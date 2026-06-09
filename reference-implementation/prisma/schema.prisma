@@ -1,0 +1,361 @@
+// EduCore (EARTMP) — Prisma schema
+// SQLite, offline-first. Every table carries createdAt / updatedAt / deletedAt
+// (soft delete) per SDP section 6.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Auth & RBAC
+// ---------------------------------------------------------------------------
+
+model Role {
+  id          String           @id @default(cuid())
+  name        String           @unique // SUPER_ADMIN, REGISTRAR, ...
+  description String?
+  permissions RolePermission[]
+  users       User[]
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  deletedAt   DateTime?
+}
+
+model Permission {
+  id        String           @id @default(cuid())
+  key       String           @unique // e.g. "students.create"
+  label     String
+  roles     RolePermission[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  deletedAt DateTime?
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+}
+
+model User {
+  id           String    @id @default(cuid())
+  username     String    @unique
+  email        String    @unique
+  fullName     String
+  passwordHash String // Argon2
+  roleId       String
+  role         Role      @relation(fields: [roleId], references: [id])
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+}
+
+// ---------------------------------------------------------------------------
+// Institution & settings
+// ---------------------------------------------------------------------------
+
+model Institution {
+  id                 String    @id @default(cuid())
+  name               String
+  motto              String?
+  accreditationNo    String?
+  address            String?
+  telephone          String?
+  email              String?
+  website            String?
+  logoPath           String?
+  sealPath           String?
+  registrarSignPath  String?
+  calendarType       String    @default("SEMESTER") // SEMESTER | TRIMESTER | QUARTER
+  transcriptNumberRule String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
+}
+
+model Setting {
+  id        String    @id @default(cuid())
+  key       String    @unique
+  value     String // JSON-encoded
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+}
+
+// ---------------------------------------------------------------------------
+// Academic structure
+// ---------------------------------------------------------------------------
+
+model Faculty {
+  id          String       @id @default(cuid())
+  name        String
+  code        String       @unique
+  departments Department[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  deletedAt   DateTime?
+}
+
+model Department {
+  id         String      @id @default(cuid())
+  name       String
+  code       String      @unique
+  facultyId  String
+  faculty    Faculty     @relation(fields: [facultyId], references: [id])
+  programmes Programme[]
+  courses    Course[]
+  students   Student[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  deletedAt  DateTime?
+}
+
+model Programme {
+  id             String     @id @default(cuid())
+  name           String
+  code           String     @unique
+  departmentId   String
+  department     Department @relation(fields: [departmentId], references: [id])
+  durationLevels Int        @default(4)
+  creditsRequired Int       @default(0)
+  levels         Level[]
+  students       Student[]
+  courses        Course[]
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  deletedAt      DateTime?
+}
+
+model Level {
+  id          String     @id @default(cuid())
+  name        String // e.g. "100", "200"
+  rank        Int // ordering
+  programmeId String
+  programme   Programme  @relation(fields: [programmeId], references: [id])
+  students    Student[]
+  courses     Course[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  deletedAt   DateTime?
+}
+
+model AcademicSession {
+  id        String     @id @default(cuid())
+  name      String     @unique // e.g. "2025/2026"
+  startDate DateTime?
+  endDate   DateTime?
+  isCurrent Boolean    @default(false)
+  semesters Semester[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  deletedAt DateTime?
+}
+
+model Semester {
+  id        String          @id @default(cuid())
+  name      String // e.g. "First Semester"
+  rank      Int
+  sessionId String
+  session   AcademicSession @relation(fields: [sessionId], references: [id])
+  results   Result[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  deletedAt DateTime?
+
+  @@unique([sessionId, rank])
+}
+
+// ---------------------------------------------------------------------------
+// Students & courses
+// ---------------------------------------------------------------------------
+
+model Student {
+  id              String     @id @default(cuid())
+  matricNumber    String     @unique
+  regNumber       String?    @unique
+  fullName        String
+  gender          String?
+  dateOfBirth     DateTime?
+  nationality     String?
+  address         String?
+  telephone       String?
+  email           String?
+  photoPath       String?
+  facultyId       String?
+  departmentId    String?
+  department      Department? @relation(fields: [departmentId], references: [id])
+  programmeId     String?
+  programme       Programme?  @relation(fields: [programmeId], references: [id])
+  levelId         String?
+  level           Level?      @relation(fields: [levelId], references: [id])
+  admissionSession String?
+  status          String      @default("ACTIVE") // ACTIVE|SUSPENDED|DEFERRED|WITHDRAWN|GRADUATED
+  results         Result[]
+  transcripts     Transcript[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  deletedAt       DateTime?
+}
+
+model Course {
+  id           String      @id @default(cuid())
+  code         String      @unique
+  title        String
+  creditValue  Int
+  courseType   String      @default("CORE") // CORE|ELECTIVE|PRACTICAL|CLINICAL
+  departmentId String?
+  department   Department?  @relation(fields: [departmentId], references: [id])
+  programmeId  String?
+  programme    Programme?   @relation(fields: [programmeId], references: [id])
+  levelId      String?
+  level        Level?       @relation(fields: [levelId], references: [id])
+  semesterRank Int? // which semester in the level
+  results      Result[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  deletedAt    DateTime?
+}
+
+// ---------------------------------------------------------------------------
+// Assessment & grading config
+// ---------------------------------------------------------------------------
+
+model AssessmentType {
+  id        String   @id @default(cuid())
+  key       String   @unique // "ca", "exam"
+  label     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+}
+
+// A named assessment structure; components stored as JSON for flexibility.
+model AssessmentConfig {
+  id         String   @id @default(cuid())
+  name       String   @unique
+  components String // JSON: [{key,label,weight,maxScore}]
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  deletedAt  DateTime?
+}
+
+// A named grade scale; bands stored as JSON.
+model GradeScale {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  bands     String // JSON: [{minMark,maxMark,grade,gradePoint,isPass}]
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+}
+
+// ---------------------------------------------------------------------------
+// Results
+// ---------------------------------------------------------------------------
+
+model Result {
+  id              String    @id @default(cuid())
+  studentId       String
+  student         Student   @relation(fields: [studentId], references: [id])
+  courseId        String
+  course          Course    @relation(fields: [courseId], references: [id])
+  semesterId      String
+  semester        Semester  @relation(fields: [semesterId], references: [id])
+  componentScores String // JSON: [{key,score}]
+  finalScore      Float?
+  grade           String?
+  gradePoint      Float?
+  creditsEarned   Int?
+  isLocked        Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  @@unique([studentId, courseId, semesterId])
+}
+
+// ---------------------------------------------------------------------------
+// Transcripts & templates
+// ---------------------------------------------------------------------------
+
+model TranscriptTemplate {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  version     Int          @default(1)
+  layout      String // JSON: ordered component definitions
+  isDefault   Boolean      @default(false)
+  transcripts Transcript[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  deletedAt   DateTime?
+}
+
+model Transcript {
+  id               String             @id @default(cuid())
+  transcriptNumber String             @unique
+  studentId        String
+  student          Student            @relation(fields: [studentId], references: [id])
+  templateId       String
+  template         TranscriptTemplate @relation(fields: [templateId], references: [id])
+  type             String             @default("ACADEMIC_TRANSCRIPT") // RESULT_SLIP|ACADEMIC_TRANSCRIPT|STATEMENT|GRADUATION_REPORT
+  snapshot         String // JSON: frozen rendered data
+  verificationHash String
+  status           String             @default("DRAFT") // DRAFT|APPROVED|LOCKED
+  remarks          String?
+  generatedAt      DateTime           @default(now())
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  deletedAt        DateTime?
+}
+
+// ---------------------------------------------------------------------------
+// Audit, backup, notifications
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String // CREATE|UPDATE|DELETE|LOGIN|EXPORT...
+  entity    String
+  recordId  String?
+  oldValue  String? // JSON
+  newValue  String? // JSON
+  ipAddress String?
+  createdAt DateTime @default(now())
+  // No updatedAt/deletedAt: audit logs are append-only and immutable.
+}
+
+model Backup {
+  id          String   @id @default(cuid())
+  filePath    String
+  sizeBytes   Int?
+  type        String   @default("MANUAL") // MANUAL|AUTOMATIC|SCHEDULED
+  schedule    String? // DAILY|WEEKLY|MONTHLY
+  isCompressed Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  title     String
+  body      String?
+  level     String    @default("INFO") // INFO|WARNING|ERROR
+  isRead    Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+}
