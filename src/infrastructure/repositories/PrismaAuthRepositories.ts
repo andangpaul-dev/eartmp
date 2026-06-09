@@ -7,7 +7,7 @@
  * Phase 7. They are the only place that knows about Prisma; the domain depends
  * only on the ports.
  */
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient, Prisma } from "@prisma/client";
 import type { UserAccount, Role, Permission } from "../../domain/entities/auth";
 import type {
   UserRepository,
@@ -150,9 +150,13 @@ export class PrismaPermissionRepository implements PermissionRepository {
   }
 }
 
-/** Append-only audit adapter (Prisma dev impl). */
+/**
+ * Append-only audit adapter (Prisma dev impl). Accepts a
+ * `Prisma.TransactionClient` so it can run inside a UnitOfWork transaction (a
+ * full PrismaClient is also assignable).
+ */
 export class PrismaAuditLogAdapter implements AuditLogPort {
-  constructor(private readonly db: PrismaClient) {}
+  constructor(private readonly db: Prisma.TransactionClient) {}
 
   async record(entry: {
     userId?: string;

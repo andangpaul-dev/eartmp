@@ -48,6 +48,9 @@ const PERMISSIONS: { key: string; label: string }[] = [
   { key: "settings.manage", label: "Edit settings" },
   { key: "structure.read", label: "View academic structure" },
   { key: "structure.manage", label: "Manage academic structure" },
+  { key: "courses.read", label: "View courses" },
+  { key: "courses.create", label: "Create courses" },
+  { key: "courses.update", label: "Edit/delete courses" },
 ];
 
 // `[ASSUMPTION]` placeholder roles → permission sets. Reconcile with real SDP.
@@ -72,12 +75,20 @@ const ROLES: { name: string; description: string; permissions: string[] }[] = [
       "settings.read",
       "structure.read",
       "structure.manage",
+      "courses.read",
+      "courses.create",
+      "courses.update",
     ],
   },
   {
     name: "DATA_ENTRY",
     description: "Enter/import results, no approvals",
-    permissions: ["students.read", "results.import", "results.process"],
+    permissions: [
+      "students.read",
+      "results.import",
+      "results.process",
+      "courses.read",
+    ],
   },
   {
     name: "VIEWER",

@@ -2,9 +2,14 @@
  * Repository interfaces (ports). The domain/application layers depend on these
  * abstractions; infrastructure provides Prisma-backed implementations. This is
  * the dependency-inversion boundary required by Clean Architecture.
+ *
+ * Phase 7 reconciliation: the student/course/result ports now live in
+ * `./records.ts` (canonical, paginated). This file keeps the append-only
+ * `AuditLogPort`, the generic `Repository<T>`, and the `TranscriptRepository`
+ * (built out in Phase 12).
  */
 
-import type { Student, Course, ResultRecord, Transcript } from "../entities";
+import type { Transcript } from "../entities";
 
 export interface Repository<T> {
   findById(id: string): Promise<T | null>;
@@ -12,29 +17,6 @@ export interface Repository<T> {
   create(entity: Omit<T, "id">): Promise<T>;
   update(id: string, patch: Partial<T>): Promise<T>;
   softDelete(id: string): Promise<void>;
-}
-
-export interface StudentRepository extends Repository<Student> {
-  findByMatric(matricNumber: string): Promise<Student | null>;
-  findByDepartment(departmentId: string): Promise<Student[]>;
-}
-
-export interface CourseRepository extends Repository<Course> {
-  findByCode(code: string): Promise<Course | null>;
-  findByProgramme(programmeId: string): Promise<Course[]>;
-}
-
-export interface ResultRepository extends Repository<ResultRecord> {
-  findByStudentAndSemester(
-    studentId: string,
-    semesterId: string,
-  ): Promise<ResultRecord[]>;
-  findByStudent(studentId: string): Promise<ResultRecord[]>;
-  existsFor(
-    studentId: string,
-    courseId: string,
-    semesterId: string,
-  ): Promise<boolean>;
 }
 
 export interface TranscriptRepository extends Repository<Transcript> {

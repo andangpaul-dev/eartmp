@@ -22,6 +22,8 @@
     "demo:settings": "tsx scripts/demo-settings.ts",
     "demo:grading": "tsx scripts/demo-grading.ts",
     "demo:structure": "tsx scripts/demo-structure.ts",
+    "demo:records": "tsx scripts/demo-records.ts",
+    "demo:persistence": "tsx scripts/demo-persistence.ts",
     "prepare": "husky || true"
   },
   "prisma": {

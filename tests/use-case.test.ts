@@ -2,10 +2,16 @@ import { describe, it, expect } from "vitest";
 import { GradeScale } from "../src/domain/value-objects/GradeScale";
 import { ProcessSemesterResults } from "../src/application/use-cases/ProcessSemesterResults";
 import type {
-  ResultRepository,
+  UnitOfWork,
+  TransactionalRepos,
+} from "../src/application/ports/UnitOfWork";
+import type {
   CourseRepository,
-  AuditLogPort,
-} from "../src/domain/repositories";
+  ResultRepository,
+  StudentRepository,
+  StudentEnrollmentRepository,
+} from "../src/domain/repositories/records";
+import type { AuditLogPort } from "../src/domain/repositories";
 import type { Course, ResultRecord } from "../src/domain/entities";
 
 const scale = GradeScale.create([
@@ -18,8 +24,9 @@ const scale = GradeScale.create([
   { minMark: 0, maxMark: 39, grade: "F", gradePoint: 0.0, isPass: false },
 ]);
 
-// Minimal in-memory fakes — prove the use-case needs no real DB.
-function makeFakes() {
+// Minimal in-memory fakes wired into a fake UnitOfWork — proves the use-case
+// needs no real DB and runs inside a transaction boundary.
+function makeUow() {
   const courseTable: Record<string, Course> = {
     c1: {
       id: "c1",
@@ -56,74 +63,69 @@ function makeFakes() {
       isLocked: false,
     },
   ];
-  const updates: Record<string, Partial<ResultRecord>> = {};
+  const updates: Record<
+    string,
+    { grade: string; gradePoint: number; creditsEarned: number }
+  > = {};
   const auditEntries: unknown[] = [];
 
-  const results: ResultRepository = {
-    async findById(id) {
-      return resultTable.find((r) => r.id === id) ?? null;
-    },
-    async findAll() {
-      return resultTable;
-    },
-    async create(e) {
-      const x = { ...e, id: "new" } as ResultRecord;
-      resultTable.push(x);
-      return x;
-    },
-    async update(id, patch) {
-      updates[id] = patch;
-      const r = resultTable.find((x) => x.id === id)!;
-      Object.assign(r, patch);
-      return r;
-    },
-    async softDelete() {},
-    async findByStudentAndSemester(sid, sem) {
+  const results = {
+    async findByStudentAndSemester(sid: string, sem: string) {
       return resultTable.filter(
         (r) => r.studentId === sid && r.semesterId === sem,
       );
     },
-    async findByStudent(sid) {
-      return resultTable.filter((r) => r.studentId === sid);
+    async updateProcessed(id, data) {
+      updates[id] = {
+        grade: data.grade,
+        gradePoint: data.gradePoint,
+        creditsEarned: data.creditsEarned,
+      };
     },
-    async existsFor() {
-      return false;
-    },
-  };
-  const courses: CourseRepository = {
-    async findById(id) {
+  } satisfies ResultRepository;
+
+  const courses = {
+    async findById(id: string) {
       return courseTable[id] ?? null;
     },
-    async findAll() {
-      return Object.values(courseTable);
+    async findByCode() {
+      return null;
     },
     async create(e) {
-      const x = { ...e, id: "new" } as Course;
-      return x;
+      return { ...e, id: "new" };
     },
     async update(_id, _p) {
       return Object.values(courseTable)[0]!;
     },
     async softDelete() {},
-    async findByCode(code) {
-      return Object.values(courseTable).find((c) => c.code === code) ?? null;
+    async find() {
+      return { items: Object.values(courseTable), total: 2 };
     },
-    async findByProgramme() {
-      return Object.values(courseTable);
-    },
-  };
+  } satisfies CourseRepository;
+
   const audit: AuditLogPort = {
     async record(e) {
       auditEntries.push(e);
     },
   };
-  return { results, courses, audit, updates, auditEntries };
+
+  // Students/enrollments unused by this use-case — minimal stubs.
+  const students = {} as StudentRepository;
+  const enrollments = {} as StudentEnrollmentRepository;
+
+  const uow: UnitOfWork = {
+    run<T>(work: (repos: TransactionalRepos) => Promise<T>) {
+      return work({ students, enrollments, courses, results, audit });
+    },
+  };
+
+  return { uow, updates, auditEntries };
 }
 
 describe("ProcessSemesterResults use-case", () => {
   it("computes GPA, persists grades, and writes an audit entry", async () => {
-    const { results, courses, audit, updates, auditEntries } = makeFakes();
-    const uc = new ProcessSemesterResults(results, courses, audit);
+    const { uow, updates, auditEntries } = makeUow();
+    const uc = new ProcessSemesterResults(uow);
 
     const summary = await uc.execute({
       studentId: "s1",
@@ -141,8 +143,8 @@ describe("ProcessSemesterResults use-case", () => {
   });
 
   it("throws when no results exist", async () => {
-    const { results, courses, audit } = makeFakes();
-    const uc = new ProcessSemesterResults(results, courses, audit);
+    const { uow } = makeUow();
+    const uc = new ProcessSemesterResults(uow);
     await expect(
       uc.execute({ studentId: "ghost", semesterId: "sem1", scale }),
     ).rejects.toThrow(/No results/);
