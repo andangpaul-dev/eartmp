@@ -32,6 +32,7 @@ const badComponents = JSON.stringify([
   { key: "exam", label: "Exam", weight: 70, maxScore: 100 },
 ]);
 
+// This suite tests the read-side loader; the write methods are unused stubs.
 class FakeGradeScaleRepo implements GradeScaleConfigRepository {
   constructor(private rows: StoredGradeScale[]) {}
   async findDefault() {
@@ -43,15 +44,40 @@ class FakeGradeScaleRepo implements GradeScaleConfigRepository {
   async findByName(name: string) {
     return this.rows.find((r) => r.name === name) ?? null;
   }
+  async list() {
+    return this.rows;
+  }
+  async create(data: Omit<StoredGradeScale, "id">) {
+    return { id: "stub", ...data };
+  }
+  async update(): Promise<never> {
+    throw new Error("unused");
+  }
+  async softDelete() {}
+  async setDefault() {}
 }
 class FakeAssessmentRepo implements AssessmentConfigRepository {
   constructor(private rows: StoredAssessmentConfig[]) {}
   async findDefault() {
     return this.rows.find((r) => r.isDefault) ?? null;
   }
+  async findById(id: string) {
+    return this.rows.find((r) => r.id === id) ?? null;
+  }
   async findByName(name: string) {
     return this.rows.find((r) => r.name === name) ?? null;
   }
+  async list() {
+    return this.rows;
+  }
+  async create(data: Omit<StoredAssessmentConfig, "id">) {
+    return { id: "stub", ...data };
+  }
+  async update(): Promise<never> {
+    throw new Error("unused");
+  }
+  async softDelete() {}
+  async setDefault() {}
 }
 
 function service(opts: {

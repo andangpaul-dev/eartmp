@@ -82,6 +82,24 @@ function makeUow() {
         creditsEarned: data.creditsEarned,
       };
     },
+    // Unused by this use-case — minimal stubs to satisfy the full port.
+    async create(d) {
+      return { ...d, id: "new" };
+    },
+    async findById() {
+      return null;
+    },
+    async existsFor() {
+      return false;
+    },
+    async findByStudent() {
+      return resultTable;
+    },
+    async updateScores() {},
+    async setLockedForSemester() {
+      return 0;
+    },
+    async unlock() {},
   } satisfies ResultRepository;
 
   const courses = {

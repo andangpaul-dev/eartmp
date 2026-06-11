@@ -24,6 +24,14 @@
     "demo:structure": "tsx scripts/demo-structure.ts",
     "demo:records": "tsx scripts/demo-records.ts",
     "demo:persistence": "tsx scripts/demo-persistence.ts",
+    "demo:config": "tsx scripts/demo-config.ts",
+    "demo:results": "tsx scripts/demo-results.ts",
+    "demo:import": "tsx scripts/demo-import.ts",
+    "demo:summary": "tsx scripts/demo-summary.ts",
+    "demo:transcript": "tsx scripts/demo-transcript.ts",
+    "demo:pdf": "tsx scripts/demo-pdf.ts",
+    "demo:docx": "tsx scripts/demo-docx.ts",
+    "demo:template": "tsx scripts/demo-template.ts",
     "prepare": "husky || true"
   },
   "prisma": {
@@ -40,6 +48,8 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@types/pdfmake": "^0.2.9",
+    "@types/qrcode": "^1.5.5",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",
     "@vitest/coverage-v8": "^2.1.8",
@@ -56,6 +66,10 @@
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",
     "@prisma/client": "^6.2.0",
-    "prisma": "^6.2.0"
+    "docx": "^8.5.0",
+    "pdfmake": "^0.2.10",
+    "prisma": "^6.2.0",
+    "qrcode": "^1.5.4",
+    "xlsx": "^0.18.5"
   }
 }

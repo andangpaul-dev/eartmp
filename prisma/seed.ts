@@ -16,6 +16,7 @@
 import { randomBytes } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { Argon2HashingService } from "../src/infrastructure/crypto/Argon2HashingService";
+import { CryptoSignatureService } from "../src/infrastructure/crypto/CryptoSignatureService";
 import {
   buildDefaultRegistry,
   SETTING_KEYS,
@@ -30,11 +31,16 @@ const PERMISSIONS: { key: string; label: string }[] = [
   { key: "students.read", label: "View students" },
   { key: "students.create", label: "Create students" },
   { key: "students.update", label: "Edit students" },
+  { key: "results.read", label: "View results" },
   { key: "results.import", label: "Import results" },
   { key: "results.process", label: "Process results" },
   { key: "results.unlock", label: "Unlock locked results" },
+  { key: "transcripts.read", label: "View/verify transcripts" },
   { key: "transcripts.generate", label: "Generate transcripts" },
   { key: "transcripts.approve", label: "Approve transcripts" },
+  { key: "templates.read", label: "View transcript templates" },
+  { key: "templates.manage", label: "Manage transcript templates" },
+  { key: "config.read", label: "View grading/assessment config" },
   { key: "config.manage", label: "Manage grading/assessment config" },
   { key: "backup.restore", label: "Restore backups" },
   { key: "audit.read", label: "View the audit log" },
@@ -67,10 +73,14 @@ const ROLES: { name: string; description: string; permissions: string[] }[] = [
       "students.read",
       "students.create",
       "students.update",
+      "results.read",
       "results.process",
       "results.unlock",
+      "transcripts.read",
       "transcripts.generate",
       "transcripts.approve",
+      "templates.read",
+      "templates.manage",
       "audit.read",
       "settings.read",
       "structure.read",
@@ -78,6 +88,7 @@ const ROLES: { name: string; description: string; permissions: string[] }[] = [
       "courses.read",
       "courses.create",
       "courses.update",
+      "config.read",
     ],
   },
   {
@@ -85,6 +96,7 @@ const ROLES: { name: string; description: string; permissions: string[] }[] = [
     description: "Enter/import results, no approvals",
     permissions: [
       "students.read",
+      "results.read",
       "results.import",
       "results.process",
       "courses.read",
@@ -253,16 +265,22 @@ async function seedAdminUser(): Promise<void> {
 }
 
 // Seed default settings as validated JSON envelopes via the SettingsRegistry.
-// Only created if absent (idempotent); the encryption salt is generated once.
+// Only created if absent (idempotent). The encryption salt and the transcript
+// signing keypair are generated once (the private key is plaintext in dev and
+// must be encrypted at rest in production — P18/19).
 async function seedSettings(): Promise<void> {
   const registry = buildDefaultRegistry();
+  const keypair = CryptoSignatureService.generateKeypair();
   for (const key of registry.keys()) {
     const existing = await prisma.setting.findUnique({ where: { key } });
     if (existing) continue;
-    const value =
-      key === SETTING_KEYS.encryptionSalt
-        ? randomBytes(16).toString("hex")
-        : registry.defaultValue(key);
+    let value: unknown = registry.defaultValue(key);
+    if (key === SETTING_KEYS.encryptionSalt)
+      value = randomBytes(16).toString("hex");
+    else if (key === SETTING_KEYS.transcriptPublicKey)
+      value = keypair.publicKeyPem;
+    else if (key === SETTING_KEYS.transcriptPrivateKey)
+      value = keypair.privateKeyPem;
     await prisma.setting.create({
       data: { key, value: registry.serialize(key, value) },
     });

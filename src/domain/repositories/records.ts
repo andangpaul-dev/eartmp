@@ -70,12 +70,29 @@ export interface StudentEnrollmentRepository {
   listByStudent(studentId: string): Promise<StudentEnrollment[]>;
 }
 
-/** Canonical result port (used by ProcessSemesterResults; full CRUD in Phase 9). */
+/** Canonical result port (Phase 9 full CRUD + lock workflow). */
 export interface ResultRepository {
+  create(data: Omit<ResultRecord, "id">): Promise<ResultRecord>;
+  findById(id: string): Promise<ResultRecord | null>;
+  /** True if a live result already exists for this (student, course, semester). */
+  existsFor(
+    studentId: string,
+    courseId: string,
+    semesterId: string,
+  ): Promise<boolean>;
   findByStudentAndSemester(
     studentId: string,
     semesterId: string,
   ): Promise<ResultRecord[]>;
+  findByStudent(studentId: string): Promise<ResultRecord[]>;
+  /** Replace raw component scores + recomputed final score (entry/edit). */
+  updateScores(
+    id: string,
+    data: {
+      componentScores: { key: string; score: number }[];
+      finalScore: number;
+    },
+  ): Promise<void>;
   /** Persist the processed grade/points for a result (records provenance). */
   updateProcessed(
     id: string,
@@ -87,6 +104,14 @@ export interface ResultRepository {
       gradeScaleId?: string;
     },
   ): Promise<void>;
+  /** Lock/unlock every live result for a student's semester; returns count. */
+  setLockedForSemester(
+    studentId: string,
+    semesterId: string,
+    locked: boolean,
+  ): Promise<number>;
+  /** Unlock a single result (audited unlock workflow). */
+  unlock(id: string): Promise<void>;
 }
 
 /**

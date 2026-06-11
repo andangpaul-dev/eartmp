@@ -171,6 +171,8 @@ export const SETTING_KEYS = {
   defaultScaleName: "grading.defaultScaleName",
   standingBands: "grading.standingBands",
   transcriptNumberRule: "transcript.numberRule",
+  transcriptPublicKey: "transcript.signingPublicKey",
+  transcriptPrivateKey: "transcript.signingPrivateKey",
   encryptionSalt: "institution.encryptionSalt",
 } as const;
 
@@ -258,6 +260,23 @@ export function buildDefaultRegistry(): SettingsRegistry {
     description: "Format rule for transcript numbers.",
     default: "TR-{year}-{seq:000000}",
     validate: (v) => asString(v, SETTING_KEYS.transcriptNumberRule),
+  });
+
+  r.register<string>({
+    key: SETTING_KEYS.transcriptPublicKey,
+    schemaVersion: 1,
+    description: "Institution transcript-signing PUBLIC key (PEM).",
+    default: "",
+    validate: (v) => asString(v, SETTING_KEYS.transcriptPublicKey),
+  });
+
+  r.register<string>({
+    key: SETTING_KEYS.transcriptPrivateKey,
+    schemaVersion: 1,
+    description:
+      "Institution transcript-signing PRIVATE key (PEM). DEV: plaintext; production must encrypt at rest (P18/19).",
+    default: "",
+    validate: (v) => asString(v, SETTING_KEYS.transcriptPrivateKey),
   });
 
   r.register<string>({

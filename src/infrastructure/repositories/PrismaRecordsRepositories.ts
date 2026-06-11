@@ -425,6 +425,40 @@ function toResult(r: ResultRow): ResultRecord {
 export class PrismaResultRepository implements ResultRepository {
   constructor(private readonly db: Db) {}
 
+  async create(data: Omit<ResultRecord, "id">): Promise<ResultRecord> {
+    const row = await this.db.result.create({
+      data: {
+        studentId: data.studentId,
+        courseId: data.courseId,
+        semesterId: data.semesterId,
+        componentScores: JSON.stringify(data.componentScores),
+        finalScore: data.finalScore,
+        grade: data.grade,
+        gradePoint: data.gradePoint,
+        creditsEarned: data.creditsEarned,
+        isLocked: data.isLocked,
+      },
+    });
+    return toResult(row);
+  }
+
+  async findById(id: string): Promise<ResultRecord | null> {
+    const row = await this.db.result.findFirst({ where: { id, ...live } });
+    return row ? toResult(row) : null;
+  }
+
+  async existsFor(
+    studentId: string,
+    courseId: string,
+    semesterId: string,
+  ): Promise<boolean> {
+    return (
+      (await this.db.result.count({
+        where: { studentId, courseId, semesterId, ...live },
+      })) > 0
+    );
+  }
+
   async findByStudentAndSemester(
     studentId: string,
     semesterId: string,
@@ -433,6 +467,45 @@ export class PrismaResultRepository implements ResultRepository {
       where: { studentId, semesterId, ...live },
     });
     return rows.map(toResult);
+  }
+
+  async findByStudent(studentId: string): Promise<ResultRecord[]> {
+    const rows = await this.db.result.findMany({
+      where: { studentId, ...live },
+    });
+    return rows.map(toResult);
+  }
+
+  async updateScores(
+    id: string,
+    data: {
+      componentScores: { key: string; score: number }[];
+      finalScore: number;
+    },
+  ): Promise<void> {
+    await this.db.result.update({
+      where: { id },
+      data: {
+        componentScores: JSON.stringify(data.componentScores),
+        finalScore: data.finalScore,
+      },
+    });
+  }
+
+  async setLockedForSemester(
+    studentId: string,
+    semesterId: string,
+    locked: boolean,
+  ): Promise<number> {
+    const { count } = await this.db.result.updateMany({
+      where: { studentId, semesterId, ...live },
+      data: { isLocked: locked },
+    });
+    return count;
+  }
+
+  async unlock(id: string): Promise<void> {
+    await this.db.result.update({ where: { id }, data: { isLocked: false } });
   }
 
   async updateProcessed(

@@ -40,6 +40,14 @@ export class ProcessSemesterResults {
         );
       }
 
+      // A locked semester is immutable; unlock before re-processing (AD9.3).
+      const locked = rawResults.find((r) => r.isLocked);
+      if (locked) {
+        throw new Error(
+          `Result ${locked.id} is locked; unlock before re-processing.`,
+        );
+      }
+
       // Resolve credit values from the course registry.
       const courseResults = [];
       for (const r of rawResults) {

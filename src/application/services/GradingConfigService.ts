@@ -72,6 +72,33 @@ export class GradingConfigService {
   }
 
   /**
+   * Like loadGradeScale but also returns the stored scale's id — used to stamp
+   * grade-scale provenance on processed results (F-19).
+   */
+  async loadGradeScaleWithId(
+    ref?: GradeScaleRef,
+  ): Promise<{ scale: GradeScale; id: string }> {
+    const row = ref?.id
+      ? await this.gradeScales.findById(ref.id)
+      : ref?.name
+        ? await this.gradeScales.findByName(ref.name)
+        : await this.gradeScales.findDefault();
+    if (!row) {
+      throw new GradeScaleError(
+        `No grade scale configured${ref?.id ? ` for id ${ref.id}` : ref?.name ? ` named "${ref.name}"` : " (no default set)"}.`,
+      );
+    }
+    const bands = parseJson<GradeBand[]>(
+      row.bands,
+      () =>
+        new GradeScaleError(
+          `Grade scale "${row.name}" has corrupt bands JSON.`,
+        ),
+    );
+    return { scale: GradeScale.create(bands), id: row.id };
+  }
+
+  /**
    * Load a validated AssessmentStructure. Resolves by name, else the default.
    * Throws AssessmentError if none is configured or the components are invalid.
    */
