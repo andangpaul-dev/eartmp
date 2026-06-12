@@ -71,6 +71,16 @@ re-test — do not paste it in wholesale or use it to jump ahead.
 
 ## Current status
 
-Phase: **0 — Solution Design (not yet started in-repo).**
-No application code is approved yet (BSD §3: "No application code permitted
-before approval").
+**BSD 20/20 complete — headless core.** Phases 0–20 are implemented, tested
+(271 tests, ≥80% coverage on domain+application), and proven end to end
+(`npm run demo:e2e`). `tsc` strict / lint / format / boundary fitness all green.
+
+The records → results → GPA/CGPA → transcript (sign/verify) → PDF/DOCX →
+graduation → backup → security (sealed key) → tamper-evident audit pipeline is
+done, all behind ports with dev-only Prisma adapters (ADR-007).
+
+**Remaining for a runnable product (outside the 20-phase BSD):** the **shell
+phase** — the Tauri 2 + React 19 UI and the Tauri-SQL runtime data layer that
+replaces the dev Prisma adapters, plus DB-at-rest SQLCipher wiring (ADR-008).
+Spec: `docs/phase-7/tauri-sql-spec.md`. See `docs/runbook.md` +
+`docs/release-checklist.md`.

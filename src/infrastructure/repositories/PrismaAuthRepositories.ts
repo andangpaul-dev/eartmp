@@ -14,6 +14,17 @@ import type {
   RoleRepository,
   PermissionRepository,
 } from "../../domain/repositories/auth";
+import {
+  canonicalAuditPayload,
+  type AuditEntry,
+} from "../../domain/services/AuditChain";
+import type {
+  AuditLogQueryRepository,
+  AuditQuery,
+} from "../../domain/repositories/audit";
+import type { Page } from "../../domain/repositories/records";
+import type { AuditHasher } from "../../application/ports/AuditHasher";
+import { Sha256Hasher } from "../crypto/Sha256Hasher";
 import type { AuditLogPort } from "../../domain/repositories";
 
 type PrismaUserRow = {
@@ -156,7 +167,10 @@ export class PrismaPermissionRepository implements PermissionRepository {
  * full PrismaClient is also assignable).
  */
 export class PrismaAuditLogAdapter implements AuditLogPort {
-  constructor(private readonly db: Prisma.TransactionClient) {}
+  constructor(
+    private readonly db: Prisma.TransactionClient,
+    private readonly hasher: AuditHasher = new Sha256Hasher(),
+  ) {}
 
   async record(entry: {
     userId?: string;
@@ -166,17 +180,106 @@ export class PrismaAuditLogAdapter implements AuditLogPort {
     oldValue?: unknown;
     newValue?: unknown;
   }): Promise<void> {
+    const oldValue =
+      entry.oldValue !== undefined ? JSON.stringify(entry.oldValue) : null;
+    const newValue =
+      entry.newValue !== undefined ? JSON.stringify(entry.newValue) : null;
+    const createdAt = new Date();
+
+    // Chain onto the latest entry (Phase 19): prevHash = its hash (or null).
+    const last = await this.db.auditLog.findFirst({
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { hash: true },
+    });
+    const prevHash = last?.hash ?? null;
+    const payload = canonicalAuditPayload({
+      userId: entry.userId,
+      action: entry.action,
+      entity: entry.entity,
+      recordId: entry.recordId,
+      oldValue: oldValue ?? undefined,
+      newValue: newValue ?? undefined,
+      createdAt: createdAt.toISOString(),
+    });
+    const hash = this.hasher.hash((prevHash ?? "") + payload);
+
     await this.db.auditLog.create({
       data: {
         userId: entry.userId ?? null,
         action: entry.action,
         entity: entry.entity,
         recordId: entry.recordId ?? null,
-        oldValue:
-          entry.oldValue !== undefined ? JSON.stringify(entry.oldValue) : null,
-        newValue:
-          entry.newValue !== undefined ? JSON.stringify(entry.newValue) : null,
+        oldValue,
+        newValue,
+        createdAt,
+        prevHash,
+        hash,
       },
     });
+  }
+}
+
+type AuditRow = {
+  id: string;
+  userId: string | null;
+  action: string;
+  entity: string;
+  recordId: string | null;
+  oldValue: string | null;
+  newValue: string | null;
+  createdAt: Date;
+  prevHash: string | null;
+  hash: string | null;
+};
+
+function toAuditEntry(r: AuditRow): AuditEntry {
+  return {
+    id: r.id,
+    userId: r.userId ?? undefined,
+    action: r.action,
+    entity: r.entity,
+    recordId: r.recordId ?? undefined,
+    oldValue: r.oldValue ?? undefined,
+    newValue: r.newValue ?? undefined,
+    createdAt: r.createdAt.toISOString(),
+    prevHash: r.prevHash ?? undefined,
+    hash: r.hash ?? undefined,
+  };
+}
+
+export class PrismaAuditLogQueryRepository implements AuditLogQueryRepository {
+  constructor(private readonly db: PrismaClient) {}
+
+  async find(query: AuditQuery): Promise<Page<AuditEntry>> {
+    const where: Prisma.AuditLogWhereInput = {
+      ...(query.actorId ? { userId: query.actorId } : {}),
+      ...(query.entity ? { entity: query.entity } : {}),
+      ...(query.action ? { action: query.action } : {}),
+      ...(query.from || query.to
+        ? {
+            createdAt: {
+              ...(query.from ? { gte: new Date(query.from) } : {}),
+              ...(query.to ? { lte: new Date(query.to) } : {}),
+            },
+          }
+        : {}),
+    };
+    const [rows, total] = await Promise.all([
+      this.db.auditLog.findMany({
+        where,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip: query.skip ?? 0,
+        take: query.take ?? 50,
+      }),
+      this.db.auditLog.count({ where }),
+    ]);
+    return { items: rows.map(toAuditEntry), total };
+  }
+
+  async listOrdered(): Promise<AuditEntry[]> {
+    const rows = await this.db.auditLog.findMany({
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    });
+    return rows.map(toAuditEntry);
   }
 }

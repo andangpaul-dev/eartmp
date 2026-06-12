@@ -392,6 +392,10 @@ model AuditLog {
   newValue  String? // JSON
   ipAddress String?
   createdAt DateTime @default(now())
+  // Tamper-evident hash chain (Phase 19). Nullable: pre-chain rows are
+  // "unchained", not broken. hash = SHA-256(prevHash + canonical payload).
+  prevHash  String?
+  hash      String?
   // No updatedAt/deletedAt: audit logs are append-only and immutable.
 
   @@index([entity, recordId])

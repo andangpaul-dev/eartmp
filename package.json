@@ -35,6 +35,8 @@
     "demo:graduation": "tsx scripts/demo-graduation.ts",
     "demo:backup": "tsx scripts/demo-backup.ts",
     "demo:security": "tsx scripts/demo-security.ts",
+    "demo:audit": "tsx scripts/demo-audit.ts",
+    "demo:e2e": "tsx scripts/demo-e2e.ts",
     "prepare": "husky || true"
   },
   "prisma": {
