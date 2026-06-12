@@ -23,12 +23,11 @@ import {
   PrismaTranscriptTemplateRepository,
 } from "../src/infrastructure/repositories/PrismaTranscriptRepository";
 import { PrismaTranscriptNameResolver } from "../src/infrastructure/repositories/PrismaTranscriptNameResolver";
-import { CryptoSignatureService } from "../src/infrastructure/crypto/CryptoSignatureService";
+import { SealedSigningKeyProvider } from "../src/infrastructure/crypto/SealedSigningKeyProvider";
+import { SecretBox } from "../src/infrastructure/crypto/SecretBox";
+import { Argon2KeyDerivationService } from "../src/infrastructure/crypto/Argon2KeyDerivationService";
 import { GradingConfigService } from "../src/application/services/GradingConfigService";
-import {
-  buildDefaultRegistry,
-  SETTING_KEYS,
-} from "../src/domain/settings/SettingsRegistry";
+import { buildDefaultRegistry } from "../src/domain/settings/SettingsRegistry";
 import { BuildReportData } from "../src/application/use-cases/transcripts/BuildReportData";
 import { GenerateTranscript } from "../src/application/use-cases/transcripts/GenerateTranscript";
 import {
@@ -45,15 +44,15 @@ async function main(): Promise<void> {
   const db = getPrisma();
   const settings = new PrismaSettingRepository(db);
   const registry = buildDefaultRegistry();
-  const pub = registry.deserialize(
-    SETTING_KEYS.transcriptPublicKey,
-    (await settings.getRaw(SETTING_KEYS.transcriptPublicKey))!,
-  ) as string;
-  const priv = registry.deserialize(
-    SETTING_KEYS.transcriptPrivateKey,
-    (await settings.getRaw(SETTING_KEYS.transcriptPrivateKey))!,
-  ) as string;
-  const signer = new CryptoSignatureService(priv, pub);
+  // Phase 18: the signing private key is sealed; open it with the passphrase.
+  const keyProvider = new SealedSigningKeyProvider(
+    settings,
+    registry,
+    new SecretBox(new Argon2KeyDerivationService()),
+  );
+  const signer = await keyProvider.getSigner(
+    process.env.EARTMP_KEY_PASSPHRASE ?? "eartmp-dev-passphrase",
+  );
 
   const grading = new GradingConfigService(
     new PrismaGradeScaleRepository(db),

@@ -16,7 +16,9 @@
 import { randomBytes } from "node:crypto";
 import { PrismaClient } from "@prisma/client";
 import { Argon2HashingService } from "../src/infrastructure/crypto/Argon2HashingService";
+import { Argon2KeyDerivationService } from "../src/infrastructure/crypto/Argon2KeyDerivationService";
 import { CryptoSignatureService } from "../src/infrastructure/crypto/CryptoSignatureService";
+import { SecretBox } from "../src/infrastructure/crypto/SecretBox";
 import {
   buildDefaultRegistry,
   SETTING_KEYS,
@@ -40,9 +42,13 @@ const PERMISSIONS: { key: string; label: string }[] = [
   { key: "transcripts.approve", label: "Approve transcripts" },
   { key: "templates.read", label: "View transcript templates" },
   { key: "templates.manage", label: "Manage transcript templates" },
+  { key: "graduation.read", label: "Evaluate graduation eligibility" },
+  { key: "graduation.clear", label: "Clear students for graduation" },
   { key: "config.read", label: "View grading/assessment config" },
   { key: "config.manage", label: "Manage grading/assessment config" },
+  { key: "backup.create", label: "Create backups" },
   { key: "backup.restore", label: "Restore backups" },
+  { key: "security.manage", label: "Manage security (key passphrase)" },
   { key: "audit.read", label: "View the audit log" },
   { key: "users.read", label: "View users" },
   { key: "users.create", label: "Create users" },
@@ -81,6 +87,8 @@ const ROLES: { name: string; description: string; permissions: string[] }[] = [
       "transcripts.approve",
       "templates.read",
       "templates.manage",
+      "graduation.read",
+      "graduation.clear",
       "audit.read",
       "settings.read",
       "structure.read",
@@ -265,12 +273,15 @@ async function seedAdminUser(): Promise<void> {
 }
 
 // Seed default settings as validated JSON envelopes via the SettingsRegistry.
-// Only created if absent (idempotent). The encryption salt and the transcript
-// signing keypair are generated once (the private key is plaintext in dev and
-// must be encrypted at rest in production — P18/19).
+// Only created if absent (idempotent). The encryption salt + signing keypair are
+// generated once; the private key is SEALED (Phase 18) with a bootstrap
+// passphrase (EARTMP_KEY_PASSPHRASE, documented dev default) — never plaintext.
 async function seedSettings(): Promise<void> {
   const registry = buildDefaultRegistry();
   const keypair = CryptoSignatureService.generateKeypair();
+  const box = new SecretBox(new Argon2KeyDerivationService());
+  const bootstrapPassphrase =
+    process.env.EARTMP_KEY_PASSPHRASE ?? "eartmp-dev-passphrase";
   for (const key of registry.keys()) {
     const existing = await prisma.setting.findUnique({ where: { key } });
     if (existing) continue;
@@ -280,7 +291,7 @@ async function seedSettings(): Promise<void> {
     else if (key === SETTING_KEYS.transcriptPublicKey)
       value = keypair.publicKeyPem;
     else if (key === SETTING_KEYS.transcriptPrivateKey)
-      value = keypair.privateKeyPem;
+      value = await box.seal(keypair.privateKeyPem, bootstrapPassphrase);
     await prisma.setting.create({
       data: { key, value: registry.serialize(key, value) },
     });

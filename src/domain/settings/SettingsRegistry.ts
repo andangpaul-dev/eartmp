@@ -9,6 +9,7 @@
  */
 import { SettingsError } from "../errors/config";
 import type { StandingBand } from "../services/GpaEngine";
+import type { GraduationRequirements } from "../services/GraduationEligibility";
 
 export interface SettingDefinition<T> {
   key: string;
@@ -173,6 +174,7 @@ export const SETTING_KEYS = {
   transcriptNumberRule: "transcript.numberRule",
   transcriptPublicKey: "transcript.signingPublicKey",
   transcriptPrivateKey: "transcript.signingPrivateKey",
+  graduationRequirements: "graduation.requirements",
   encryptionSalt: "institution.encryptionSalt",
 } as const;
 
@@ -277,6 +279,40 @@ export function buildDefaultRegistry(): SettingsRegistry {
       "Institution transcript-signing PRIVATE key (PEM). DEV: plaintext; production must encrypt at rest (P18/19).",
     default: "",
     validate: (v) => asString(v, SETTING_KEYS.transcriptPrivateKey),
+  });
+
+  r.register<GraduationRequirements>({
+    key: SETTING_KEYS.graduationRequirements,
+    schemaVersion: 1,
+    description:
+      "Graduation requirements (min CGPA, min credits earned, no outstanding fails).",
+    // `[ASSUMPTION]` permissive default — institutions tune their own bar.
+    default: {
+      minCgpa: 1.0,
+      minCreditsEarned: 0,
+      requireNoOutstandingFails: true,
+    },
+    validate: (v) => {
+      const o = asObject(v, SETTING_KEYS.graduationRequirements);
+      const minCgpa = asFiniteNumber(o.minCgpa, "graduation.minCgpa");
+      const minCreditsEarned = asFiniteNumber(
+        o.minCreditsEarned,
+        "graduation.minCreditsEarned",
+      );
+      if (minCgpa < 0)
+        throw new SettingsError("graduation.minCgpa must be >= 0.");
+      if (minCreditsEarned < 0) {
+        throw new SettingsError("graduation.minCreditsEarned must be >= 0.");
+      }
+      return {
+        minCgpa,
+        minCreditsEarned,
+        requireNoOutstandingFails: asBool(
+          o.requireNoOutstandingFails,
+          "graduation.requireNoOutstandingFails",
+        ),
+      };
+    },
   });
 
   r.register<string>({

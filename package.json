@@ -32,6 +32,9 @@
     "demo:pdf": "tsx scripts/demo-pdf.ts",
     "demo:docx": "tsx scripts/demo-docx.ts",
     "demo:template": "tsx scripts/demo-template.ts",
+    "demo:graduation": "tsx scripts/demo-graduation.ts",
+    "demo:backup": "tsx scripts/demo-backup.ts",
+    "demo:security": "tsx scripts/demo-security.ts",
     "prepare": "husky || true"
   },
   "prisma": {
