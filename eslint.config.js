@@ -26,9 +26,12 @@ export default [
     ignores: [
       "node_modules/**",
       "dist/**",
+      "dist-ui/**",
       "reference-implementation/**",
       "coverage/**",
       "**/*.d.ts",
+      // Design handoff package (reference material, not shipped code).
+      "Student_Record_Management UI/**",
     ],
   },
   {

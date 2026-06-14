@@ -4,6 +4,7 @@ reference-implementation/node_modules/
 
 # Build output
 dist/
+dist-ui/
 coverage/
 
 # Local database & Prisma local artifacts

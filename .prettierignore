@@ -1,6 +1,8 @@
 node_modules
 dist
+dist-ui
 coverage
 reference-implementation
 prisma/migrations
 dev.db
+Student_Record_Management UI

@@ -37,6 +37,10 @@
     "demo:security": "tsx scripts/demo-security.ts",
     "demo:audit": "tsx scripts/demo-audit.ts",
     "demo:e2e": "tsx scripts/demo-e2e.ts",
+    "host:smoke": "tsx scripts/host-smoke.ts",
+    "host:serve": "tsx src/host/server.ts",
+    "ui:dev": "vite",
+    "ui:build": "vite build",
     "prepare": "husky || true"
   },
   "prisma": {
@@ -55,8 +59,11 @@
     "@types/node": "^22.10.0",
     "@types/pdfmake": "^0.2.9",
     "@types/qrcode": "^1.5.5",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
     "@typescript-eslint/eslint-plugin": "^8.18.0",
     "@typescript-eslint/parser": "^8.18.0",
+    "@vitejs/plugin-react": "^4.7.0",
     "@vitest/coverage-v8": "^2.1.8",
     "eslint": "^9.17.0",
     "eslint-import-resolver-typescript": "^3.7.0",
@@ -66,6 +73,7 @@
     "prettier": "^3.4.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
+    "vite": "^6.4.3",
     "vitest": "^2.1.8"
   },
   "dependencies": {
@@ -75,6 +83,8 @@
     "pdfmake": "^0.2.10",
     "prisma": "^6.2.0",
     "qrcode": "^1.5.4",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "xlsx": "^0.18.5"
   }
 }
