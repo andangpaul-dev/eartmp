@@ -23,6 +23,8 @@ prisma/dev.db
 .env
 .env.*
 !.env.example
+# Production webview build config (localhost URL, no secret) — tracked.
+!.env.production
 
 # Editor / OS
 .DS_Store
@@ -32,3 +34,7 @@ Thumbs.db
 
 # Tauri (later phases)
 src-tauri/target/
+
+# Mobile icon sets (desktop build only)
+src-tauri/icons/ios/
+src-tauri/icons/android/

@@ -75,10 +75,16 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building EARTMP")
         .run(|app, event| {
-            // Kill the sidecar when the last window closes / app exits.
+            // Kill the sidecar when the last window closes / app exits. Take the
+            // child out in an inner scope so the MutexGuard/State temporaries are
+            // dropped before we use it (avoids E0597).
             if let RunEvent::ExitRequested { .. } | RunEvent::Exit = event {
-                let state: State<Sidecar> = app.state();
-                if let Some(child) = state.0.lock().unwrap().take() {
+                let taken = {
+                    let state: State<Sidecar> = app.state();
+                    let child = state.0.lock().unwrap().take();
+                    child
+                };
+                if let Some(child) = taken {
                     let _ = child.kill();
                 }
             }
