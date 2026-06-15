@@ -83,6 +83,17 @@ export interface RenderScreenResult extends RenderResult {
   user: ReturnType<typeof userEvent.setup>;
 }
 
+/** Drive the shared StudentPicker: type a query, then click the matched option. */
+export async function pickStudent(
+  user: ReturnType<typeof userEvent.setup>,
+  query: string,
+  optionMatcher: RegExp,
+): Promise<void> {
+  const { screen } = await import("@testing-library/react");
+  await user.type(await screen.findByLabelText(/find student/i), query);
+  await user.click(await screen.findByRole("button", { name: optionMatcher }));
+}
+
 export function renderScreen(
   ui: ReactElement,
   opts: { permissions?: string[]; core?: Partial<CoreApi> } = {},
