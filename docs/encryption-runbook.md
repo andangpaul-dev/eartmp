@@ -36,23 +36,33 @@ Seam + proof (implemented, not deferred):
 `driverAdapters` is GA in Prisma 6.19 (no preview flag needed); the default dev
 `getPrisma()` is unchanged, so the full suite stays green.
 
-## Wiring it into the host (remaining)
+## Wiring into the host (implemented)
 
-The factory is done; what's left is to call it from the composition root once the
-operator unlocks, instead of the default plaintext `getPrisma()`:
+The host (`src/host/server.ts`) now selects the DB connection at startup:
 
-1. Add an unlock step to the host (mirrors the signing-key unseal already there)
-   that takes the operator passphrase, reads `institution.encryptionSalt`, and
-   builds the client:
-   ```ts
-   const prisma = await getEncryptedPrisma(passphrase, salt, dbPath);
-   const host = buildHost(prisma); // buildHost already accepts a PrismaClient
-   ```
-2. Until unlocked, the host serves no data (fail-closed), the same way transcript
-   operations are refused until the signing key is unsealed.
+- `EARTMP_DB_PASSPHRASE` set → encrypted, **auto-unlocked** with it (UAT builds).
+- `EARTMP_REQUIRE_UNLOCK=1` → encrypted, **locked** until `/api/unlock` with the
+  operator passphrase (production builds).
+- neither → plaintext `getPrisma()` (dev).
 
-The native `@libsql/client` ships in the sidecar `node_modules` (added to the
-bundle externals), alongside Prisma's engine and `@node-rs/argon2`.
+While locked, `core` is null and every data route returns `LOCKED`; the webview
+shows the **Unlock screen** (`src/presentation/screens/UnlockScreen.tsx`), routed
+from `App.tsx` via `GET /api/lock-state`. On `/api/unlock` the host derives the
+key (`getEncryptedPrisma(passphrase, salt, dbFile)`), and — if the DB already
+exists — **probes a real table to fail fast on a wrong passphrase** before
+running any migration (a wrong key can't decrypt and must not be migrated into).
+On first run the passphrase the operator enters becomes the DB password. The
+per-install KDF salt lives in a plaintext sidecar (`<db>.salt`, not secret).
+
+The Tauri supervisor (`src-tauri/src/lib.rs`) sets `EARTMP_DB_PASSPHRASE` under
+the `uat` feature and `EARTMP_REQUIRE_UNLOCK=1` otherwise. The native
+`@libsql/client` ships in the sidecar `node_modules` (bundle externals).
+
+Proven: `tests/infrastructure/encrypted-bootstrap.test.ts` (migrate+seed over an
+encrypted connection) and `encryptedDatabase.test.ts` (wrong-key rejection);
+verified live that auto-unlock provisions + logs in and the on-disk file is
+encrypted. Note: first-launch provisioning over the encrypted connection takes
+~15–20 s (the webview polls `lock-state` until the host is ready).
 
 ## Migrations on an encrypted DB (R-3 / F-32)
 

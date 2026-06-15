@@ -3,10 +3,11 @@
  * AppShell with the selected screen. Locking signs out (clears the session) and
  * returns to Login.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCore, useSession } from "./runtime/CoreProvider";
 import { KeyProvider } from "./runtime/KeyProvider";
 import { AppShell, type Route } from "./components/AppShell";
+import { UnlockScreen } from "./screens/UnlockScreen";
 import { LoginScreen } from "./screens/LoginScreen";
 import { DashboardScreen } from "./screens/DashboardScreen";
 import { StudentsScreen } from "./screens/StudentsScreen";
@@ -37,7 +38,30 @@ export function App() {
   const core = useCore();
   const { session, setSession } = useSession();
   const [route, setRoute] = useState<Route>("dashboard");
+  // null = still checking lock state; true = encrypted DB awaiting unlock.
+  const [locked, setLocked] = useState<boolean | null>(null);
 
+  useEffect(() => {
+    let alive = true;
+    let tries = 0;
+    const check = (): void => {
+      core
+        .lockState()
+        .then((s) => alive && setLocked(s.locked))
+        .catch(() => {
+          // Host not listening yet (first-launch provisioning can take ~20s on
+          // the encrypted DB) — keep polling until it responds.
+          if (alive && tries++ < 60) setTimeout(check, 1000);
+        });
+    };
+    check();
+    return () => {
+      alive = false;
+    };
+  }, [core]);
+
+  if (locked === null) return <div className="splash">Starting…</div>;
+  if (locked) return <UnlockScreen onUnlocked={() => setLocked(false)} />;
   if (!session) return <LoginScreen />;
 
   const screen =

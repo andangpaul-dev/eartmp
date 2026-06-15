@@ -69,6 +69,29 @@ function setToken(next: string | null): void {
 }
 
 export const ipcClient: CoreApi = {
+  async lockState() {
+    // Throws if the host isn't listening yet (first-launch provisioning) so the
+    // caller can retry; resolves once the host responds.
+    const res = await fetch(`${BASE}/lock-state`);
+    const env = (await res.json()) as Envelope<{
+      locked: boolean;
+      required: boolean;
+    }>;
+    if (!env.ok) throw new CoreApiError(env.error);
+    return env.data;
+  },
+
+  async unlock(input: { passphrase: string }) {
+    const res = await fetch(`${BASE}/unlock`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    const env = (await res.json()) as Envelope<{ locked: boolean }>;
+    if (!env.ok) throw new CoreApiError(env.error);
+    return env.data;
+  },
+
   async login(input: LoginInput) {
     const res = await fetch(`${BASE}/login`, {
       method: "POST",

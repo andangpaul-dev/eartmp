@@ -141,6 +141,11 @@ export interface ChangeStudentStatusInput {
  * host-owned and returns a SessionView.
  */
 export interface CoreApi {
+  // DB-at-rest unlock lifecycle (host-owned). `locked` is true until the
+  // encrypted database is opened with the operator passphrase.
+  lockState(): Promise<{ locked: boolean; required: boolean }>;
+  unlock(input: { passphrase: string }): Promise<{ locked: boolean }>;
+
   // auth / session
   login(input: LoginInput): Promise<{ token: string; session: SessionView }>;
   logout(): Promise<void>;

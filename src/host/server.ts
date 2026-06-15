@@ -11,7 +11,12 @@ import {
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
+import { existsSync, statSync } from "node:fs";
 import { getPrisma } from "../infrastructure/db/prisma";
+import {
+  getEncryptedPrisma,
+  resolveDbSalt,
+} from "../infrastructure/db/encryptedDatabase";
 import { bootstrapDatabase } from "../infrastructure/db/bootstrap";
 import { buildHost } from "./composition";
 import { createCore, type Core } from "./dispatcher";
@@ -20,9 +25,24 @@ import { toCoreError } from "./errors";
 const PORT = Number(process.env.EARTMP_HOST_PORT ?? 5179);
 const MIGRATIONS_DIR = process.env.EARTMP_MIGRATIONS_DIR ?? "prisma/migrations";
 
-// Assigned during startup, after the DB is bootstrapped. Requests only arrive
-// once the server is listening, which happens after this is set.
-let core: Core;
+// DB-at-rest encryption (ADR-008):
+//   EARTMP_DB_PASSPHRASE set  → encrypted, auto-unlocked at startup (UAT).
+//   EARTMP_REQUIRE_UNLOCK=1   → encrypted, LOCKED until /api/unlock (production).
+//   neither                   → plaintext getPrisma (dev).
+const DB_PASSPHRASE = process.env.EARTMP_DB_PASSPHRASE;
+const REQUIRE_UNLOCK = process.env.EARTMP_REQUIRE_UNLOCK === "1";
+const ENCRYPTED = Boolean(DB_PASSPHRASE) || REQUIRE_UNLOCK;
+
+/** Absolute SQLite file path parsed from DATABASE_URL (encrypted path needs it). */
+function dbFilePath(): string {
+  const url = process.env.DATABASE_URL ?? "file:./prisma/dev.db";
+  return url.replace(/^file:/, "");
+}
+
+// `core` is null until the DB is unlocked + the host is built. Requests that
+// need data are refused with LOCKED until then.
+let core: Core | null = null;
+let unlocking = false;
 
 // The webview origins allowed to call the host. Dev = Vite; packaged = the
 // Tauri webview (custom protocol / tauri.localhost). Anything else gets no
@@ -96,10 +116,59 @@ const server = createServer((req, res) => {
     if (req.method === "OPTIONS") return send(res, 204, {}, origin);
 
     try {
+      // Unlock lifecycle (available even while locked).
+      if (req.method === "GET" && url === "/api/lock-state") {
+        return send(
+          res,
+          200,
+          { ok: true, data: { locked: core === null, required: ENCRYPTED } },
+          origin,
+        );
+      }
+      if (req.method === "POST" && url === "/api/unlock") {
+        const body = await readJson(req);
+        try {
+          await unlock(String(body.passphrase ?? ""));
+          return send(
+            res,
+            200,
+            { ok: true, data: { locked: core === null } },
+            origin,
+          );
+        } catch {
+          return send(
+            res,
+            200,
+            {
+              ok: false,
+              error: {
+                code: "UNAUTHENTICATED",
+                message: "Incorrect passphrase.",
+              },
+            },
+            origin,
+          );
+        }
+      }
+
+      // Everything else needs an unlocked database.
+      const c = core;
+      if (c === null) {
+        return send(
+          res,
+          200,
+          {
+            ok: false,
+            error: { code: "LOCKED", message: "Database is locked." },
+          },
+          origin,
+        );
+      }
+
       if (req.method === "POST" && url === "/api/login") {
         const body = await readJson(req);
         try {
-          const result = await core.login({
+          const result = await c.login({
             username: String(body.username ?? ""),
             password: String(body.password ?? ""),
           });
@@ -113,18 +182,18 @@ const server = createServer((req, res) => {
 
       if (req.method === "POST" && url === "/api/logout") {
         const token = bearer(req);
-        if (token) await core.logout(token);
+        if (token) await c.logout(token);
         return send(res, 200, { ok: true, data: null }, origin);
       }
 
       if (req.method === "GET" && url === "/api/me") {
-        const session = await core.currentUser(bearer(req));
+        const session = await c.currentUser(bearer(req));
         return send(res, 200, { ok: true, data: session }, origin);
       }
 
       if (req.method === "POST" && url === "/api/rpc") {
         const body = await readJson(req);
-        const envelope = await core.dispatch(
+        const envelope = await c.dispatch(
           String(body.method ?? ""),
           body.input,
           bearer(req),
@@ -157,15 +226,57 @@ const server = createServer((req, res) => {
   })();
 });
 
+/**
+ * Open the DB (encrypted with the passphrase, or plaintext for dev), bootstrap
+ * it, and build the host. Throws if a wrong passphrase can't decrypt the file.
+ */
+async function unlock(passphrase: string | undefined): Promise<void> {
+  if (core || unlocking) return;
+  unlocking = true;
+  try {
+    const file = dbFilePath();
+    const preExisting = existsSync(file) && statSync(file).size > 0;
+    const prisma =
+      ENCRYPTED && passphrase
+        ? await getEncryptedPrisma(passphrase, resolveDbSalt(file), file)
+        : getPrisma();
+
+    // If an encrypted DB already exists, the key must decrypt it. Probe a real
+    // table and fail fast on a wrong passphrase — DON'T run migrations against
+    // an undecryptable file (which corrupts/hangs).
+    if (ENCRYPTED && preExisting) {
+      try {
+        await prisma.$queryRawUnsafe('SELECT 1 FROM "User" LIMIT 1');
+      } catch (e) {
+        await prisma.$disconnect().catch(() => {});
+        throw new Error("Database could not be decrypted (wrong passphrase).", {
+          cause: e,
+        });
+      }
+    }
+
+    const provisioned = await bootstrapDatabase(prisma, MIGRATIONS_DIR);
+    if (provisioned) console.log("EARTMP database provisioned (first launch).");
+    core = createCore(buildHost(prisma));
+    console.log(
+      ENCRYPTED ? "EARTMP database unlocked." : "EARTMP database open.",
+    );
+  } finally {
+    unlocking = false;
+  }
+}
+
 async function start(): Promise<void> {
-  const prisma = getPrisma();
-  // First launch: apply migrations + seed (idempotent; a no-op on an existing
-  // DB). The packaged sidecar points at a fresh per-user DB.
-  const provisioned = await bootstrapDatabase(prisma, MIGRATIONS_DIR);
-  if (provisioned) console.log("EARTMP database provisioned (first launch).");
-  core = createCore(buildHost(prisma));
+  // Auto-unlock when a passphrase is supplied (UAT) or for the plaintext dev
+  // path; otherwise stay locked until /api/unlock (production REQUIRE_UNLOCK).
+  if (!REQUIRE_UNLOCK) {
+    await unlock(DB_PASSPHRASE);
+  }
   server.listen(PORT, "127.0.0.1", () => {
-    console.log(`EARTMP host listening on http://127.0.0.1:${PORT}`);
+    console.log(
+      `EARTMP host listening on http://127.0.0.1:${PORT}` +
+        (core ? "" : " (locked — awaiting unlock)"),
+    );
   });
 }
 

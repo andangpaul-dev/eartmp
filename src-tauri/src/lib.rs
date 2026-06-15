@@ -58,11 +58,19 @@ fn spawn_host(app: &tauri::AppHandle) -> Result<CommandChild, String> {
         .env("DATABASE_URL", db_url)
         .env("EARTMP_MIGRATIONS_DIR", migrations_dir);
 
-    // UAT/test builds (the `uat` cargo feature, on by default) seed sample data
-    // on first launch. A production build (`--no-default-features`) omits it.
+    // UAT/test builds (the `uat` cargo feature, on by default): seed sample data
+    // and auto-unlock the encrypted DB with the documented default passphrase so
+    // testers aren't blocked. A production build (`--no-default-features`) omits
+    // the sample data and requires the operator passphrase via the unlock screen.
     #[cfg(feature = "uat")]
     {
-        cmd = cmd.env("EARTMP_SEED_DEMO", "1");
+        cmd = cmd
+            .env("EARTMP_SEED_DEMO", "1")
+            .env("EARTMP_DB_PASSPHRASE", "eartmp-dev-passphrase");
+    }
+    #[cfg(not(feature = "uat"))]
+    {
+        cmd = cmd.env("EARTMP_REQUIRE_UNLOCK", "1");
     }
 
     let (mut rx, child) = cmd
