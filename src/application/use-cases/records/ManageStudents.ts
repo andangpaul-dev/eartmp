@@ -13,9 +13,34 @@ import type {
   StudentRepository,
   StudentQuery,
   Page,
+  VersionedStudentWrites,
 } from "../../../domain/repositories/records";
 import type { AuditLogPort } from "../../../domain/repositories";
 import type { AuthorizedUseCase } from "../../authorization/AuthorizedUseCase";
+
+/**
+ * Apply a patch with optimistic locking when a versioned writer is available
+ * (the production Prisma repo): reads the version, then UPDATE … WHERE version =
+ * expected — a concurrent edit since the load throws ConcurrencyError. Falls
+ * back to a plain update for repos that don't support versioning (fakes).
+ */
+async function versionedPatch(
+  students: StudentRepository,
+  versioned: VersionedStudentWrites | undefined,
+  id: string,
+  patch: Partial<Omit<Student, "id">>,
+  loadedVersion?: number,
+): Promise<Student> {
+  if (versioned) {
+    const v = loadedVersion ?? (await versioned.readVersion(id));
+    if (v === null) throw new RecordsError("Student not found.");
+    await versioned.tryUpdate(id, patch, v);
+    const updated = await students.findById(id);
+    if (!updated) throw new RecordsError("Student not found.");
+    return updated;
+  }
+  return students.update(id, patch);
+}
 
 export const DEFAULT_TAKE = 50;
 export const MAX_TAKE = 200;
@@ -86,11 +111,21 @@ export class UpdateStudent implements AuthorizedUseCase<
   constructor(
     private readonly students: StudentRepository,
     private readonly audit: AuditLogPort,
+    private readonly versioned?: VersionedStudentWrites,
   ) {}
   async execute(input: UpdateStudentInput, session: SessionContext) {
     const before = await this.students.findById(input.id);
     if (!before) throw new RecordsError("Student not found.");
-    const updated = await this.students.update(input.id, input.patch);
+    const version = this.versioned
+      ? await this.versioned.readVersion(input.id)
+      : undefined;
+    const updated = await versionedPatch(
+      this.students,
+      this.versioned,
+      input.id,
+      input.patch,
+      version ?? undefined,
+    );
     await this.audit.record({
       userId: session.actorId,
       action: "UPDATE",
@@ -146,10 +181,17 @@ export class ChangeStudentStatus implements AuthorizedUseCase<
   constructor(
     private readonly students: StudentRepository,
     private readonly audit: AuditLogPort,
+    private readonly versioned?: VersionedStudentWrites,
   ) {}
   async execute(input: ChangeStudentStatusInput, session: SessionContext) {
     const student = await this.students.findById(input.studentId);
     if (!student) throw new RecordsError("Student not found.");
+    // Capture the version at load time so a concurrent status change since this
+    // read makes the write fail (ConcurrencyError) — two racing transitions on a
+    // stale status can't both win.
+    const version = this.versioned
+      ? await this.versioned.readVersion(input.studentId)
+      : undefined;
     if (StudentRules.isFinalized(student.status)) {
       throw new RecordsError(
         `Student status "${student.status}" is final and cannot change.`,
@@ -167,9 +209,13 @@ export class ChangeStudentStatus implements AuthorizedUseCase<
         `Illegal status transition ${student.status} → ${input.to}.`,
       );
     }
-    const updated = await this.students.update(input.studentId, {
-      status: input.to,
-    });
+    const updated = await versionedPatch(
+      this.students,
+      this.versioned,
+      input.studentId,
+      { status: input.to },
+      version ?? undefined,
+    );
     await this.audit.record({
       userId: session.actorId,
       action: "UPDATE",

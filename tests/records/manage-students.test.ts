@@ -7,7 +7,9 @@ import {
 } from "../../src/application/use-cases/records/ManageStudents";
 import { authorize } from "../../src/application/authorization/AuthorizedUseCase";
 import { RecordsError } from "../../src/domain/errors/records";
+import { ConcurrencyError } from "../../src/domain/errors/persistence";
 import { AuthorizationError } from "../../src/domain/errors/auth";
+import type { VersionedStudentWrites } from "../../src/domain/repositories/records";
 import { SessionContext } from "../../src/domain/value-objects/SessionContext";
 import { CapturingAudit } from "../auth/fakes";
 import { FakeStudentRepo } from "./fakes";
@@ -106,6 +108,43 @@ describe("ChangeStudentStatus (workflow)", () => {
     await expect(
       uc.execute({ studentId: s.id, to: "GRADUATED" }, admin),
     ).rejects.toThrow(/graduation clearance flow/);
+  });
+
+  it("optimistic locking: a stale version throws ConcurrencyError", async () => {
+    const s = await makeStudent();
+    // readVersion (load time) = 0, but a concurrent write bumped it to 1.
+    const versioned: VersionedStudentWrites = {
+      readVersion: async () => 0,
+      tryUpdate: async (_id, _patch, expected) => {
+        if (expected !== 1) throw new ConcurrencyError();
+        return 2;
+      },
+    };
+    const uc = new ChangeStudentStatus(students, audit, versioned);
+    await expect(
+      uc.execute({ studentId: s.id, to: "SUSPENDED" }, admin),
+    ).rejects.toBeInstanceOf(ConcurrencyError);
+  });
+
+  it("optimistic locking: applies the change when the version matches", async () => {
+    const s = await makeStudent();
+    let applied = false;
+    const versioned: VersionedStudentWrites = {
+      readVersion: async () => 0,
+      tryUpdate: async (id, patch, expected) => {
+        if (expected !== 0) throw new ConcurrencyError();
+        await students.update(id, patch);
+        applied = true;
+        return 1;
+      },
+    };
+    const updated = await new ChangeStudentStatus(
+      students,
+      audit,
+      versioned,
+    ).execute({ studentId: s.id, to: "SUSPENDED" }, admin);
+    expect(updated.status).toBe("SUSPENDED");
+    expect(applied).toBe(true);
   });
 });
 

@@ -181,8 +181,14 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
   const listStudents = new ListStudents(students);
   const getStudent = new GetStudent(students);
   const admitStudent = new AdmitStudent(uow);
-  const updateStudent = new UpdateStudent(students, audit);
-  const changeStudentStatus = new ChangeStudentStatus(students, audit);
+  // `students` (PrismaStudentRepository) also implements VersionedStudentWrites,
+  // so these edits use optimistic locking (lost-update protection, F-27).
+  const updateStudent = new UpdateStudent(students, audit, students);
+  const changeStudentStatus = new ChangeStudentStatus(
+    students,
+    audit,
+    students,
+  );
   const deleteStudent = new DeleteStudent(students, audit);
   const listFaculties = new ListFaculties(new PrismaFacultyRepository(db));
   const listDepartments = new ListDepartments(
