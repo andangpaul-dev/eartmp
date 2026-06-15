@@ -116,6 +116,15 @@ import {
   SetDefaultAssessmentConfig,
 } from "../application/use-cases/config/ManageAssessmentConfigs";
 import { ChangeKeyPassphrase } from "../application/use-cases/security/ChangeKeyPassphrase";
+import {
+  CreateUser,
+  DeactivateUser,
+  ActivateUser,
+  AssignRole,
+  ResetUserPassword,
+  ListUsers,
+  ListRoles,
+} from "../application/use-cases/auth/ManageUsers";
 import { buildDefaultRegistry } from "../domain/settings/SettingsRegistry";
 import { AuthorizationError } from "../domain/errors/auth";
 import { TranscriptError } from "../domain/errors/transcript";
@@ -244,6 +253,15 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     audit,
   );
 
+  // --- user & role administration ---
+  const listUsers = new ListUsers(users, roles);
+  const listRoles = new ListRoles(roles);
+  const createUser = new CreateUser(users, roles, hasher, audit);
+  const deactivateUser = new DeactivateUser(users, audit);
+  const activateUser = new ActivateUser(users, audit);
+  const assignRole = new AssignRole(users, roles, audit);
+  const resetUserPassword = new ResetUserPassword(users, hasher, audit);
+
   // The transcript-signing key is sealed at rest. It is unsealed ONCE per host
   // session with the institution passphrase and held in memory; a lost
   // passphrase is unrecoverable. While sealed, signing operations are refused.
@@ -326,6 +344,22 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     [
       "changeKeyPassphrase",
       (i, s) => authorize(changeKeyPassphrase, i as never, s),
+    ],
+    ["listUsers", (i, s) => authorize(listUsers, i as never, s)],
+    ["listRoles", (i, s) => authorize(listRoles, i as never, s)],
+    [
+      "createUser",
+      async (i, s) => {
+        const u = await authorize(createUser, i as never, s);
+        return { id: (u as { id: string }).id }; // never return the hash
+      },
+    ],
+    ["deactivateUser", (i, s) => authorize(deactivateUser, i as never, s)],
+    ["activateUser", (i, s) => authorize(activateUser, i as never, s)],
+    ["assignRole", (i, s) => authorize(assignRole, i as never, s)],
+    [
+      "resetUserPassword",
+      (i, s) => authorize(resetUserPassword, i as never, s),
     ],
   ]);
 

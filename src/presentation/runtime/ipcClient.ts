@@ -127,4 +127,11 @@ export const ipcClient: CoreApi = {
   setDefaultAssessmentConfig: (input) =>
     rpc("setDefaultAssessmentConfig", input),
   changeKeyPassphrase: (input) => rpc("changeKeyPassphrase", input),
+  listUsers: (input) => rpc("listUsers", input),
+  listRoles: (input) => rpc("listRoles", input),
+  createUser: (input) => rpc("createUser", input),
+  deactivateUser: (input) => rpc("deactivateUser", input),
+  activateUser: (input) => rpc("activateUser", input),
+  assignRole: (input) => rpc("assignRole", input),
+  resetUserPassword: (input) => rpc("resetUserPassword", input),
 };

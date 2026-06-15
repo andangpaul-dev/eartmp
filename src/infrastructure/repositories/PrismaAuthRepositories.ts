@@ -68,6 +68,14 @@ export class PrismaUserRepository implements UserRepository {
     return row ? toUser(row) : null;
   }
 
+  async list(): Promise<UserAccount[]> {
+    const rows = await this.db.user.findMany({
+      where: { deletedAt: null },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    });
+    return rows.map(toUser);
+  }
+
   async create(
     data: Omit<UserAccount, "id" | "lastLoginAt"> & { lastLoginAt?: Date },
   ): Promise<UserAccount> {
@@ -140,6 +148,15 @@ export class PrismaRoleRepository implements RoleRepository {
       include: roleInclude,
     });
     return row ? toRole(row) : null;
+  }
+
+  async list(): Promise<Role[]> {
+    const rows = await this.db.role.findMany({
+      where: { deletedAt: null },
+      include: roleInclude,
+      orderBy: { name: "asc" },
+    });
+    return rows.map(toRole);
   }
 }
 

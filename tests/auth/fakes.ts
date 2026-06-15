@@ -61,6 +61,9 @@ export class InMemoryUserRepository implements UserRepository {
     }
     return null;
   }
+  async list(): Promise<UserAccount[]> {
+    return [...this.byId.values()].map((u) => ({ ...u }));
+  }
   async create(
     data: Omit<UserAccount, "id" | "lastLoginAt"> & { lastLoginAt?: Date },
   ): Promise<UserAccount> {
@@ -90,6 +93,9 @@ export class InMemoryRoleRepository implements RoleRepository {
       if (r.name === name) return r;
     }
     return null;
+  }
+  async list(): Promise<Role[]> {
+    return [...this.byId.values()];
   }
 }
 

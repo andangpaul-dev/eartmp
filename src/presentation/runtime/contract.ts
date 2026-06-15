@@ -49,6 +49,8 @@ import type {
   StoredAssessmentConfig,
 } from "../../domain/repositories/grading";
 import type { GraduationRequirements } from "../../domain/services/GraduationEligibility";
+import type { UserSummary } from "../../application/use-cases/auth/ManageUsers";
+import type { Role } from "../../domain/entities/auth";
 
 // Re-exported so presentation code imports these shapes from the contract
 // (the single seam) rather than reaching into application/domain paths.
@@ -67,6 +69,8 @@ export type {
   StoredGradeScale,
   StoredAssessmentConfig,
   GraduationRequirements,
+  UserSummary,
+  Role,
 };
 
 /** Transcript bytes are transported base64-encoded (JSON can't carry Uint8Array). */
@@ -246,6 +250,24 @@ export interface CoreApi {
   changeKeyPassphrase(input: {
     oldPassphrase: string;
     newPassphrase: string;
+  }): Promise<void>;
+
+  // users & roles administration
+  listUsers(input: Record<string, never>): Promise<UserSummary[]>;
+  listRoles(input: Record<string, never>): Promise<Role[]>;
+  createUser(input: {
+    username: string;
+    email: string;
+    fullName: string;
+    roleId: string;
+    password: string;
+  }): Promise<{ id: string }>;
+  deactivateUser(input: { userId: string }): Promise<void>;
+  activateUser(input: { userId: string }): Promise<void>;
+  assignRole(input: { userId: string; roleId: string }): Promise<void>;
+  resetUserPassword(input: {
+    userId: string;
+    newPassword: string;
   }): Promise<void>;
 }
 
