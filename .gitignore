@@ -5,7 +5,13 @@ reference-implementation/node_modules/
 # Build output
 dist/
 dist-ui/
+dist-host/
 coverage/
+
+# Tauri (Rust build + generated, sidecar binaries)
+src-tauri/target/
+src-tauri/gen/
+src-tauri/binaries/
 
 # Local database & Prisma local artifacts
 *.db

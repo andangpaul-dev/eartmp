@@ -1,0 +1,25 @@
+# EARTMP Tauri shell (Item 1 — packaging). NOTE: this crate is NOT built in the
+# headless dev environment (no Rust toolchain). Build it on a machine with Rust
+# + the platform toolchain (MSVC on Windows). See docs/packaging-runbook.md.
+[package]
+name = "eartmp"
+version = "0.1.0"
+description = "EARTMP Academic Records & Transcript Management Platform"
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "eartmp_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]

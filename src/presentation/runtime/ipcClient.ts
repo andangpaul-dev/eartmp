@@ -12,7 +12,10 @@ import type {
   LoginInput,
 } from "./contract";
 
-const BASE = "/api";
+// Dev: "/api" (Vite proxies to the host). Packaged Tauri build: there is no
+// proxy, so VITE_API_BASE is set to the sidecar's absolute loopback URL at build
+// time (see docs/packaging-runbook.md).
+const BASE = import.meta.env.VITE_API_BASE ?? "/api";
 const TOKEN_KEY = "eartmp.token";
 
 let token: string | null =

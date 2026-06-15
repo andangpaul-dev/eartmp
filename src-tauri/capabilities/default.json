@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Core permissions for the EARTMP main window. The host sidecar is launched by Rust, not from JS, so no broad shell-execute permission is granted to the webview.",
+  "windows": ["main"],
+  "permissions": ["core:default", "shell:allow-open"]
+}

@@ -27,6 +27,8 @@ export default [
       "node_modules/**",
       "dist/**",
       "dist-ui/**",
+      "dist-host/**",
+      "src-tauri/**",
       "reference-implementation/**",
       "coverage/**",
       "**/*.d.ts",

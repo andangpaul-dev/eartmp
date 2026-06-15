@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "EARTMP",
+  "version": "0.1.0",
+  "identifier": "edu.eartmp.desktop",
+  "build": {
+    "frontendDist": "../dist-ui",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run ui:build && npm run bundle:host"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "EARTMP — Academic Records & Transcripts",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 1024,
+        "minHeight": 680
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:5179; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; object-src blob:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["msi", "nsis", "dmg", "appimage", "deb"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "../dist-host/": "host/",
+      "../prisma/migrations/": "migrations/"
+    },
+    "externalBin": ["binaries/eartmp-node"]
+  }
+}
