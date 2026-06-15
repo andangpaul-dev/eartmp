@@ -41,6 +41,7 @@
     "host:serve": "tsx src/host/server.ts",
     "ui:dev": "vite",
     "ui:build": "vite build",
+    "dev": "tsx scripts/dev.ts",
     "prepare": "husky || true"
   },
   "prisma": {
