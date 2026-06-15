@@ -10,16 +10,71 @@
  */
 import type { PrismaClient } from "@prisma/client";
 import { PrismaUnitOfWork } from "../persistence/PrismaUnitOfWork";
+import { Argon2HashingService } from "../crypto/Argon2HashingService";
 import { AdmitStudent } from "../../application/use-cases/records/AdmitStudent";
 import { SessionContext } from "../../domain/value-objects/SessionContext";
 
 const FACULTY_CODE = "SCI";
 
+/**
+ * One test account per non-admin role, so RBAC can be exercised from each
+ * perspective. Idempotent per username; runs regardless of the structure seed so
+ * an already-provisioned test DB still gets them on next launch.
+ */
+const DEMO_USERS = [
+  {
+    username: "registrar",
+    password: "Registrar123!",
+    role: "REGISTRAR",
+    fullName: "Test Registrar",
+    email: "registrar@example.edu",
+  },
+  {
+    username: "dataentry",
+    password: "DataEntry123!",
+    role: "DATA_ENTRY",
+    fullName: "Test Data Entry",
+    email: "dataentry@example.edu",
+  },
+  {
+    username: "viewer",
+    password: "Viewer123!",
+    role: "VIEWER",
+    fullName: "Test Viewer",
+    email: "viewer@example.edu",
+  },
+];
+
+async function seedDemoUsers(prisma: PrismaClient): Promise<void> {
+  const hasher = new Argon2HashingService();
+  for (const u of DEMO_USERS) {
+    const existing = await prisma.user.findUnique({
+      where: { username: u.username },
+    });
+    if (existing) continue;
+    const role = await prisma.role.findUnique({ where: { name: u.role } });
+    if (!role) continue;
+    await prisma.user.create({
+      data: {
+        username: u.username,
+        email: u.email,
+        fullName: u.fullName,
+        passwordHash: await hasher.hash(u.password),
+        roleId: role.id,
+        isActive: true,
+      },
+    });
+  }
+}
+
 export async function seedDemoData(prisma: PrismaClient): Promise<boolean> {
+  // Role test accounts first (ungated, idempotent).
+  await seedDemoUsers(prisma);
+
   const exists = await prisma.faculty.findFirst({
     where: { code: FACULTY_CODE },
   });
-  if (exists) return false; // already seeded
+  if (exists) return false; // structure already seeded
 
   const faculty = await prisma.faculty.create({
     data: { name: "Faculty of Science", code: FACULTY_CODE },

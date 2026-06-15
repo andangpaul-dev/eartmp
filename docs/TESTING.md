@@ -15,13 +15,21 @@ Pick one (Windows x64):
 Run the installer, then launch **EARTMP** from the Start menu. First launch
 provisions the database (you'll see the window load after a moment).
 
-## Sign in
+## Sign in — test accounts (one per role)
 
-- **Username:** `admin`
-- **Password:** `ChangeMe123!`
+The test build seeds one account per role so RBAC can be checked from each
+perspective. Change these passwords for any real use.
 
-(SUPER_ADMIN — full access. Change this password during testing: Configuration →
-Security → My password.)
+| Username    | Password        | Role        | Can do                                                                           |
+| ----------- | --------------- | ----------- | -------------------------------------------------------------------------------- |
+| `admin`     | `ChangeMe123!`  | SUPER_ADMIN | Everything                                                                       |
+| `registrar` | `Registrar123!` | REGISTRAR   | Records, results, transcripts (generate/approve), graduation, audit, config-read |
+| `dataentry` | `DataEntry123!` | DATA_ENTRY  | View students, enter/import/process results, courses                             |
+| `viewer`    | `Viewer123!`    | VIEWER      | Read-only: students + audit log                                                  |
+
+To verify gating, sign in as each: the sidebar locks routes the role can't
+access, and actions (admit, process, approve, etc.) are hidden/disabled — the
+host re-checks every call, so the UI only mirrors what's granted.
 
 ## What's pre-loaded (so you can test immediately)
 
