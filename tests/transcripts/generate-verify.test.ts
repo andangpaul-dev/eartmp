@@ -3,6 +3,8 @@ import { GenerateTranscript } from "../../src/application/use-cases/transcripts/
 import {
   VerifyTranscript,
   ApproveTranscript,
+  LockTranscript,
+  RevokeTranscript,
 } from "../../src/application/use-cases/transcripts/VerifyTranscript";
 import { CryptoSignatureService } from "../../src/infrastructure/crypto/CryptoSignatureService";
 import { TranscriptError } from "../../src/domain/errors/transcript";
@@ -142,11 +144,12 @@ describe("GenerateTranscript", () => {
     expect(audit.entries.at(-1)).toMatchObject({ action: "GENERATE" });
   });
 
-  it("produces a verifiable signature", async () => {
+  it("a DRAFT has a valid signature but is not an issued (valid) transcript", async () => {
     const t = await generate.execute({ studentId: "s1" }, admin);
-    expect((await verify.execute({ transcriptId: t.id }, admin)).valid).toBe(
-      true,
-    );
+    const r = await verify.execute({ transcriptId: t.id }, admin);
+    expect(r.signatureValid).toBe(true); // signature checks out
+    expect(r.valid).toBe(false); // …but a DRAFT isn't an official issue
+    expect(r.status).toBe("DRAFT");
   });
 
   it("verification FAILS when the snapshot is tampered", async () => {
@@ -155,9 +158,69 @@ describe("GenerateTranscript", () => {
       "Ada Lovelace",
       "Mallory",
     );
-    expect((await verify.execute({ transcriptId: t.id }, admin)).valid).toBe(
-      false,
+    const r = await verify.execute({ transcriptId: t.id }, admin);
+    expect(r.signatureValid).toBe(false);
+    expect(r.valid).toBe(false);
+  });
+});
+
+describe("Lock / Revoke + verify depth", () => {
+  it("APPROVED → LOCKED is verifiably valid; revoked is not", async () => {
+    const t = await generate.execute({ studentId: "s1" }, admin);
+    await new ApproveTranscript(store, audit).execute(
+      { transcriptId: t.id },
+      admin,
     );
+    expect((await verify.execute({ transcriptId: t.id }, admin)).valid).toBe(
+      true,
+    );
+
+    await new LockTranscript(store, audit).execute(
+      { transcriptId: t.id },
+      admin,
+    );
+    const locked = await verify.execute({ transcriptId: t.id }, admin);
+    expect(locked.status).toBe("LOCKED");
+    expect(locked.valid).toBe(true);
+
+    await new RevokeTranscript(store, audit).execute(
+      { transcriptId: t.id, reason: "superseded" },
+      admin,
+    );
+    const revoked = await verify.execute({ transcriptId: t.id }, admin);
+    expect(revoked.revoked).toBe(true);
+    expect(revoked.valid).toBe(false); // signature still checks, but revoked
+    expect(revoked.signatureValid).toBe(true);
+  });
+
+  it("Lock rejects a DRAFT; Revoke rejects a DRAFT", async () => {
+    const t = await generate.execute({ studentId: "s1" }, admin);
+    await expect(
+      new LockTranscript(store, audit).execute({ transcriptId: t.id }, admin),
+    ).rejects.toBeInstanceOf(TranscriptError);
+    await expect(
+      new RevokeTranscript(store, audit).execute({ transcriptId: t.id }, admin),
+    ).rejects.toBeInstanceOf(TranscriptError);
+  });
+
+  it("detects a rotated signing key (key mismatch)", async () => {
+    const t = await generate.execute({ studentId: "s1" }, admin);
+    await new ApproveTranscript(store, audit).execute(
+      { transcriptId: t.id },
+      admin,
+    );
+    // Verify with a DIFFERENT key than the one that signed.
+    const other = CryptoSignatureService.generateKeypair();
+    const otherSigner = new CryptoSignatureService(
+      other.privateKeyPem,
+      other.publicKeyPem,
+    );
+    const r = await new VerifyTranscript(store, otherSigner).execute(
+      { transcriptId: t.id },
+      admin,
+    );
+    expect(r.keyMatches).toBe(false);
+    expect(r.valid).toBe(false);
   });
 });
 

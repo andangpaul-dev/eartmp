@@ -53,8 +53,17 @@ export function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
     getAcademicSummary: async () => ({}) as never,
     listTranscripts: async () => [],
     generateTranscript: async () => ({}) as never,
-    verifyTranscript: async () => ({ valid: true, transcriptNumber: "TR-1" }),
+    verifyTranscript: async () => ({
+      valid: true,
+      transcriptNumber: "TR-1",
+      status: "APPROVED",
+      signatureValid: true,
+      revoked: false,
+      keyMatches: true,
+    }),
     approveTranscript: async () => ({}) as never,
+    lockTranscript: async () => ({}) as never,
+    revokeTranscript: async () => ({}) as never,
     exportTranscript: async () => ({
       base64: "",
       filename: "t.pdf",

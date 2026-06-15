@@ -32,6 +32,7 @@ const STATUS_TONE: Record<string, Tone> = {
   DRAFT: "warn",
   APPROVED: "info",
   LOCKED: "success",
+  REVOKED: "danger",
 };
 
 function downloadDoc(doc: ExportedDoc): void {
@@ -103,6 +104,37 @@ export function TranscriptsScreen() {
       notify(`${t.transcriptNumber} approved`);
     } catch (e) {
       notify(e instanceof Error ? e.message : "Approve failed");
+    }
+  };
+
+  const lock = async (t: StoredTranscript) => {
+    try {
+      await core.lockTranscript({ transcriptId: t.id });
+      list.reload();
+      notify(`${t.transcriptNumber} locked`);
+    } catch (e) {
+      notify(e instanceof Error ? e.message : "Lock failed");
+    }
+  };
+
+  const revoke = async (t: StoredTranscript) => {
+    if (
+      !window.confirm(
+        `Revoke ${t.transcriptNumber}? It will no longer verify as a valid issue. This is recorded in the audit log.`,
+      )
+    )
+      return;
+    try {
+      await core.revokeTranscript({ transcriptId: t.id });
+      list.reload();
+      setVerifyOf((m) => {
+        const n = { ...m };
+        delete n[t.id];
+        return n;
+      });
+      notify(`${t.transcriptNumber} revoked`);
+    } catch (e) {
+      notify(e instanceof Error ? e.message : "Revoke failed");
     }
   };
 
@@ -199,9 +231,25 @@ export function TranscriptsScreen() {
                             <span className="verify-ok">
                               <Icon name="check" size={14} /> Ed25519 valid
                             </span>
-                          ) : (
+                          ) : v.revoked ? (
                             <span className="verify-bad">
-                              <Icon name="shield" size={14} /> INVALID
+                              <Icon name="shield" size={14} /> REVOKED
+                            </span>
+                          ) : !v.signatureValid ? (
+                            <span className="verify-bad">
+                              <Icon name="shield" size={14} /> INVALID signature
+                            </span>
+                          ) : !v.keyMatches ? (
+                            <span className="verify-bad">
+                              <Icon name="shield" size={14} /> key mismatch
+                            </span>
+                          ) : (
+                            <span
+                              className="verify-bad"
+                              title="Signature valid but not an approved/issued transcript"
+                            >
+                              <Icon name="shield" size={14} /> not issued (
+                              {v.status})
                             </span>
                           )
                         ) : (
@@ -232,6 +280,17 @@ export function TranscriptsScreen() {
                                 Approve
                               </Button>
                             )}
+                          {t.status === "APPROVED" &&
+                            can("transcripts.approve") && (
+                              <Button variant="ghost" onClick={() => lock(t)}>
+                                Lock
+                              </Button>
+                            )}
+                          {official && can("transcripts.approve") && (
+                            <Button variant="danger" onClick={() => revoke(t)}>
+                              Revoke
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             onClick={() => showPreview(t)}

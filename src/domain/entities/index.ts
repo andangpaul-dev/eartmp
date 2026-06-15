@@ -54,7 +54,7 @@ export interface ResultRecord {
   isLocked: boolean;
 }
 
-export type TranscriptStatus = "DRAFT" | "APPROVED" | "LOCKED";
+export type TranscriptStatus = "DRAFT" | "APPROVED" | "LOCKED" | "REVOKED";
 
 export interface Transcript {
   id: string;
@@ -87,6 +87,14 @@ export const TranscriptRules = {
     return status === "DRAFT";
   },
   canExport(status: TranscriptStatus): boolean {
+    return status === "APPROVED" || status === "LOCKED";
+  },
+  /** Seal an approved transcript (terminal except for revocation). */
+  canLock(status: TranscriptStatus): boolean {
+    return status === "APPROVED";
+  },
+  /** Revoke an issued transcript (corrected/superseded/fraudulent). */
+  canRevoke(status: TranscriptStatus): boolean {
     return status === "APPROVED" || status === "LOCKED";
   },
 };

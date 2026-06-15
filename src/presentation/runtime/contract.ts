@@ -219,6 +219,11 @@ export interface CoreApi {
   }): Promise<StoredTranscript>;
   verifyTranscript(input: { transcriptId: string }): Promise<VerifyResult>;
   approveTranscript(input: { transcriptId: string }): Promise<StoredTranscript>;
+  lockTranscript(input: { transcriptId: string }): Promise<StoredTranscript>;
+  revokeTranscript(input: {
+    transcriptId: string;
+    reason?: string;
+  }): Promise<StoredTranscript>;
   exportTranscript(input: {
     transcriptId: string;
     preview?: boolean;

@@ -13,4 +13,6 @@ export interface SignaturePort {
   sign(data: string): SignatureResult;
   /** Verify a signature against the configured public key. Never throws. */
   verify(data: string, signature: string): boolean;
+  /** Short id of the configured public key (to detect a rotated key on verify). */
+  readonly keyId?: string;
 }

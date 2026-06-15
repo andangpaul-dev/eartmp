@@ -24,8 +24,16 @@ export interface VerifyTranscriptInput {
   transcriptId: string;
 }
 export interface VerifyResult {
+  /** True only if the signature verifies AND the transcript is a current,
+   *  non-revoked issue signed by the current key. */
   valid: boolean;
   transcriptNumber: string;
+  status: string;
+  /** Whether the signature itself verifies (independent of status/key). */
+  signatureValid: boolean;
+  revoked: boolean;
+  /** False if signed by a different (rotated) key than the current one. */
+  keyMatches: boolean;
 }
 
 export class VerifyTranscript implements AuthorizedUseCase<
@@ -46,17 +54,122 @@ export class VerifyTranscript implements AuthorizedUseCase<
   ): Promise<VerifyResult> {
     const t = await this.transcripts.findById(input.transcriptId);
     if (!t) throw new TranscriptError("Transcript not found.");
-    let signature = "";
-    try {
-      signature = (JSON.parse(t.verificationHash) as { signature: string })
-        .signature;
-    } catch {
-      return { valid: false, transcriptNumber: t.transcriptNumber };
-    }
-    return {
-      valid: this.signer.verify(t.snapshot, signature),
+
+    const base = {
       transcriptNumber: t.transcriptNumber,
+      status: t.status,
+      revoked: t.status === "REVOKED",
     };
+    let parsed: { signature: string; keyId?: string };
+    try {
+      parsed = JSON.parse(t.verificationHash) as {
+        signature: string;
+        keyId?: string;
+      };
+    } catch {
+      return {
+        ...base,
+        valid: false,
+        signatureValid: false,
+        keyMatches: false,
+      };
+    }
+
+    const signatureValid = this.signer.verify(t.snapshot, parsed.signature);
+    // If the current key id is known, the signing key must match (detects a
+    // rotated/replaced key). Unknown current key id → don't penalize.
+    const keyMatches =
+      this.signer.keyId && parsed.keyId
+        ? parsed.keyId === this.signer.keyId
+        : true;
+    // A signature can be valid yet the transcript not be a trustworthy issue:
+    // only APPROVED/LOCKED, non-revoked, current-key transcripts are "valid".
+    const issued = t.status === "APPROVED" || t.status === "LOCKED";
+    return {
+      ...base,
+      signatureValid,
+      keyMatches,
+      valid: signatureValid && keyMatches && issued,
+    };
+  }
+}
+
+export interface LockTranscriptInput {
+  transcriptId: string;
+}
+export class LockTranscript implements AuthorizedUseCase<
+  LockTranscriptInput,
+  StoredTranscript
+> {
+  readonly name = "LockTranscript";
+  readonly requiredPermissions = ["transcripts.approve"];
+
+  constructor(
+    private readonly transcripts: TranscriptStore,
+    private readonly audit: AuditLogPort,
+  ) {}
+
+  async execute(input: LockTranscriptInput, session: SessionContext) {
+    const t = await this.transcripts.findById(input.transcriptId);
+    if (!t) throw new TranscriptError("Transcript not found.");
+    if (!TranscriptRules.canLock(t.status as TranscriptStatus)) {
+      throw new TranscriptError(
+        `Only an APPROVED transcript can be locked (is "${t.status}").`,
+      );
+    }
+    const updated = await this.transcripts.updateStatus(
+      input.transcriptId,
+      "LOCKED",
+    );
+    await this.audit.record({
+      userId: session.actorId,
+      action: "LOCK",
+      entity: "Transcript",
+      recordId: input.transcriptId,
+      oldValue: { status: t.status },
+      newValue: { status: "LOCKED" },
+    });
+    return updated;
+  }
+}
+
+export interface RevokeTranscriptInput {
+  transcriptId: string;
+  reason?: string;
+}
+export class RevokeTranscript implements AuthorizedUseCase<
+  RevokeTranscriptInput,
+  StoredTranscript
+> {
+  readonly name = "RevokeTranscript";
+  readonly requiredPermissions = ["transcripts.approve"];
+
+  constructor(
+    private readonly transcripts: TranscriptStore,
+    private readonly audit: AuditLogPort,
+  ) {}
+
+  async execute(input: RevokeTranscriptInput, session: SessionContext) {
+    const t = await this.transcripts.findById(input.transcriptId);
+    if (!t) throw new TranscriptError("Transcript not found.");
+    if (!TranscriptRules.canRevoke(t.status as TranscriptStatus)) {
+      throw new TranscriptError(
+        `Only an issued transcript can be revoked (is "${t.status}").`,
+      );
+    }
+    const updated = await this.transcripts.updateStatus(
+      input.transcriptId,
+      "REVOKED",
+    );
+    await this.audit.record({
+      userId: session.actorId,
+      action: "REVOKE",
+      entity: "Transcript",
+      recordId: input.transcriptId,
+      oldValue: { status: t.status },
+      newValue: { status: "REVOKED", reason: input.reason ?? null },
+    });
+    return updated;
   }
 }
 

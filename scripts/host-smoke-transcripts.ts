@@ -149,7 +149,11 @@ async function main(): Promise<void> {
   const ver = tx
     ? await core.dispatch("verifyTranscript", { transcriptId: tx.id }, token)
     : g0;
-  check("valid signature", ver.ok && (ver.data as { valid: boolean }).valid);
+  // A DRAFT has a valid signature but is not yet an "issued" (valid) transcript.
+  check(
+    "valid signature",
+    ver.ok && (ver.data as { signatureValid: boolean }).signatureValid,
+  );
 
   console.log("8) official export refused while DRAFT:");
   const exDraft = tx

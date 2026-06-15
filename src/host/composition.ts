@@ -89,6 +89,8 @@ import { GenerateTranscript } from "../application/use-cases/transcripts/Generat
 import {
   VerifyTranscript,
   ApproveTranscript,
+  LockTranscript,
+  RevokeTranscript,
 } from "../application/use-cases/transcripts/VerifyTranscript";
 import { ExportTranscript } from "../application/use-cases/transcripts/ExportTranscript";
 import {
@@ -220,6 +222,8 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     grading,
   );
   const approveTranscript = new ApproveTranscript(transcripts, audit);
+  const lockTranscript = new LockTranscript(transcripts, audit);
+  const revokeTranscript = new RevokeTranscript(transcripts, audit);
   const gradConfig = new GraduationConfigService(settings, settingsRegistry);
   const evaluateGraduation = new EvaluateGraduation(academic, gradConfig);
   const graduateStudent = new GraduateStudent(
@@ -314,6 +318,8 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
       "approveTranscript",
       (i, s) => authorize(approveTranscript, i as never, s),
     ],
+    ["lockTranscript", (i, s) => authorize(lockTranscript, i as never, s)],
+    ["revokeTranscript", (i, s) => authorize(revokeTranscript, i as never, s)],
     [
       "evaluateGraduation",
       (i, s) => authorize(evaluateGraduation, i as never, s),
