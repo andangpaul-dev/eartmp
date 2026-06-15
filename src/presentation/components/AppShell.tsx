@@ -170,12 +170,7 @@ export function AppShell({
             <div className="t">{title.t}</div>
             <div className="s">{title.s}</div>
           </div>
-          <div className="search">
-            <input
-              className="input"
-              placeholder="Search students, transcripts…"
-            />
-          </div>
+          <div className="grow" />
           <span
             className={`chip ${sealed ? "" : "chip-ok"}`}
             title={

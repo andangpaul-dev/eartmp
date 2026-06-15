@@ -14,6 +14,7 @@ import {
   type ReactNode,
 } from "react";
 import type { CoreApi, SessionView } from "./contract";
+import { setUnauthenticatedHandler } from "./ipcClient";
 
 interface SessionState {
   session: SessionView | null;
@@ -33,6 +34,13 @@ export function CoreProvider({
 }) {
   const [session, setSession] = useState<SessionView | null>(null);
   const [ready, setReady] = useState(false);
+
+  // Centralized 401 handling: any RPC that comes back UNAUTHENTICATED clears the
+  // session so the app returns to Login instead of scattering error banners.
+  useEffect(() => {
+    setUnauthenticatedHandler(() => setSession(null));
+    return () => setUnauthenticatedHandler(null);
+  }, []);
 
   useEffect(() => {
     let alive = true;

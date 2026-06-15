@@ -36,6 +36,14 @@ function authHeaders(): Record<string, string> {
   return token ? { authorization: `Bearer ${token}` } : {};
 }
 
+// Notified when any RPC comes back UNAUTHENTICATED (expired/invalid session) so
+// the app can clear state and return to Login centrally, instead of every
+// screen handling it.
+let onUnauthenticated: (() => void) | null = null;
+export function setUnauthenticatedHandler(fn: (() => void) | null): void {
+  onUnauthenticated = fn;
+}
+
 async function rpc<T>(method: string, input: unknown): Promise<T> {
   const res = await fetch(`${BASE}/rpc`, {
     method: "POST",
@@ -43,7 +51,13 @@ async function rpc<T>(method: string, input: unknown): Promise<T> {
     body: JSON.stringify({ method, input }),
   });
   const env = (await res.json()) as Envelope<T>;
-  if (!env.ok) throw new CoreApiError(env.error);
+  if (!env.ok) {
+    if (env.error.code === "UNAUTHENTICATED") {
+      setToken(null);
+      onUnauthenticated?.();
+    }
+    throw new CoreApiError(env.error);
+  }
   return env.data;
 }
 

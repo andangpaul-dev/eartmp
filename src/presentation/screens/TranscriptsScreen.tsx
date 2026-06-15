@@ -5,7 +5,7 @@
  * APPROVED/LOCKED. Generating and verifying need the signing key unsealed for
  * this session (a lost passphrase is unrecoverable).
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useCore, useSession } from "../runtime/CoreProvider";
 import { useKeyState } from "../runtime/KeyProvider";
 import { useAsync, useAction } from "../runtime/hooks";
@@ -60,6 +60,14 @@ export function TranscriptsScreen() {
     setToast(m);
     setTimeout(() => setToast(null), 2600);
   };
+
+  // Revoke the preview blob URL when it changes or the screen unmounts.
+  useEffect(() => {
+    const url = preview?.url;
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [preview?.url]);
 
   const list = useAsync(
     () =>

@@ -1,8 +1,10 @@
 /**
  * Async hooks (webview). `useAsync` gives every read the four states the design
- * requires — loading / error / empty / data — plus reload. `useAction` runs a
- * mutation with loading + error + success callbacks. Errors are `CoreApiError`
- * (carrying `.code`), so screens can branch on CONFLICT / LOCKED / VALIDATION.
+ * requires — loading / error / empty / data — plus reload, with a request
+ * sequence guard so a slow earlier request can't overwrite a newer one.
+ * `useAction` runs a mutation with loading + error + a one-shot `success` flag,
+ * and refuses re-entry while in flight (no double-submit on irreversible,
+ * audited mutations). Errors are `CoreApiError` (carrying `.code`).
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CoreApiError } from "./ipcClient";
@@ -23,18 +25,27 @@ export function useAsync<T>(
   const [data, setData] = useState<T | null>(null);
   const fnRef = useRef(fn);
   fnRef.current = fn;
+  // Monotonic request id — only the latest run is allowed to write state.
+  const seq = useRef(0);
 
   const run = useCallback(() => {
-    let alive = true;
+    const id = ++seq.current;
     setLoading(true);
     setError(null);
     fnRef
       .current()
-      .then((d) => alive && setData(d))
-      .catch((e) => alive && setError(asCoreError(e)))
-      .finally(() => alive && setLoading(false));
+      .then((d) => {
+        if (id === seq.current) setData(d);
+      })
+      .catch((e) => {
+        if (id === seq.current) setError(asCoreError(e));
+      })
+      .finally(() => {
+        if (id === seq.current) setLoading(false);
+      });
     return () => {
-      alive = false;
+      // Invalidate this run so a late resolution is ignored.
+      if (id === seq.current) seq.current++;
     };
     // deps are the caller's dependency list (intentional dynamic deps).
   }, deps);
@@ -48,6 +59,8 @@ export interface ActionState {
   run: () => void;
   loading: boolean;
   error: CoreApiError | null;
+  success: boolean;
+  reset: () => void;
 }
 
 export function useAction<T>(
@@ -59,26 +72,42 @@ export function useAction<T>(
 ): ActionState {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<CoreApiError | null>(null);
+  const [success, setSuccess] = useState(false);
   const optsRef = useRef(opts);
   optsRef.current = opts;
   const fnRef = useRef(fn);
   fnRef.current = fn;
+  const inFlight = useRef(false);
 
   const run = useCallback(() => {
+    if (inFlight.current) return; // re-entry guard: no double-submit
+    inFlight.current = true;
     setLoading(true);
     setError(null);
+    setSuccess(false);
     fnRef
       .current()
-      .then((r) => optsRef.current.onSuccess?.(r))
+      .then((r) => {
+        setSuccess(true);
+        optsRef.current.onSuccess?.(r);
+      })
       .catch((e) => {
         const ce = asCoreError(e);
         setError(ce);
         optsRef.current.onError?.(ce);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        inFlight.current = false;
+        setLoading(false);
+      });
   }, []);
 
-  return { run, loading, error };
+  const reset = useCallback(() => {
+    setError(null);
+    setSuccess(false);
+  }, []);
+
+  return { run, loading, error, success, reset };
 }
 
 function asCoreError(e: unknown): CoreApiError {
