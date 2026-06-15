@@ -12,11 +12,16 @@ import {
   type ServerResponse,
 } from "node:http";
 import { getPrisma } from "../infrastructure/db/prisma";
+import { bootstrapDatabase } from "../infrastructure/db/bootstrap";
 import { buildHost } from "./composition";
-import { createCore } from "./dispatcher";
+import { createCore, type Core } from "./dispatcher";
 
 const PORT = Number(process.env.EARTMP_HOST_PORT ?? 5179);
-const core = createCore(buildHost(getPrisma()));
+const MIGRATIONS_DIR = process.env.EARTMP_MIGRATIONS_DIR ?? "prisma/migrations";
+
+// Assigned during startup, after the DB is bootstrapped. Requests only arrive
+// once the server is listening, which happens after this is set.
+let core: Core;
 
 function send(res: ServerResponse, status: number, body: unknown): void {
   const json = JSON.stringify(body);
@@ -112,6 +117,19 @@ const server = createServer((req, res) => {
   })();
 });
 
-server.listen(PORT, "127.0.0.1", () => {
-  console.log(`EARTMP host listening on http://127.0.0.1:${PORT}`);
+async function start(): Promise<void> {
+  const prisma = getPrisma();
+  // First launch: apply migrations + seed (idempotent; a no-op on an existing
+  // DB). The packaged sidecar points at a fresh per-user DB.
+  const provisioned = await bootstrapDatabase(prisma, MIGRATIONS_DIR);
+  if (provisioned) console.log("EARTMP database provisioned (first launch).");
+  core = createCore(buildHost(prisma));
+  server.listen(PORT, "127.0.0.1", () => {
+    console.log(`EARTMP host listening on http://127.0.0.1:${PORT}`);
+  });
+}
+
+start().catch((e) => {
+  console.error("EARTMP host failed to start:", e);
+  process.exit(1);
 });

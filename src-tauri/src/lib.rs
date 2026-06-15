@@ -25,20 +25,29 @@ fn spawn_host(app: &tauri::AppHandle) -> Result<CommandChild, String> {
         .path()
         .resolve("host/server.mjs", tauri::path::BaseDirectory::Resource)
         .map_err(|e| format!("resolve server.mjs: {e}"))?;
-    let server_str = server.to_string_lossy();
-    let server_arg = server_str
-        .strip_prefix(r"\\?\")
-        .unwrap_or(&server_str)
-        .to_string();
+    let strip = |p: std::path::PathBuf| {
+        let s = p.to_string_lossy();
+        s.strip_prefix(r"\\?\").unwrap_or(&s).to_string()
+    };
+    let server_arg = strip(server);
+
+    // Migration SQL shipped as resources/migrations/ for the first-launch
+    // bootstrap (apply + seed on a fresh DB).
+    let migrations = app
+        .path()
+        .resolve("migrations", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| format!("resolve migrations: {e}"))?;
+    let migrations_dir = strip(migrations);
 
     // SQLite DB in the per-user app-data dir. Prisma resolves a RELATIVE
-    // `file:` path against the schema dir, so pass an ABSOLUTE url.
-    let db = app
+    // `file:` path against the schema dir, so pass an ABSOLUTE url. Create the
+    // dir first — Prisma/SQLite won't create the parent.
+    let data_dir = app
         .path()
         .app_data_dir()
-        .map_err(|e| format!("app_data_dir: {e}"))?
-        .join("eartmp.db");
-    let db_url = format!("file:{}", db.to_string_lossy());
+        .map_err(|e| format!("app_data_dir: {e}"))?;
+    std::fs::create_dir_all(&data_dir).map_err(|e| format!("create data dir: {e}"))?;
+    let db_url = format!("file:{}", strip(data_dir.join("eartmp.db")));
 
     let (mut rx, child) = app
         .shell()
@@ -47,6 +56,7 @@ fn spawn_host(app: &tauri::AppHandle) -> Result<CommandChild, String> {
         .arg(server_arg)
         .env("EARTMP_HOST_PORT", HOST_PORT)
         .env("DATABASE_URL", db_url)
+        .env("EARTMP_MIGRATIONS_DIR", migrations_dir)
         .spawn()
         .map_err(|e| format!("spawn host: {e}"))?;
 
