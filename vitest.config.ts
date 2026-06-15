@@ -14,8 +14,12 @@ export default defineConfig({
   },
   test: {
     globals: true,
+    // Default env is node (domain/application/host tests need no DOM). UI tests
+    // opt into jsdom per-file via `// @vitest-environment jsdom`.
     environment: "node",
-    include: ["tests/**/*.test.ts", "src/**/*.test.ts"],
+    include: ["tests/**/*.test.ts", "tests/**/*.test.tsx", "src/**/*.test.ts"],
+    setupFiles: ["tests/ui/setup.ts"],
+    environmentOptions: { jsdom: { url: "http://localhost:1420" } },
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
