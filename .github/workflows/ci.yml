@@ -33,3 +33,40 @@ jobs:
 
       - name: Test with coverage
         run: npm run test:coverage
+
+  # The shell/packaging path (host transport, sidecar, encryption) on the primary
+  # target OS — previously unautomated.
+  integration-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate
+      - name: Apply migrations + seed
+        run: |
+          npx prisma migrate deploy
+          npm run db:seed
+        env:
+          DATABASE_URL: "file:./prisma/dev.db"
+      - name: DB-at-rest encryption proof
+        run: npm run verify:encryption
+      - name: End-to-end pipeline
+        run: npm run demo:e2e
+        env:
+          DATABASE_URL: "file:./prisma/dev.db"
+      - name: Host smokes (students / results+import / transcripts+graduation+audit / config)
+        run: |
+          npx tsx scripts/host-smoke-students.ts
+          npx tsx scripts/host-smoke-results.ts
+          npx tsx scripts/host-smoke-transcripts.ts
+          npx tsx scripts/host-smoke-config.ts
+        env:
+          DATABASE_URL: "file:./prisma/dev.db"
+      - name: Sidecar bundle builds
+        run: npm run bundle:host

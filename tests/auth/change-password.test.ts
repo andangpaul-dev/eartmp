@@ -32,8 +32,8 @@ function build() {
 describe("ChangePassword", () => {
   it("re-hashes and audits when the old password verifies", async () => {
     const { uc, users, audit } = build();
-    await uc.execute({ oldPassword: "old", newPassword: "new" }, session);
-    expect((await users.findById("u1"))!.passwordHash).toBe("hashed:new");
+    await uc.execute({ oldPassword: "old", newPassword: "newpass12" }, session);
+    expect((await users.findById("u1"))!.passwordHash).toBe("hashed:newpass12");
     expect(audit.entries[0]).toMatchObject({
       action: "UPDATE",
       entity: "User",
@@ -43,23 +43,35 @@ describe("ChangePassword", () => {
   it("rejects a wrong current password", async () => {
     const { uc, users } = build();
     await expect(
-      uc.execute({ oldPassword: "WRONG", newPassword: "new" }, session),
+      uc.execute(
+        { oldPassword: "WRONGPW1", newPassword: "newpass12" },
+        session,
+      ),
     ).rejects.toBeInstanceOf(AuthenticationError);
     expect((await users.findById("u1"))!.passwordHash).toBe("hashed:old");
   });
 
-  it("rejects an empty new password", async () => {
+  it("rejects a too-short new password and an unchanged password", async () => {
     const { uc } = build();
     await expect(
-      uc.execute({ oldPassword: "old", newPassword: "" }, session),
-    ).rejects.toThrow(/must not be empty/);
+      uc.execute({ oldPassword: "old", newPassword: "short" }, session),
+    ).rejects.toThrow(/at least 8/);
+    await expect(
+      uc.execute(
+        { oldPassword: "samepass1", newPassword: "samepass1" },
+        session,
+      ),
+    ).rejects.toThrow(/differ from the current/);
   });
 
   it("only ever targets the session actor (identity from session)", async () => {
     const { uc, users } = build();
     const otherSession = SessionContext.create("ghost", "X", []);
     await expect(
-      uc.execute({ oldPassword: "old", newPassword: "new" }, otherSession),
+      uc.execute(
+        { oldPassword: "old", newPassword: "newpass12" },
+        otherSession,
+      ),
     ).rejects.toBeInstanceOf(AuthenticationError);
     // original user untouched
     expect((await users.findById("u1"))!.passwordHash).toBe("hashed:old");

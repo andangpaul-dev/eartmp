@@ -35,8 +35,11 @@ export class ChangePassword implements AuthorizedUseCase<
     input: ChangePasswordInput,
     session: SessionContext,
   ): Promise<void> {
-    if (input.newPassword.length === 0) {
-      throw new Error("New password must not be empty.");
+    if (input.newPassword.length < 8) {
+      throw new Error("New password must be at least 8 characters.");
+    }
+    if (input.newPassword === input.oldPassword) {
+      throw new Error("New password must differ from the current one.");
     }
 
     const user = await this.users.findById(session.actorId);

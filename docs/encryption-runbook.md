@@ -57,9 +57,11 @@ bundle externals), alongside Prisma's engine and `@node-rs/argon2`.
 ## Migrations on an encrypted DB (R-3 / F-32)
 
 Apply `prisma/migrations/*/migration.sql` through the **keyed** connection on
-first launch (a tiny `_migrations` bookkeeping table records what's applied), then
-open normally. The migration SQL is identical; only the connection is encrypted.
-No Prisma CLI/engine is needed at runtime.
+first launch, then open normally. The migration SQL is identical; only the
+connection is encrypted. No Prisma CLI/engine is needed at runtime. (Today
+`src/infrastructure/db/bootstrap.ts` applies all migrations when the schema is
+absent, keyed on the `User` table; per-migration tracking + transactional apply
+is a Tier-3 follow-up.)
 
 ## Salt provisioning
 

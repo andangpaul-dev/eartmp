@@ -16,6 +16,36 @@ import { buildPdfDocDefinition } from "./buildPdfDocDefinition";
 
 const require = createRequire(import.meta.url);
 
+// The pdfmake printer + decoded fonts are expensive to build and identical for
+// every render — memoize them at module scope (batch transcript generation
+// reused this work on every document before).
+interface PdfKitDoc {
+  on(event: string, cb: (arg: never) => void): void;
+  end(): void;
+}
+let printerSingleton: { createPdfKitDocument(def: unknown): PdfKitDoc };
+function getPrinter(): { createPdfKitDocument(def: unknown): PdfKitDoc } {
+  if (printerSingleton) return printerSingleton;
+  const PdfPrinter = require("pdfmake");
+  const vfs = require("pdfmake/build/vfs_fonts.js");
+  const vfsData = vfs.pdfMake?.vfs ?? vfs.vfs ?? vfs;
+  const font = (name: string): Buffer => {
+    const b64 = vfsData[name];
+    if (!b64) throw new Error(`pdfmake VFS missing font "${name}".`);
+    return Buffer.from(b64, "base64");
+  };
+  const fonts = {
+    Roboto: {
+      normal: font("Roboto-Regular.ttf"),
+      bold: font("Roboto-Medium.ttf"),
+      italics: font("Roboto-Italic.ttf"),
+      bolditalics: font("Roboto-MediumItalic.ttf"),
+    },
+  };
+  printerSingleton = new PdfPrinter(fonts);
+  return printerSingleton;
+}
+
 export class PdfMakeRenderer implements DocumentRendererPort {
   async render(
     doc: ResolvedDoc,
@@ -32,20 +62,7 @@ export class PdfMakeRenderer implements DocumentRendererPort {
       ...(qrDataUrl ? { qrDataUrl } : {}),
     });
 
-    // pdfmake is CommonJS; load the server printer + bundled fonts.
-    const PdfPrinter = require("pdfmake");
-    const vfs = require("pdfmake/build/vfs_fonts.js");
-    const vfsData = vfs.pdfMake?.vfs ?? vfs.vfs ?? vfs;
-    const fonts = {
-      Roboto: {
-        normal: Buffer.from(vfsData["Roboto-Regular.ttf"], "base64"),
-        bold: Buffer.from(vfsData["Roboto-Medium.ttf"], "base64"),
-        italics: Buffer.from(vfsData["Roboto-Italic.ttf"], "base64"),
-        bolditalics: Buffer.from(vfsData["Roboto-MediumItalic.ttf"], "base64"),
-      },
-    };
-    const printer = new PdfPrinter(fonts);
-    const pdfDoc = printer.createPdfKitDocument(def);
+    const pdfDoc = getPrinter().createPdfKitDocument(def);
 
     return new Promise<Uint8Array>((resolve, reject) => {
       const chunks: Buffer[] = [];
