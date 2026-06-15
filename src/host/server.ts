@@ -15,6 +15,7 @@ import { getPrisma } from "../infrastructure/db/prisma";
 import { bootstrapDatabase } from "../infrastructure/db/bootstrap";
 import { buildHost } from "./composition";
 import { createCore, type Core } from "./dispatcher";
+import { toCoreError } from "./errors";
 
 const PORT = Number(process.env.EARTMP_HOST_PORT ?? 5179);
 const MIGRATIONS_DIR = process.env.EARTMP_MIGRATIONS_DIR ?? "prisma/migrations";
@@ -23,22 +24,55 @@ const MIGRATIONS_DIR = process.env.EARTMP_MIGRATIONS_DIR ?? "prisma/migrations";
 // once the server is listening, which happens after this is set.
 let core: Core;
 
-function send(res: ServerResponse, status: number, body: unknown): void {
+// The webview origins allowed to call the host. Dev = Vite; packaged = the
+// Tauri webview (custom protocol / tauri.localhost). Anything else gets no
+// ACAO header (so a stray browser tab can't read responses).
+const ALLOWED_ORIGINS = new Set([
+  "http://localhost:1420",
+  "http://127.0.0.1:1420",
+  "tauri://localhost",
+  "http://tauri.localhost",
+  "https://tauri.localhost",
+]);
+
+/** Max request body (base64 workbooks are the largest legitimate payload). */
+const MAX_BODY_BYTES = 40 * 1024 * 1024;
+
+function send(
+  res: ServerResponse,
+  status: number,
+  body: unknown,
+  origin?: string,
+): void {
   const json = JSON.stringify(body);
-  res.writeHead(status, {
+  const headers: Record<string, string> = {
     "content-type": "application/json",
-    "access-control-allow-origin": "*",
     "access-control-allow-headers": "content-type,authorization",
     "access-control-allow-methods": "GET,POST,OPTIONS",
-  });
+    vary: "Origin",
+  };
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
+    headers["access-control-allow-origin"] = origin;
+  }
+  res.writeHead(status, headers);
   res.end(json);
 }
+
+class PayloadTooLargeError extends Error {}
 
 async function readJson(
   req: IncomingMessage,
 ): Promise<Record<string, unknown>> {
   const chunks: Buffer[] = [];
-  for await (const c of req) chunks.push(c as Buffer);
+  let total = 0;
+  for await (const c of req) {
+    total += (c as Buffer).length;
+    if (total > MAX_BODY_BYTES) {
+      req.destroy();
+      throw new PayloadTooLargeError("Request body too large.");
+    }
+    chunks.push(c as Buffer);
+  }
   if (chunks.length === 0) return {};
   try {
     return JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<
@@ -58,7 +92,8 @@ function bearer(req: IncomingMessage): string | undefined {
 const server = createServer((req, res) => {
   void (async () => {
     const url = req.url ?? "";
-    if (req.method === "OPTIONS") return send(res, 204, {});
+    const origin = req.headers.origin;
+    if (req.method === "OPTIONS") return send(res, 204, {}, origin);
 
     try {
       if (req.method === "POST" && url === "/api/login") {
@@ -68,27 +103,23 @@ const server = createServer((req, res) => {
             username: String(body.username ?? ""),
             password: String(body.password ?? ""),
           });
-          return send(res, 200, { ok: true, data: result });
-        } catch {
-          return send(res, 200, {
-            ok: false,
-            error: {
-              code: "UNAUTHENTICATED",
-              message: "Invalid username or password.",
-            },
-          });
+          return send(res, 200, { ok: true, data: result }, origin);
+        } catch (e) {
+          // Surfaces the generic "Invalid credentials" or the lockout message,
+          // both as UNAUTHENTICATED (no user enumeration beyond the lockout).
+          return send(res, 200, { ok: false, error: toCoreError(e) }, origin);
         }
       }
 
       if (req.method === "POST" && url === "/api/logout") {
         const token = bearer(req);
         if (token) await core.logout(token);
-        return send(res, 200, { ok: true, data: null });
+        return send(res, 200, { ok: true, data: null }, origin);
       }
 
       if (req.method === "GET" && url === "/api/me") {
         const session = await core.currentUser(bearer(req));
-        return send(res, 200, { ok: true, data: session });
+        return send(res, 200, { ok: true, data: session }, origin);
       }
 
       if (req.method === "POST" && url === "/api/rpc") {
@@ -98,21 +129,30 @@ const server = createServer((req, res) => {
           body.input,
           bearer(req),
         );
-        return send(res, 200, envelope);
+        return send(res, 200, envelope, origin);
       }
 
-      return send(res, 404, {
-        ok: false,
-        error: { code: "NOT_FOUND", message: "No such route." },
-      });
+      return send(
+        res,
+        404,
+        { ok: false, error: { code: "NOT_FOUND", message: "No such route." } },
+        origin,
+      );
     } catch (e) {
-      return send(res, 200, {
-        ok: false,
-        error: {
-          code: "INTERNAL",
-          message: (e as Error).message ?? "Host error.",
+      // Don't leak internal detail to the webview; log it host-side.
+      console.error("[host] request error:", e);
+      const tooLarge = e instanceof PayloadTooLargeError;
+      return send(
+        res,
+        200,
+        {
+          ok: false,
+          error: tooLarge
+            ? { code: "VALIDATION", message: "Request body too large." }
+            : { code: "INTERNAL", message: "Internal host error." },
         },
-      });
+        origin,
+      );
     }
   })();
 });

@@ -49,16 +49,23 @@ fn spawn_host(app: &tauri::AppHandle) -> Result<CommandChild, String> {
     std::fs::create_dir_all(&data_dir).map_err(|e| format!("create data dir: {e}"))?;
     let db_url = format!("file:{}", strip(data_dir.join("eartmp.db")));
 
-    let (mut rx, child) = app
+    let mut cmd = app
         .shell()
         .sidecar("eartmp-node")
         .map_err(|e| format!("sidecar: {e}"))?
         .arg(server_arg)
         .env("EARTMP_HOST_PORT", HOST_PORT)
         .env("DATABASE_URL", db_url)
-        .env("EARTMP_MIGRATIONS_DIR", migrations_dir)
-        // TEST BUILD: seed UAT sample data on first launch. Remove for production.
-        .env("EARTMP_SEED_DEMO", "1")
+        .env("EARTMP_MIGRATIONS_DIR", migrations_dir);
+
+    // UAT/test builds (the `uat` cargo feature, on by default) seed sample data
+    // on first launch. A production build (`--no-default-features`) omits it.
+    #[cfg(feature = "uat")]
+    {
+        cmd = cmd.env("EARTMP_SEED_DEMO", "1");
+    }
+
+    let (mut rx, child) = cmd
         .spawn()
         .map_err(|e| format!("spawn host: {e}"))?;
 

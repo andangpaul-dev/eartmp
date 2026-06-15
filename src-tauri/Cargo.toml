@@ -22,4 +22,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 [features]
+# `uat` (default) seeds sample data + test accounts on first launch. Build a
+# production installer with `--no-default-features` to omit it.
+default = ["uat"]
+uat = []
 custom-protocol = ["tauri/custom-protocol"]
