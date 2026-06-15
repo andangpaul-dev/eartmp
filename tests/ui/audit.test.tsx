@@ -32,7 +32,11 @@ describe("AuditScreen", () => {
   });
 
   it("reports an intact chain prominently after Verify", async () => {
-    const verifyAuditChain = vi.fn(async () => ({ valid: true, checked: 42 }));
+    const verifyAuditChain = vi.fn(async () => ({
+      valid: true,
+      checked: 42,
+      total: 42,
+    }));
     const { user } = renderScreen(<AuditScreen />, {
       permissions: ["audit.read"],
       core: { verifyAuditChain },
@@ -49,6 +53,7 @@ describe("AuditScreen", () => {
     const verifyAuditChain = vi.fn(async () => ({
       valid: false,
       checked: 7,
+      total: 16,
       brokenAt: { index: 8, id: "a-bad", reason: "content" as const },
     }));
     const { user } = renderScreen(<AuditScreen />, {

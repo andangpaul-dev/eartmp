@@ -155,6 +155,13 @@ export class ChangeStudentStatus implements AuthorizedUseCase<
         `Student status "${student.status}" is final and cannot change.`,
       );
     }
+    // GRADUATED is reachable only through the eligibility-checked, audited
+    // graduation clearance flow — never a direct status edit.
+    if (input.to === "GRADUATED") {
+      throw new RecordsError(
+        "Use the graduation clearance flow to graduate a student.",
+      );
+    }
     if (!canTransition(student.status, input.to)) {
       throw new RecordsError(
         `Illegal status transition ${student.status} → ${input.to}.`,

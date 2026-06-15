@@ -60,6 +60,31 @@ describe("verifyAuditChain", () => {
     expect(r.brokenAt).toMatchObject({ index: 1, reason: "linkage" });
   });
 
+  it("flags a nulled hash on the LAST entry (tail truncation)", () => {
+    const entries = chain([{ id: "1" }, { id: "2" }, { id: "3" }]);
+    delete entries[2]!.hash; // null the tail hash — a plain skip would hide this
+    const r = verifyAuditChain(entries, link);
+    expect(r.valid).toBe(false);
+    expect(r.brokenAt).toMatchObject({ index: 2, reason: "missing-hash" });
+  });
+
+  it("flags a nulled hash in the MIDDLE of the chain", () => {
+    const entries = chain([{ id: "1" }, { id: "2" }, { id: "3" }]);
+    delete entries[1]!.hash;
+    const r = verifyAuditChain(entries, link);
+    expect(r.valid).toBe(false);
+    expect(r.brokenAt).toMatchObject({ index: 1, reason: "missing-hash" });
+  });
+
+  it("reports total alongside checked", () => {
+    const entries = chain([{ id: "1" }, { id: "2" }]);
+    expect(verifyAuditChain(entries, link)).toMatchObject({
+      valid: true,
+      checked: 2,
+      total: 2,
+    });
+  });
+
   it("skips pre-chain (unhashed) entries", () => {
     const legacy: AuditEntry = {
       id: "0",

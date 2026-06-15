@@ -85,18 +85,27 @@ describe("ChangeStudentStatus (workflow)", () => {
     const s = await makeStudent();
     const uc = new ChangeStudentStatus(students, audit);
     await uc.execute({ studentId: s.id, to: "DEFERRED" }, admin);
+    // DEFERRED → SUSPENDED is not in the transition matrix.
     await expect(
-      uc.execute({ studentId: s.id, to: "GRADUATED" }, admin),
+      uc.execute({ studentId: s.id, to: "SUSPENDED" }, admin),
     ).rejects.toThrow(/Illegal status transition/);
   });
 
-  it("treats GRADUATED/WITHDRAWN as terminal", async () => {
+  it("treats WITHDRAWN as terminal", async () => {
     const s = await makeStudent();
     const uc = new ChangeStudentStatus(students, audit);
-    await uc.execute({ studentId: s.id, to: "GRADUATED" }, admin);
+    await uc.execute({ studentId: s.id, to: "WITHDRAWN" }, admin);
     await expect(
       uc.execute({ studentId: s.id, to: "ACTIVE" }, admin),
     ).rejects.toThrow(/final and cannot change/);
+  });
+
+  it("refuses to set GRADUATED directly (must use the graduation flow)", async () => {
+    const s = await makeStudent();
+    const uc = new ChangeStudentStatus(students, audit);
+    await expect(
+      uc.execute({ studentId: s.id, to: "GRADUATED" }, admin),
+    ).rejects.toThrow(/graduation clearance flow/);
   });
 });
 
