@@ -1,26 +1,45 @@
 /**
- * DB-at-rest encryption (ADR-008) — the SQLCipher helper the packaged sidecar
- * uses. Proves the file is genuinely encrypted, the right key round-trips, and a
- * wrong key is rejected. Runs in node env (native SQLite driver).
+ * DB-at-rest encryption (ADR-008) — the encrypted libSQL Prisma factory the
+ * packaged sidecar uses. Proves Prisma genuinely reads/writes an encrypted
+ * database, that the file on disk is not a plaintext SQLite database, and that
+ * the wrong key cannot read it. Runs in node env (native libSQL driver).
+ *
+ * Each test uses its own DB file: libSQL releases the native file handle a beat
+ * after $disconnect on Windows, so a shared file would race the lock between
+ * tests. Leftover temp files (if any) are best-effort cleaned at the end.
  */
 import { rmSync, readFileSync, existsSync } from "node:fs";
-import { afterEach, describe, expect, it } from "vitest";
+import { setTimeout as delay } from "node:timers/promises";
+import { afterAll, describe, expect, it } from "vitest";
 import {
   deriveDbKey,
-  openEncryptedDatabase,
+  getEncryptedPrisma,
 } from "../../src/infrastructure/db/encryptedDatabase";
 
-const FILE = "./.tmp-enc-test.db";
+const files = new Set<string>();
+function tmp(name: string): string {
+  const f = `./.tmp-enc-${name}.db`;
+  files.add(f);
+  return f;
+}
 
-function cleanup(): void {
-  for (const f of [FILE, `${FILE}-wal`, `${FILE}-shm`, `${FILE}-journal`]) {
-    if (existsSync(f)) rmSync(f, { force: true });
+async function removeBestEffort(file: string): Promise<void> {
+  for (const f of [file, `${file}-wal`, `${file}-shm`, `${file}-journal`]) {
+    for (let i = 0; i < 20 && existsSync(f); i++) {
+      try {
+        rmSync(f, { force: true });
+      } catch {
+        await delay(50);
+      }
+    }
   }
 }
 
-describe("encryptedDatabase (ADR-008)", () => {
-  afterEach(cleanup);
+afterAll(async () => {
+  for (const f of files) await removeBestEffort(f);
+});
 
+describe("encryptedDatabase (ADR-008)", () => {
   it("derives a deterministic 32-byte key from passphrase + salt", async () => {
     const a = await deriveDbKey("pass", "institution.encryptionSalt:x");
     const b = await deriveDbKey("pass", "institution.encryptionSalt:x");
@@ -30,49 +49,58 @@ describe("encryptedDatabase (ADR-008)", () => {
     expect(c).not.toBe(a);
   });
 
-  it("writes an encrypted file that is not a plaintext SQLite database", async () => {
-    cleanup();
-    const key = await deriveDbKey("operator", "institution.encryptionSalt:1");
-    const db = openEncryptedDatabase(FILE, key);
-    db.exec("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)");
-    db.prepare("INSERT INTO t (v) VALUES (?)").run("secret");
-    db.close();
+  it("Prisma reads/writes an encrypted DB that is not plaintext SQLite", async () => {
+    const file = tmp("rw");
+    await removeBestEffort(file);
+    const prisma = await getEncryptedPrisma(
+      "operator",
+      "institution.encryptionSalt:1",
+      file,
+    );
+    await prisma.$executeRawUnsafe(
+      "CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)",
+    );
+    await prisma.$executeRawUnsafe("INSERT INTO t (v) VALUES ('secret')");
+    const rows =
+      await prisma.$queryRawUnsafe<{ v: string }[]>("SELECT v FROM t");
+    expect(rows[0]?.v).toBe("secret");
+    await prisma.$disconnect();
 
-    const header = readFileSync(FILE).subarray(0, 16).toString("latin1");
+    const header = readFileSync(file).subarray(0, 16).toString("latin1");
     expect(header.startsWith("SQLite format 3")).toBe(false);
   });
 
-  it("round-trips with the right key and rejects the wrong key", async () => {
-    cleanup();
-    const key = await deriveDbKey("operator", "institution.encryptionSalt:2");
-    {
-      const db = openEncryptedDatabase(FILE, key);
-      db.exec("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)");
-      db.prepare("INSERT INTO t (v) VALUES (?)").run("payload");
-      db.close();
-    }
-    {
-      const db = openEncryptedDatabase(FILE, key);
-      const row = db.prepare("SELECT v FROM t WHERE id = 1").get() as {
-        v: string;
-      };
-      expect(row.v).toBe("payload");
-      db.close();
-    }
+  it("rejects the wrong key", async () => {
+    const file = tmp("wrongkey");
+    await removeBestEffort(file);
+    const prisma = await getEncryptedPrisma(
+      "operator",
+      "institution.encryptionSalt:2",
+      file,
+    );
+    await prisma.$executeRawUnsafe(
+      "CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)",
+    );
+    await prisma.$executeRawUnsafe("INSERT INTO t (v) VALUES ('payload')");
+    await prisma.$disconnect();
 
-    const wrong = key.replace(/^./, key[0] === "a" ? "b" : "a");
-    let db: ReturnType<typeof openEncryptedDatabase> | undefined;
-    expect(() => {
+    const wrong = await getEncryptedPrisma(
+      "operator",
+      "institution.encryptionSalt:DIFFERENT",
+      file,
+    );
+    let rejected = false;
+    try {
+      await wrong.$queryRawUnsafe("SELECT v FROM t");
+    } catch {
+      rejected = true; // SQLITE_NOTADB — the file cannot be decrypted
+    } finally {
       try {
-        db = openEncryptedDatabase(FILE, wrong);
-        db.prepare("SELECT v FROM t WHERE id = 1").get();
-      } finally {
-        db?.close();
+        await wrong.$disconnect();
+      } catch {
+        /* connection already faulted */
       }
-    }).toThrow();
-  });
-
-  it("rejects a malformed key", () => {
-    expect(() => openEncryptedDatabase(FILE, "tooshort")).toThrow(/32 bytes/);
+    }
+    expect(rejected).toBe(true);
   });
 });

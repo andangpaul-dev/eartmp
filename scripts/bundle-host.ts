@@ -24,6 +24,9 @@ const EXTERNAL = [
   "@prisma/engines",
   "@node-rs/argon2",
   "@node-rs/*",
+  "@libsql/client", // native libSQL driver (encrypted-at-rest path, ADR-008)
+  "@libsql/*",
+  "libsql",
 ];
 
 // esbuild ESM recipe: define require/__filename/__dirname so bundled CJS deps

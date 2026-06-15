@@ -1,19 +1,20 @@
 /**
- * Encrypted SQLite at rest (ADR-008). Opens an SQLCipher-encrypted database
- * keyed by a 32-byte key derived from the operator passphrase + the
- * `institution.encryptionSalt` setting via the Argon2 KeyDerivationPort. The key
- * is derived at unlock and never persisted.
+ * Encrypted SQLite at rest (ADR-008) for the packaged Node sidecar.
  *
- * This is the connection the packaged Node sidecar uses for the primary DB; it
- * plugs into Prisma through the driver adapter (see docs/encryption-runbook.md).
- * The default dev flow remains the plaintext Prisma client until encryption is
- * enabled at packaging time.
+ * Prisma's stock SQLite connector can't open an encrypted database, so the
+ * encrypted path runs Prisma through the **libSQL driver adapter**, whose client
+ * takes an `encryptionKey`. The key is a 32-byte value derived from the operator
+ * passphrase + the `institution.encryptionSalt` setting via the Argon2
+ * KeyDerivationPort — derived at unlock, never persisted (same discipline as the
+ * transcript signing key).
+ *
+ * The default dev flow keeps the plaintext `getPrisma()` until encryption is
+ * enabled at packaging time; this factory is the encrypted equivalent.
  */
-import Database from "better-sqlite3-multiple-ciphers";
+import { PrismaClient } from "@prisma/client";
+import { PrismaLibSQL } from "@prisma/adapter-libsql";
 import { Argon2KeyDerivationService } from "../crypto/Argon2KeyDerivationService";
 import type { KeyDerivationPort } from "../../application/ports/KeyDerivationPort";
-
-export type EncryptedDb = Database.Database;
 
 /** Derive the raw DB key (hex) from passphrase + salt. Deterministic. */
 export async function deriveDbKey(
@@ -25,27 +26,20 @@ export async function deriveDbKey(
 }
 
 /**
- * Open (or create) an SQLCipher-encrypted SQLite file with a raw 32-byte key
- * (hex). The Argon2 KDF already stretched the passphrase, so the key is applied
- * raw (`x'...'`) rather than through SQLCipher's inner KDF.
+ * Build a PrismaClient backed by an encrypted local libSQL database. `file` is a
+ * filesystem path; it is opened as `file:<path>` with the derived key. Wrong key
+ * ⇒ queries fail (the file cannot be decrypted).
  */
-export function openEncryptedDatabase(
+export async function getEncryptedPrisma(
+  passphrase: string,
+  salt: string,
   file: string,
-  keyHex: string,
-): EncryptedDb {
-  if (!/^[0-9a-f]{64}$/i.test(keyHex)) {
-    throw new Error("Encryption key must be 32 bytes (64 hex chars).");
-  }
-  const db = new Database(file);
-  try {
-    db.pragma("cipher='sqlcipher'");
-    db.pragma(`key="x'${keyHex}'"`);
-    // Touch the schema so a wrong key fails fast here rather than on first query.
-    db.pragma("user_version");
-    return db;
-  } catch (e) {
-    // Close the handle so a wrong key doesn't leak a lock on the file.
-    db.close();
-    throw e;
-  }
+  kdf?: KeyDerivationPort,
+): Promise<PrismaClient> {
+  const key = await deriveDbKey(passphrase, salt, kdf);
+  const adapter = new PrismaLibSQL({
+    url: `file:${file}`,
+    encryptionKey: key,
+  });
+  return new PrismaClient({ adapter });
 }

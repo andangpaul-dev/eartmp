@@ -86,9 +86,10 @@
     "vitest": "^2.1.8"
   },
   "dependencies": {
+    "@libsql/client": "^0.17.3",
     "@node-rs/argon2": "^2.0.2",
+    "@prisma/adapter-libsql": "^6.19.3",
     "@prisma/client": "^6.2.0",
-    "better-sqlite3-multiple-ciphers": "^12.10.0",
     "docx": "^8.5.0",
     "pdfmake": "^0.2.10",
     "prisma": "^6.2.0",

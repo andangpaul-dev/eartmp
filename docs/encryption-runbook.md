@@ -3,74 +3,56 @@
 How the packaged EARTMP encrypts the primary database on disk. The signing key
 was always sealed; this closes the remaining gap — the **database file itself**.
 
-## Mechanism (verified here)
+## Mechanism (verified here — Prisma reads/writes an encrypted DB)
 
-- **Cipher:** SQLCipher, via `better-sqlite3-multiple-ciphers` (a drop-in
-  better-sqlite3 with SQLite3 Multiple Ciphers). The DB file is unreadable
-  without the key — its header is not `SQLite format 3`.
+Prisma's stock SQLite connector can't open an encrypted file, so the encrypted
+path runs **Prisma through the libSQL driver adapter**, whose client takes an
+`encryptionKey`. (We started with SQLCipher/`better-sqlite3-multiple-ciphers`,
+but its Prisma adapter opens its own connection with no hook to run `PRAGMA key`
+before queries — so it can't drive a keyed DB. libSQL is the adapter that
+supports encryption directly.)
+
+- **Cipher:** libSQL local encryption (AES). The DB file is unreadable without
+  the key — its header is not `SQLite format 3`, and a wrong key fails with
+  `SQLITE_NOTADB`.
 - **Key:** a 32-byte key derived from the operator passphrase + the
   `institution.encryptionSalt` setting via the existing Argon2id
-  `KeyDerivationPort` (`src/infrastructure/crypto/Argon2KeyDerivationService`).
-  Because Argon2 already stretched the passphrase, the key is applied **raw**
-  (`PRAGMA key="x'<hex>'"`), not through SQLCipher's inner KDF.
+  `KeyDerivationPort` (`src/infrastructure/crypto/Argon2KeyDerivationService`),
+  passed as the libSQL `encryptionKey`.
 - **Lifecycle:** derived **at unlock**, held in the sidecar's memory for the
   session, **never persisted** — same discipline as the transcript signing key.
 
-Seam + proof:
+Seam + proof (implemented, not deferred):
 
 - `src/infrastructure/db/encryptedDatabase.ts` — `deriveDbKey(passphrase, salt)`
-  and `openEncryptedDatabase(file, keyHex)` (closes the handle if a wrong key
-  fails the fast-check, so a bad key never leaks a file lock).
-- `tests/infrastructure/encryptedDatabase.test.ts` — encrypted-header, key
-  round-trip, wrong-key rejection, malformed-key guard (4 tests, green).
-- `npm run verify:encryption` — end-to-end demonstration (derive → write →
-  assert-encrypted → right/wrong/no-key), green.
+  and `getEncryptedPrisma(passphrase, salt, file)` returning a `PrismaClient`
+  backed by `new PrismaLibSQL({ url: "file:<path>", encryptionKey })`.
+- `tests/infrastructure/encryptedDatabase.test.ts` — deterministic key,
+  **Prisma actually CREATE/INSERT/SELECTs over the encrypted DB**, the on-disk
+  file is not plaintext SQLite, and a wrong key is rejected (3 tests, green).
+- `npm run verify:encryption` — the same end-to-end demonstration via Prisma,
+  green.
 
-## Wiring it into the Prisma sidecar (packaging-time)
+`driverAdapters` is GA in Prisma 6.19 (no preview flag needed); the default dev
+`getPrisma()` is unchanged, so the full suite stays green.
 
-The sidecar uses Prisma. Prisma's stock SQLite connector cannot open an encrypted
-file, so route Prisma through a **driver adapter** backed by the keyed
-connection:
+## Wiring it into the host (remaining)
 
-1. Enable the preview feature and add the adapter:
-   ```prisma
-   // prisma/schema.prisma
-   generator client {
-     provider        = "prisma-client-js"
-     previewFeatures = ["driverAdapters"]
-   }
-   ```
-   ```
-   npm i @prisma/adapter-better-sqlite3
-   npx prisma generate
-   ```
-2. Construct the client from the keyed connection (replacing the plaintext
-   `getPrisma()` on the encrypted path):
+The factory is done; what's left is to call it from the composition root once the
+operator unlocks, instead of the default plaintext `getPrisma()`:
 
+1. Add an unlock step to the host (mirrors the signing-key unseal already there)
+   that takes the operator passphrase, reads `institution.encryptionSalt`, and
+   builds the client:
    ```ts
-   import { PrismaBetterSQLite3 } from "@prisma/adapter-better-sqlite3";
-   import { openEncryptedDatabase, deriveDbKey } from "./encryptedDatabase";
-
-   export async function getEncryptedPrisma(
-     passphrase: string,
-     salt: string,
-     file: string,
-   ) {
-     const key = await deriveDbKey(passphrase, salt);
-     const conn = openEncryptedDatabase(file, key); // keyed SQLCipher handle
-     const adapter = new PrismaBetterSQLite3(conn);
-     return new PrismaClient({ adapter });
-   }
+   const prisma = await getEncryptedPrisma(passphrase, salt, dbPath);
+   const host = buildHost(prisma); // buildHost already accepts a PrismaClient
    ```
+2. Until unlocked, the host serves no data (fail-closed), the same way transcript
+   operations are refused until the signing key is unsealed.
 
-3. The host composition root calls `getEncryptedPrisma(...)` once the operator
-   unlocks (mirrors the signing-key unseal already in the host), instead of the
-   default plaintext `getPrisma()`.
-
-> Deferred from this environment because `prisma generate` with `driverAdapters`
-> changes the generated client and is best done on the packaging workstation
-> alongside the Tauri build (keeps the 288-test dev suite stable). The mechanism
-> it depends on is already proven above.
+The native `@libsql/client` ships in the sidecar `node_modules` (added to the
+bundle externals), alongside Prisma's engine and `@node-rs/argon2`.
 
 ## Migrations on an encrypted DB (R-3 / F-32)
 
@@ -83,15 +65,15 @@ No Prisma CLI/engine is needed at runtime.
 
 `institution.encryptionSalt` is a settings row (Phase 3). Provision a random,
 stable salt at install (≥ 16 bytes) and never change it — the key is
-`Argon2id(passphrase, salt)`, so a changed salt makes the DB unreadable. Rotating
-the passphrase re-keys the DB with `PRAGMA rekey` (a follow-up, analogous to the
+`Argon2id(passphrase, salt)`, so a changed salt makes the DB unreadable.
+Passphrase rotation re-encrypts the DB under the new key (analogous to the
 signing-key passphrase rotation already shipped).
 
 ## Open items
 
-- Implement `getEncryptedPrisma` + the unlock flow in the host at packaging time
-  (per above) and re-point the persistence integration suite at it (parity check,
+- Call `getEncryptedPrisma` from the host unlock flow at packaging time (per
+  above) and re-point the persistence integration suite at it (parity check,
   same approach the Tauri-SQL spec describes).
-- `PRAGMA rekey` passphrase rotation for the DB key.
-- Ship `better-sqlite3-multiple-ciphers` prebuilt for each target in the sidecar
-  `node_modules` (it's a native module, like Prisma's engine and `@node-rs/argon2`).
+- DB-key passphrase rotation (re-encrypt under a new key).
+- Ship `@libsql/client` prebuilt for each target in the sidecar `node_modules`
+  (it's a native module, like Prisma's engine and `@node-rs/argon2`).
