@@ -7,7 +7,7 @@
     "frontendDist": "../dist-ui",
     "devUrl": "http://localhost:1420",
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run ui:build && npm run bundle:host"
+    "beforeBuildCommand": "npm run ui:build && npm run assemble:sidecar"
   },
   "app": {
     "windows": [

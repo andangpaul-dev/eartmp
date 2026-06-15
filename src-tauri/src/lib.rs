@@ -24,12 +24,22 @@ fn spawn_host(app: &tauri::AppHandle) -> Result<CommandChild, String> {
         .resolve("host/server.mjs", tauri::path::BaseDirectory::Resource)
         .map_err(|e| format!("resolve server.mjs: {e}"))?;
 
+    // SQLite DB in the per-user app-data dir. Prisma resolves a RELATIVE
+    // `file:` path against the schema dir, so pass an ABSOLUTE url.
+    let db = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("app_data_dir: {e}"))?
+        .join("eartmp.db");
+    let db_url = format!("file:{}", db.to_string_lossy());
+
     let (mut rx, child) = app
         .shell()
         .sidecar("eartmp-node")
         .map_err(|e| format!("sidecar: {e}"))?
         .arg(server.to_string_lossy().to_string())
         .env("EARTMP_HOST_PORT", HOST_PORT)
+        .env("DATABASE_URL", db_url)
         .spawn()
         .map_err(|e| format!("spawn host: {e}"))?;
 

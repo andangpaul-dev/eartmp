@@ -13,13 +13,14 @@ that the Rust shell launches and supervises.
 
 ## What's verified vs. what needs a toolchain
 
-| Step                                                | Status                                                             |
-| --------------------------------------------------- | ------------------------------------------------------------------ |
-| Host bundles to a single ESM file                   | ✅ `npm run bundle:host` → `dist-host/server.mjs` (~2.1 MB)        |
-| Bundled host runs (login, RPC, gate, Prisma+Argon2) | ✅ ran on loopback; `listStudents` returned rows, anon → FORBIDDEN |
-| Webview build + configurable API base               | ✅ `npm run ui:build`; `VITE_API_BASE` honoured                    |
-| Tauri crate compiles / installer builds             | ⛔ needs Rust + platform toolchain (do on your workstation)        |
-| PDF/DOCX export from the packaged sidecar           | ⚠️ validate after first build (see "Known validation points")      |
+| Step                                                | Status                                                                       |
+| --------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Host bundles to a single ESM file                   | ✅ `npm run bundle:host` → `dist-host/server.mjs` (~2.1 MB)                  |
+| Bundled host runs (login, RPC, gate, Prisma+Argon2) | ✅ ran on loopback; `listStudents` returned rows, anon → FORBIDDEN           |
+| Sidecar payload assembled + self-contained          | ✅ `npm run assemble:sidecar`; ran isolated outside the repo, login + RPC OK |
+| Webview build + configurable API base               | ✅ `npm run ui:build`; `VITE_API_BASE` honoured                              |
+| Tauri crate compiles / installer builds             | ⛔ needs Rust + platform toolchain (do on your workstation)                  |
+| PDF/DOCX export from the packaged sidecar           | ⚠️ validate after first build (see "Known validation points")                |
 
 ## Prerequisites (build workstation)
 
@@ -51,31 +52,37 @@ So the sidecar payload is: **Node runtime + `server.mjs` + a pruned production
 `node_modules` (just the externals above)**. A single self-contained `.exe`
 (SEA/pkg) is _not_ viable here because of Prisma's native query engine.
 
-### Producing the sidecar binary
+### Producing the sidecar payload — `npm run assemble:sidecar` (verified)
 
-Tauri's `externalBin` expects a binary named with the target triple. Ship the
-Node runtime as that binary and let Rust pass it `server.mjs`:
+`scripts/assemble-sidecar.ts` builds the whole payload in one step:
 
-```
-# from repo root, on the build workstation
-npm run bundle:host
-mkdir -p src-tauri/binaries
-# copy the platform node into place, named for the target triple, e.g. Windows:
-cp "$(command -v node)" "src-tauri/binaries/eartmp-node-x86_64-pc-windows-msvc.exe"
-# prune a production node_modules holding only the externals, into dist-host/ :
-#   @prisma/client, .prisma/client, @prisma/engines, @node-rs/argon2(+platform)
-```
+1. `npm run bundle:host` → `dist-host/server.mjs`.
+2. writes `dist-host/package.json` (runtime deps only),
+3. `npm install --omit=dev --prefix dist-host` → pruned `dist-host/node_modules`,
+4. copies `node_modules/.prisma` (the client generated against THIS schema +
+   the query-engine binary) into the payload,
+5. copies the platform `node` to
+   `src-tauri/binaries/eartmp-node-<target-triple>` (Tauri's `externalBin`).
 
-`tauri.conf.json` ships `dist-host/` (bundle + that pruned `node_modules`) and
-`prisma/migrations/` as resources; `src-tauri/src/lib.rs` resolves
-`host/server.mjs` from resources and spawns the sidecar on `EARTMP_HOST_PORT`
-(5179), killing it on exit.
+**Verified self-contained:** the assembled `dist-host/` (~113 MB, mostly the
+Prisma engine) was copied to a temp dir _outside the project_ and run with
+`node server.mjs` — login succeeded and an authed RPC returned data, so Prisma's
+client+engine, `@node-rs/argon2`, and `@libsql/client` all load from the pruned
+payload with no access to the repo's `node_modules`. Anonymous RPC returned
+FORBIDDEN (gate intact).
+
+`tauri.conf.json` ships `dist-host/` and `prisma/migrations/` as resources;
+`src-tauri/src/lib.rs` resolves `host/server.mjs` from resources and spawns the
+sidecar on `EARTMP_HOST_PORT` (5179), passing an **absolute** `DATABASE_URL`
+under the app-data dir (Prisma resolves a relative `file:` path against the
+schema dir, not cwd — a real gotcha found during the isolated run), and kills it
+on exit.
 
 ## Build
 
 ```
 npm ci
-npm run tauri build      # runs ui:build + bundle:host, then cargo build + bundler
+npm run tauri build      # runs ui:build + assemble:sidecar, then cargo build + bundler
 ```
 
 Installers land in `src-tauri/target/release/bundle/` (msi/nsis, dmg, appimage/deb).
@@ -106,6 +113,7 @@ Installers land in `src-tauri/target/release/bundle/` (msi/nsis, dmg, appimage/d
 ## Files
 
 - `scripts/bundle-host.ts` — esbuild the host (verified).
+- `scripts/assemble-sidecar.ts` — assemble the full payload + node binary (verified).
 - `src-tauri/tauri.conf.json` — window, CSP, resources, sidecar.
 - `src-tauri/src/lib.rs` — sidecar supervisor (spawn + kill-on-exit).
 - `src-tauri/Cargo.toml`, `build.rs`, `src/main.rs`, `capabilities/default.json`.

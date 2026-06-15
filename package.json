@@ -43,6 +43,7 @@
     "ui:build": "vite build",
     "dev": "tsx scripts/dev.ts",
     "bundle:host": "tsx scripts/bundle-host.ts",
+    "assemble:sidecar": "tsx scripts/assemble-sidecar.ts",
     "verify:encryption": "tsx scripts/verify-encryption.ts",
     "tauri": "tauri",
     "prepare": "husky || true"
