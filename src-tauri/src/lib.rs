@@ -18,11 +18,18 @@ const HOST_PORT: &str = "5179";
 struct Sidecar(Mutex<Option<CommandChild>>);
 
 fn spawn_host(app: &tauri::AppHandle) -> Result<CommandChild, String> {
-    // The bundled host entrypoint, shipped under resources/host/.
+    // The bundled host entrypoint, shipped under resources/host/. On Windows the
+    // resolver returns an extended-length path (\\?\C:\…); Node's main-module
+    // resolution chokes on that prefix, so strip it.
     let server = app
         .path()
         .resolve("host/server.mjs", tauri::path::BaseDirectory::Resource)
         .map_err(|e| format!("resolve server.mjs: {e}"))?;
+    let server_str = server.to_string_lossy();
+    let server_arg = server_str
+        .strip_prefix(r"\\?\")
+        .unwrap_or(&server_str)
+        .to_string();
 
     // SQLite DB in the per-user app-data dir. Prisma resolves a RELATIVE
     // `file:` path against the schema dir, so pass an ABSOLUTE url.
@@ -37,7 +44,7 @@ fn spawn_host(app: &tauri::AppHandle) -> Result<CommandChild, String> {
         .shell()
         .sidecar("eartmp-node")
         .map_err(|e| format!("sidecar: {e}"))?
-        .arg(server.to_string_lossy().to_string())
+        .arg(server_arg)
         .env("EARTMP_HOST_PORT", HOST_PORT)
         .env("DATABASE_URL", db_url)
         .spawn()
