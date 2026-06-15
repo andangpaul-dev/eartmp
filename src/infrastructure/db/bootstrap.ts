@@ -9,6 +9,7 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import type { PrismaClient } from "@prisma/client";
 import { seedDatabase } from "./seed";
+import { seedDemoData } from "./demoData";
 
 async function isInitialized(prisma: PrismaClient): Promise<boolean> {
   try {
@@ -60,8 +61,12 @@ export async function bootstrapDatabase(
   prisma: PrismaClient,
   migrationsDir: string,
 ): Promise<boolean> {
-  if (await isInitialized(prisma)) return false;
-  await applyMigrations(prisma, migrationsDir);
-  await seedDatabase(prisma);
-  return true;
+  const fresh = !(await isInitialized(prisma));
+  if (fresh) {
+    await applyMigrations(prisma, migrationsDir);
+    await seedDatabase(prisma);
+  }
+  // Optional sample data for UAT/test builds (idempotent; off by default).
+  if (process.env.EARTMP_SEED_DEMO) await seedDemoData(prisma);
+  return fresh;
 }

@@ -57,6 +57,8 @@ fn spawn_host(app: &tauri::AppHandle) -> Result<CommandChild, String> {
         .env("EARTMP_HOST_PORT", HOST_PORT)
         .env("DATABASE_URL", db_url)
         .env("EARTMP_MIGRATIONS_DIR", migrations_dir)
+        // TEST BUILD: seed UAT sample data on first launch. Remove for production.
+        .env("EARTMP_SEED_DEMO", "1")
         .spawn()
         .map_err(|e| format!("spawn host: {e}"))?;
 
