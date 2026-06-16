@@ -12,10 +12,20 @@ import type {
   LoginInput,
 } from "./contract";
 
-// Dev: "/api" (Vite proxies to the host). Packaged Tauri build: there is no
-// proxy, so VITE_API_BASE is set to the sidecar's absolute loopback URL at build
-// time (see docs/packaging-runbook.md).
-const BASE = import.meta.env.VITE_API_BASE ?? "/api";
+// Where the host lives, resolved per call (not cached) so a value injected by
+// the Tauri shell after page creation is always honored:
+//   1. `window.__EARTMP_API_BASE__` — the shell binds an ephemeral port and
+//      injects the absolute loopback base before the app loads.
+//   2. `VITE_API_BASE` — a build-time absolute base (legacy packaged build).
+//   3. "/api" — dev, where Vite proxies to the fixed-port host.
+function apiBase(): string {
+  if (typeof window !== "undefined") {
+    const injected = (window as { __EARTMP_API_BASE__?: unknown })
+      .__EARTMP_API_BASE__;
+    if (typeof injected === "string" && injected.length > 0) return injected;
+  }
+  return import.meta.env.VITE_API_BASE ?? "/api";
+}
 const TOKEN_KEY = "eartmp.token";
 
 let token: string | null =
@@ -45,7 +55,7 @@ export function setUnauthenticatedHandler(fn: (() => void) | null): void {
 }
 
 async function rpc<T>(method: string, input: unknown): Promise<T> {
-  const res = await fetch(`${BASE}/rpc`, {
+  const res = await fetch(`${apiBase()}/rpc`, {
     method: "POST",
     headers: { "content-type": "application/json", ...authHeaders() },
     body: JSON.stringify({ method, input }),
@@ -72,7 +82,7 @@ export const ipcClient: CoreApi = {
   async lockState() {
     // Throws if the host isn't listening yet (first-launch provisioning) so the
     // caller can retry; resolves once the host responds.
-    const res = await fetch(`${BASE}/lock-state`);
+    const res = await fetch(`${apiBase()}/lock-state`);
     const env = (await res.json()) as Envelope<{
       locked: boolean;
       required: boolean;
@@ -82,7 +92,7 @@ export const ipcClient: CoreApi = {
   },
 
   async unlock(input: { passphrase: string }) {
-    const res = await fetch(`${BASE}/unlock`, {
+    const res = await fetch(`${apiBase()}/unlock`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(input),
@@ -93,7 +103,7 @@ export const ipcClient: CoreApi = {
   },
 
   async login(input: LoginInput) {
-    const res = await fetch(`${BASE}/login`, {
+    const res = await fetch(`${apiBase()}/login`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(input),
@@ -108,13 +118,16 @@ export const ipcClient: CoreApi = {
   },
 
   async logout() {
-    await fetch(`${BASE}/logout`, { method: "POST", headers: authHeaders() });
+    await fetch(`${apiBase()}/logout`, {
+      method: "POST",
+      headers: authHeaders(),
+    });
     setToken(null);
   },
 
   async currentUser() {
     if (!token) return null;
-    const res = await fetch(`${BASE}/me`, { headers: authHeaders() });
+    const res = await fetch(`${apiBase()}/me`, { headers: authHeaders() });
     const env = (await res.json()) as Envelope<SessionView | null>;
     return env.ok ? env.data : null;
   },

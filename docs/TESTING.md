@@ -89,7 +89,9 @@ passphrase is unrecoverable.**
   inside the DB is still sealed; the file itself isn't encrypted yet.
 - **Sample data is seeded** on first launch (test switch `EARTMP_SEED_DEMO`).
   Production builds omit it.
-- **Fixed host port 5179** — if another app holds it, the sidecar can't bind.
+- **Host port** — packaged builds bind a free OS-assigned loopback port (the
+  shell injects the base into the webview) with a watchdog that restarts the
+  sidecar on unexpected exit; only `npm run dev` uses the fixed 5179 (Vite proxy).
 - **No academic-structure management UI** yet — structure comes from the seed.
 - **Users & roles** screen is informational (RBAC is enforced; there's no
   list/create UI yet).

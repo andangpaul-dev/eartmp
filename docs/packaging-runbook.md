@@ -72,11 +72,15 @@ payload with no access to the repo's `node_modules`. Anonymous RPC returned
 FORBIDDEN (gate intact).
 
 `tauri.conf.json` ships `dist-host/` and `prisma/migrations/` as resources;
-`src-tauri/src/lib.rs` resolves `host/server.mjs` from resources and spawns the
-sidecar on `EARTMP_HOST_PORT` (5179), passing an **absolute** `DATABASE_URL`
-under the app-data dir (Prisma resolves a relative `file:` path against the
-schema dir, not cwd — a real gotcha found during the isolated run), and kills it
-on exit.
+`src-tauri/src/lib.rs` picks a **free loopback port**, resolves `host/server.mjs`
+from resources and spawns the sidecar on that port (`EARTMP_HOST_PORT`), passing
+an **absolute** `DATABASE_URL` under the app-data dir (Prisma resolves a relative
+`file:` path against the schema dir, not cwd — a real gotcha found during the
+isolated run). A **watchdog** restarts the sidecar (same port) if it exits
+unexpectedly, up to a bounded number of attempts; the child is killed on app
+exit. The shell injects the chosen base into the window
+(`window.__EARTMP_API_BASE__`) before the frontend loads, so the webview never
+discovers the port itself.
 
 ## Build
 
@@ -90,11 +94,13 @@ Installers land in `src-tauri/target/release/bundle/` (msi/nsis, dmg, appimage/d
 ## Webview ↔ host wiring
 
 - **Dev** (`npm run dev` / `tauri dev`): webview calls `/api`, Vite proxies to the
-  host on 5179.
-- **Packaged**: there is no proxy. Build the webview with
-  `VITE_API_BASE=http://127.0.0.1:5179/api` so the webview calls the sidecar's
-  loopback URL directly. The window CSP in `tauri.conf.json` already allows
-  `connect-src http://127.0.0.1:5179`.
+  host on the fixed dev port 5179.
+- **Packaged**: there is no proxy. The shell picks a free loopback port and
+  injects `window.__EARTMP_API_BASE__ = http://127.0.0.1:<port>/api` into the
+  window before load; `ipcClient` reads that global (falling back to
+  `VITE_API_BASE`, then `/api`). The window CSP allows `connect-src` on any
+  loopback port (`http://127.0.0.1:* http://localhost:*`). `.env.production`
+  leaves `VITE_API_BASE` blank — the injected global is the source of truth.
 
 ## Known validation points (do on first packaged build)
 
@@ -107,8 +113,10 @@ Installers land in `src-tauri/target/release/bundle/` (msi/nsis, dmg, appimage/d
 3. **DB location & migrations** — point `DATABASE_URL` at a per-user app-data path
    and apply `prisma/migrations` on first launch (see ADR-008 / the encryption
    runbook). The dev build uses the repo-local SQLite file.
-4. **Port contention** — 5179 is fixed; if taken, the sidecar fails to bind. A
-   follow-up can negotiate a free port and pass it to the webview at runtime.
+4. **Port contention** — resolved: the shell binds a free OS-assigned port and
+   injects the base into the webview; a watchdog restarts the sidecar (same
+   port) on unexpected exit. Confirm restart works (kill the `eartmp-node`
+   process and watch it respawn) on the first packaged build.
 
 ## Files
 

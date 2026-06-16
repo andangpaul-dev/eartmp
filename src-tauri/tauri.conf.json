@@ -10,17 +10,8 @@
     "beforeBuildCommand": "npm run ui:build && npm run assemble:sidecar"
   },
   "app": {
-    "windows": [
-      {
-        "title": "EARTMP — Academic Records & Transcripts",
-        "width": 1280,
-        "height": 820,
-        "minWidth": 1024,
-        "minHeight": 680
-      }
-    ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:5179; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; object-src blob:"
+      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:* http://localhost:*; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; object-src blob:"
     }
   },
   "bundle": {

@@ -1,23 +1,47 @@
 // EARTMP Tauri shell — supervises the bundled Node host sidecar.
 //
-// On startup it launches the Node sidecar (`eartmp-node`, a node runtime shipped
-// as an external binary) running the bundled host (`host/server.mjs` from app
-// resources) on the loopback port the webview talks to. The child is killed when
-// the app exits so no orphan host outlives the window.
+// On startup it picks a free loopback port, creates the main window with that
+// port's API base injected BEFORE the frontend loads (so the webview never has
+// to discover the port), then launches the Node sidecar (`eartmp-node`) running
+// the bundled host (`host/server.mjs`) on that port. A watchdog restarts the
+// sidecar if it dies unexpectedly (reusing the same port, so the injected base
+// stays valid), up to a bounded number of attempts. The child is killed when the
+// app exits so no orphan host outlives the window.
 //
-// NOTE: not compiled in the headless dev environment (no Rust toolchain). Build
-// per docs/packaging-runbook.md.
+// NOTE: build per docs/packaging-runbook.md.
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Mutex;
-use tauri::{Manager, RunEvent, State};
-use tauri_plugin_shell::process::CommandChild;
+use std::time::Duration;
+use tauri::{Manager, RunEvent, State, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
-const HOST_PORT: &str = "5179";
+/// Give up after this many unexpected restarts — a host that keeps dying is
+/// genuinely broken, and an unbounded loop would spin forever.
+const MAX_RESTARTS: u32 = 10;
 
 #[derive(Default)]
-struct Sidecar(Mutex<Option<CommandChild>>);
+struct Sidecar {
+    child: Mutex<Option<CommandChild>>,
+    shutting_down: AtomicBool,
+    restarts: AtomicU32,
+    port: Mutex<u16>,
+}
 
-fn spawn_host(app: &tauri::AppHandle) -> Result<CommandChild, String> {
+/// Bind an OS-assigned port, read it, and release it — the host then binds it.
+/// Cheaper and simpler than a stdout handshake, and lets us inject the base
+/// before the window loads.
+fn pick_free_port() -> Result<u16, String> {
+    let listener =
+        std::net::TcpListener::bind("127.0.0.1:0").map_err(|e| format!("pick port: {e}"))?;
+    let port = listener
+        .local_addr()
+        .map_err(|e| format!("local_addr: {e}"))?
+        .port();
+    Ok(port)
+}
+
+fn spawn_host(app: &tauri::AppHandle, port: u16) -> Result<CommandChild, String> {
     // The bundled host entrypoint, shipped under resources/host/. On Windows the
     // resolver returns an extended-length path (\\?\C:\…); Node's main-module
     // resolution chokes on that prefix, so strip it.
@@ -54,7 +78,7 @@ fn spawn_host(app: &tauri::AppHandle) -> Result<CommandChild, String> {
         .sidecar("eartmp-node")
         .map_err(|e| format!("sidecar: {e}"))?
         .arg(server_arg)
-        .env("EARTMP_HOST_PORT", HOST_PORT)
+        .env("EARTMP_HOST_PORT", port.to_string())
         .env("DATABASE_URL", db_url)
         .env("EARTMP_MIGRATIONS_DIR", migrations_dir);
 
@@ -73,21 +97,60 @@ fn spawn_host(app: &tauri::AppHandle) -> Result<CommandChild, String> {
         cmd = cmd.env("EARTMP_REQUIRE_UNLOCK", "1");
     }
 
-    let (mut rx, child) = cmd
-        .spawn()
-        .map_err(|e| format!("spawn host: {e}"))?;
+    let (mut rx, child) = cmd.spawn().map_err(|e| format!("spawn host: {e}"))?;
 
-    // Drain sidecar stdout/stderr so the OS pipe never fills and blocks it.
+    // Drain sidecar stdout/stderr so the OS pipe never fills and blocks it, and
+    // watch for unexpected termination to trigger a restart.
+    let handle = app.clone();
     tauri::async_runtime::spawn(async move {
-        use tauri_plugin_shell::process::CommandEvent;
         while let Some(event) = rx.recv().await {
-            if let CommandEvent::Stderr(line) | CommandEvent::Stdout(line) = event {
-                eprintln!("[host] {}", String::from_utf8_lossy(&line));
+            match event {
+                CommandEvent::Stdout(line) | CommandEvent::Stderr(line) => {
+                    eprintln!("[host] {}", String::from_utf8_lossy(&line));
+                }
+                CommandEvent::Terminated(payload) => {
+                    eprintln!("[host] terminated: {payload:?}");
+                    restart_host(&handle);
+                    break;
+                }
+                _ => {}
             }
         }
     });
 
     Ok(child)
+}
+
+/// Restart the host after an unexpected exit, unless the app is shutting down or
+/// we've exhausted the restart budget. Backs off linearly and reuses the same
+/// port so the base injected into the webview stays valid.
+fn restart_host(app: &tauri::AppHandle) {
+    let state: State<Sidecar> = app.state();
+    if state.shutting_down.load(Ordering::SeqCst) {
+        return;
+    }
+    let n = state.restarts.fetch_add(1, Ordering::SeqCst) + 1;
+    if n > MAX_RESTARTS {
+        eprintln!("[host] exceeded {MAX_RESTARTS} restarts; giving up");
+        return;
+    }
+    let port = *state.port.lock().unwrap();
+    let backoff = Duration::from_millis(500 * u64::from(n));
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(backoff);
+        let st: State<Sidecar> = handle.state();
+        if st.shutting_down.load(Ordering::SeqCst) {
+            return;
+        }
+        match spawn_host(&handle, port) {
+            Ok(child) => {
+                *st.child.lock().unwrap() = Some(child);
+                eprintln!("[host] restarted on port {port} (attempt {n})");
+            }
+            Err(e) => eprintln!("[host] restart failed: {e}"),
+        }
+    });
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -97,10 +160,28 @@ pub fn run() {
         .manage(Sidecar::default())
         .setup(|app| {
             let handle = app.handle().clone();
-            match spawn_host(&handle) {
+            let port = pick_free_port().unwrap_or(5179);
+            {
+                let state: State<Sidecar> = app.state();
+                *state.port.lock().unwrap() = port;
+            }
+
+            // Create the main window with the host's loopback base injected
+            // before any frontend JS runs — no port-discovery handshake needed.
+            let script =
+                format!("window.__EARTMP_API_BASE__ = 'http://127.0.0.1:{port}/api';");
+            WebviewWindowBuilder::new(&handle, "main", WebviewUrl::App("index.html".into()))
+                .title("EARTMP — Academic Records & Transcripts")
+                .inner_size(1280.0, 820.0)
+                .min_inner_size(1024.0, 680.0)
+                .initialization_script(&script)
+                .build()
+                .map_err(|e| format!("build main window: {e}"))?;
+
+            match spawn_host(&handle, port) {
                 Ok(child) => {
                     let state: State<Sidecar> = app.state();
-                    *state.0.lock().unwrap() = Some(child);
+                    *state.child.lock().unwrap() = Some(child);
                 }
                 Err(e) => eprintln!("failed to start host sidecar: {e}"),
             }
@@ -115,8 +196,8 @@ pub fn run() {
             if let RunEvent::ExitRequested { .. } | RunEvent::Exit = event {
                 let taken = {
                     let state: State<Sidecar> = app.state();
-                    let child = state.0.lock().unwrap().take();
-                    child
+                    state.shutting_down.store(true, Ordering::SeqCst);
+                    state.child.lock().unwrap().take()
                 };
                 if let Some(child) = taken {
                     let _ = child.kill();

@@ -21,8 +21,9 @@ import { bootstrapDatabase } from "../infrastructure/db/bootstrap";
 import { buildHost } from "./composition";
 import { createCore, type Core } from "./dispatcher";
 import { toCoreError } from "./errors";
+import { resolveHostPort, handshakeLine } from "./hostPort";
 
-const PORT = Number(process.env.EARTMP_HOST_PORT ?? 5179);
+const PORT = resolveHostPort();
 const MIGRATIONS_DIR = process.env.EARTMP_MIGRATIONS_DIR ?? "prisma/migrations";
 
 // DB-at-rest encryption (ADR-008):
@@ -273,8 +274,14 @@ async function start(): Promise<void> {
     await unlock(DB_PASSPHRASE);
   }
   server.listen(PORT, "127.0.0.1", () => {
+    const addr = server.address();
+    const boundPort =
+      typeof addr === "object" && addr !== null ? addr.port : PORT;
+    // Machine-readable handshake the Tauri shell parses to learn the actual
+    // (possibly ephemeral) port. Must precede the human log line.
+    console.log(handshakeLine(boundPort));
     console.log(
-      `EARTMP host listening on http://127.0.0.1:${PORT}` +
+      `EARTMP host listening on http://127.0.0.1:${boundPort}` +
         (core ? "" : " (locked — awaiting unlock)"),
     );
   });
