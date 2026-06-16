@@ -21,6 +21,7 @@ import type {
 import type {
   Faculty,
   Department,
+  SubDepartment,
   Programme,
   Level,
   AcademicSession,
@@ -58,6 +59,12 @@ import type { Role } from "../../domain/entities/auth";
 // Re-exported so presentation code imports these shapes from the contract
 // (the single seam) rather than reaching into application/domain paths.
 export type {
+  Faculty,
+  Department,
+  SubDepartment,
+  Programme,
+  Level,
+  Course,
   ImportReport,
   RawRow,
   AcademicSummary,
@@ -174,6 +181,80 @@ export interface CoreApi {
   listSessions(input: Record<string, never>): Promise<AcademicSession[]>;
   listSemesters(input: { sessionId: string }): Promise<Semester[]>;
   listCourses(input: CourseQuery): Promise<Page<Course>>;
+  listSubDepartments(input: { departmentId: string }): Promise<SubDepartment[]>;
+
+  // structure management (Feature 2) — all gated structure.manage / courses.*
+  createFaculty(input: { name: string; code: string }): Promise<Faculty>;
+  updateFaculty(input: {
+    id: string;
+    patch: { name?: string; code?: string };
+  }): Promise<Faculty>;
+  deleteFaculty(input: { id: string }): Promise<void>;
+  createDepartment(input: {
+    name: string;
+    code: string;
+    facultyId: string;
+  }): Promise<Department>;
+  updateDepartment(input: {
+    id: string;
+    patch: { name?: string; code?: string };
+  }): Promise<Department>;
+  deleteDepartment(input: { id: string }): Promise<void>;
+  createSubDepartment(input: {
+    name: string;
+    code: string;
+    departmentId: string;
+  }): Promise<SubDepartment>;
+  updateSubDepartment(input: {
+    id: string;
+    patch: { name?: string; code?: string };
+  }): Promise<SubDepartment>;
+  deleteSubDepartment(input: { id: string }): Promise<void>;
+  createProgramme(input: {
+    name: string;
+    code: string;
+    departmentId: string;
+    subDepartmentId?: string;
+    durationLevels?: number;
+    creditsRequired?: number;
+  }): Promise<Programme>;
+  updateProgramme(input: {
+    id: string;
+    patch: {
+      name?: string;
+      code?: string;
+      subDepartmentId?: string | null;
+      durationLevels?: number;
+      creditsRequired?: number;
+    };
+  }): Promise<Programme>;
+  deleteProgramme(input: { id: string }): Promise<void>;
+  createLevel(input: {
+    name: string;
+    rank: number;
+    programmeId: string;
+  }): Promise<Level>;
+  updateLevel(input: {
+    id: string;
+    patch: { name?: string; rank?: number; gradeScaleId?: string | null };
+  }): Promise<Level>;
+  deleteLevel(input: { id: string }): Promise<void>;
+  createCourse(input: {
+    code: string;
+    title: string;
+    creditValue: number;
+    courseType: Course["courseType"];
+    departmentId?: string;
+    subDepartmentId?: string;
+    programmeId?: string;
+    levelId?: string;
+    semesterRank?: number;
+  }): Promise<Course>;
+  updateCourse(input: {
+    id: string;
+    patch: Partial<Omit<Course, "id" | "code">>;
+  }): Promise<Course>;
+  deleteCourse(input: { id: string }): Promise<void>;
 
   // results
   getAssessmentStructure(

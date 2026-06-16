@@ -26,6 +26,7 @@ import {
 import {
   PrismaFacultyRepository,
   PrismaDepartmentRepository,
+  PrismaSubDepartmentRepository,
   PrismaProgrammeRepository,
   PrismaLevelRepository,
   PrismaAcademicSessionRepository,
@@ -63,13 +64,36 @@ import {
   DeleteStudent,
 } from "../application/use-cases/records/ManageStudents";
 import { AdmitStudent } from "../application/use-cases/records/AdmitStudent";
-import { ListCourses } from "../application/use-cases/records/ManageCourses";
+import {
+  ListCourses,
+  CreateCourse,
+  UpdateCourse,
+  DeleteCourse,
+} from "../application/use-cases/records/ManageCourses";
 import {
   ListFaculties,
   ListDepartments,
   ListProgrammes,
   ListLevels,
+  CreateFaculty,
+  UpdateFaculty,
+  DeleteFaculty,
+  CreateDepartment,
+  UpdateDepartment,
+  DeleteDepartment,
+  CreateProgramme,
+  UpdateProgramme,
+  DeleteProgramme,
+  CreateLevel,
+  UpdateLevel,
+  DeleteLevel,
 } from "../application/use-cases/structure/ManageStructure";
+import {
+  CreateSubDepartment,
+  UpdateSubDepartment,
+  DeleteSubDepartment,
+  ListSubDepartments,
+} from "../application/use-cases/structure/ManageSubDepartments";
 import {
   ListSessions,
   ListSemesters,
@@ -191,12 +215,15 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     students,
   );
   const deleteStudent = new DeleteStudent(students, audit);
-  const listFaculties = new ListFaculties(new PrismaFacultyRepository(db));
-  const listDepartments = new ListDepartments(
-    new PrismaDepartmentRepository(db),
-  );
-  const listProgrammes = new ListProgrammes(new PrismaProgrammeRepository(db));
+  // Shared structure repos (reads + writes go through the same instances).
+  const facultyRepo = new PrismaFacultyRepository(db);
+  const departmentRepo = new PrismaDepartmentRepository(db);
+  const subDepartmentRepo = new PrismaSubDepartmentRepository(db);
+  const programmeRepo = new PrismaProgrammeRepository(db);
   const levelRepo = new PrismaLevelRepository(db);
+  const listFaculties = new ListFaculties(facultyRepo);
+  const listDepartments = new ListDepartments(departmentRepo);
+  const listProgrammes = new ListProgrammes(programmeRepo);
   const listLevels = new ListLevels(levelRepo);
   const listSessions = new ListSessions(
     new PrismaAcademicSessionRepository(db),
@@ -309,6 +336,118 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     ["listSessions", (i, s) => authorize(listSessions, i as never, s)],
     ["listSemesters", (i, s) => authorize(listSemesters, i as never, s)],
     ["listCourses", (i, s) => authorize(listCourses, i as never, s)],
+    [
+      "listSubDepartments",
+      (i, s) =>
+        authorize(new ListSubDepartments(subDepartmentRepo), i as never, s),
+    ],
+    // --- academic-structure management (Feature 2) ---
+    [
+      "createFaculty",
+      (i, s) => authorize(new CreateFaculty(facultyRepo, audit), i as never, s),
+    ],
+    [
+      "updateFaculty",
+      (i, s) => authorize(new UpdateFaculty(facultyRepo, audit), i as never, s),
+    ],
+    [
+      "deleteFaculty",
+      (i, s) => authorize(new DeleteFaculty(facultyRepo, audit), i as never, s),
+    ],
+    [
+      "createDepartment",
+      (i, s) =>
+        authorize(
+          new CreateDepartment(departmentRepo, facultyRepo, audit),
+          i as never,
+          s,
+        ),
+    ],
+    [
+      "updateDepartment",
+      (i, s) =>
+        authorize(new UpdateDepartment(departmentRepo, audit), i as never, s),
+    ],
+    [
+      "deleteDepartment",
+      (i, s) =>
+        authorize(new DeleteDepartment(departmentRepo, audit), i as never, s),
+    ],
+    [
+      "createSubDepartment",
+      (i, s) =>
+        authorize(
+          new CreateSubDepartment(subDepartmentRepo, departmentRepo, audit),
+          i as never,
+          s,
+        ),
+    ],
+    [
+      "updateSubDepartment",
+      (i, s) =>
+        authorize(
+          new UpdateSubDepartment(subDepartmentRepo, audit),
+          i as never,
+          s,
+        ),
+    ],
+    [
+      "deleteSubDepartment",
+      (i, s) =>
+        authorize(
+          new DeleteSubDepartment(subDepartmentRepo, audit),
+          i as never,
+          s,
+        ),
+    ],
+    [
+      "createProgramme",
+      (i, s) =>
+        authorize(
+          new CreateProgramme(programmeRepo, departmentRepo, audit),
+          i as never,
+          s,
+        ),
+    ],
+    [
+      "updateProgramme",
+      (i, s) =>
+        authorize(new UpdateProgramme(programmeRepo, audit), i as never, s),
+    ],
+    [
+      "deleteProgramme",
+      (i, s) =>
+        authorize(new DeleteProgramme(programmeRepo, audit), i as never, s),
+    ],
+    [
+      "createLevel",
+      (i, s) =>
+        authorize(
+          new CreateLevel(levelRepo, programmeRepo, audit),
+          i as never,
+          s,
+        ),
+    ],
+    [
+      "updateLevel",
+      (i, s) => authorize(new UpdateLevel(levelRepo, audit), i as never, s),
+    ],
+    [
+      "deleteLevel",
+      (i, s) => authorize(new DeleteLevel(levelRepo, audit), i as never, s),
+    ],
+    [
+      "createCourse",
+      (i, s) => authorize(new CreateCourse(courses, audit), i as never, s),
+    ],
+    [
+      "updateCourse",
+      (i, s) => authorize(new UpdateCourse(courses, audit), i as never, s),
+    ],
+    [
+      "deleteCourse",
+      (i, s) => authorize(new DeleteCourse(courses, audit), i as never, s),
+    ],
     ["enterResult", (i, s) => authorize(enterResult, i as never, s)],
     [
       "getStudentSemesterResults",
