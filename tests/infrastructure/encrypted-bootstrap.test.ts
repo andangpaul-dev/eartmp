@@ -46,6 +46,24 @@ describe("encrypted bootstrap (ADR-008)", () => {
       expect(admin?.username).toBe("admin");
       const roles = await prisma.role.findMany();
       expect(roles.length).toBeGreaterThanOrEqual(4);
+
+      // Every shipped migration is tracked, so a re-run applies nothing.
+      const tracked = await prisma.$queryRawUnsafe<{ n: bigint | number }[]>(
+        'SELECT COUNT(*) as n FROM "_eartmp_migrations"',
+      );
+      expect(Number(tracked[0]!.n)).toBeGreaterThanOrEqual(3);
+
+      // Idempotent: bootstrapping again provisions nothing and does not
+      // duplicate the admin (migrations skipped, seed skipped).
+      const reprovisioned = await bootstrapDatabase(
+        prisma,
+        "prisma/migrations",
+      );
+      expect(reprovisioned).toBe(false);
+      const admins = await prisma.user.findMany({
+        where: { username: "admin" },
+      });
+      expect(admins).toHaveLength(1);
       await prisma.$disconnect();
 
       // The file on disk is encrypted, not a plaintext SQLite database.
