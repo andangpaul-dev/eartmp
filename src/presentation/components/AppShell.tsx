@@ -23,6 +23,7 @@ export type Route =
   | "config"
   | "security"
   | "users"
+  | "roles"
   | "audit";
 
 interface NavDef {
@@ -114,9 +115,16 @@ const NAV: NavDef[] = [
   },
   {
     key: "users",
-    label: "Users & roles",
+    label: "Users",
     icon: "admin",
     perm: "users.read",
+    group: "Administration",
+  },
+  {
+    key: "roles",
+    label: "Roles & permissions",
+    icon: "admin",
+    perm: "roles.read",
     group: "Administration",
   },
   {
@@ -141,7 +149,8 @@ const TITLES: Record<Route, { t: string; s: string }> = {
   structure: { t: "Academic structure", s: "Faculties, departments & courses" },
   config: { t: "Configuration", s: "Grading, assessment & institution" },
   security: { t: "Security & keys", s: "Signing key & passphrase" },
-  users: { t: "Users & roles", s: "Access control" },
+  users: { t: "Users", s: "Accounts & access" },
+  roles: { t: "Roles & permissions", s: "Role-based access control" },
   audit: { t: "Audit log", s: "Append-only, tamper-evident" },
 };
 

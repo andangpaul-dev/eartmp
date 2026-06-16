@@ -795,6 +795,29 @@ table.data tr:hover td {
   color: var(--text-strong);
 }
 
+/* ---- Permission editor ---- */
+.perm-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 16px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 4px 2px;
+  margin: 6px 0;
+}
+.perm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  padding: 3px 0;
+}
+@media (max-width: 720px) {
+  .perm-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---- Responsive breakpoints ----
    The window min is 1024×680, but it can be resized smaller (and the same UI
    runs in the browser during dev), so the layout degrades gracefully: the

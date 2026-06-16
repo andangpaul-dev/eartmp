@@ -162,6 +162,58 @@ export class ActivateUser implements AuthorizedUseCase<
   }
 }
 
+export interface UpdateUserDetailsInput {
+  userId: string;
+  patch: { username?: string; email?: string; fullName?: string };
+}
+export class UpdateUserDetails implements AuthorizedUseCase<
+  UpdateUserDetailsInput,
+  UserAccount
+> {
+  readonly name = "UpdateUserDetails";
+  readonly requiredPermissions = ["users.update"];
+  constructor(
+    private readonly users: UserRepository,
+    private readonly audit: AuditLogPort,
+  ) {}
+  async execute(input: UpdateUserDetailsInput, session: SessionContext) {
+    const before = await this.users.findById(input.userId);
+    if (!before) throw new ValidationError("User not found.");
+    const patch: { username?: string; email?: string; fullName?: string } = {};
+    if (input.patch.username !== undefined) {
+      const username = input.patch.username.trim();
+      if (username.length < 3) {
+        throw ValidationError.field(
+          "username",
+          "Username must be at least 3 characters.",
+        );
+      }
+      const clash = await this.users.findByUsername(username);
+      if (clash && clash.id !== input.userId) {
+        throw ValidationError.field(
+          "username",
+          `Username "${username}" already exists.`,
+        );
+      }
+      patch.username = username;
+    }
+    if (input.patch.email !== undefined) patch.email = input.patch.email.trim();
+    if (input.patch.fullName !== undefined)
+      patch.fullName = input.patch.fullName.trim();
+
+    const updated = await this.users.update(input.userId, patch);
+    await this.audit.record({
+      userId: session.actorId,
+      action: "UPDATE",
+      entity: "User",
+      recordId: input.userId,
+      oldValue: { username: before.username },
+      newValue: { username: updated.username },
+    });
+    return updated;
+  }
+}
+
 export interface ResetUserPasswordInput {
   userId: string;
   newPassword: string;

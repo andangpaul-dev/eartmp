@@ -23,6 +23,7 @@ import { ConfigurationScreen } from "./screens/ConfigurationScreen";
 import { StructureScreen } from "./screens/StructureScreen";
 import { SecurityScreen } from "./screens/SecurityScreen";
 import { UsersScreen } from "./screens/UsersScreen";
+import { RolesScreen } from "./screens/RolesScreen";
 import { Placeholder } from "./screens/Placeholder";
 
 const SCREEN_NAMES: Record<Route, string> = {
@@ -38,7 +39,8 @@ const SCREEN_NAMES: Record<Route, string> = {
   structure: "Academic structure",
   config: "Configuration",
   security: "Security & keys",
-  users: "Users & roles",
+  users: "Users",
+  roles: "Roles & permissions",
   audit: "Audit log",
 };
 
@@ -101,6 +103,8 @@ export function App() {
       <SecurityScreen />
     ) : route === "users" ? (
       <UsersScreen />
+    ) : route === "roles" ? (
+      <RolesScreen />
     ) : (
       <Placeholder name={SCREEN_NAMES[route]} />
     );

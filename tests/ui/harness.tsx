@@ -120,6 +120,12 @@ export function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
     activateUser: async () => {},
     assignRole: async () => {},
     resetUserPassword: async () => {},
+    updateUserDetails: async () => ({ id: "u1" }),
+    listPermissions: async () => [],
+    createRole: async () => ({}) as never,
+    updateRole: async () => ({}) as never,
+    deleteRole: async () => {},
+    setRolePermissions: async () => ({}) as never,
   };
   return { ...base, ...overrides };
 }

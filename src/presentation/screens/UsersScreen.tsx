@@ -25,6 +25,7 @@ export function UsersScreen() {
   const { session, can } = useSession();
   const [creating, setCreating] = useState(false);
   const [resetFor, setResetFor] = useState<UserSummary | null>(null);
+  const [editFor, setEditFor] = useState<UserSummary | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const notify = (m: string) => {
     setToast(m);
@@ -136,6 +137,11 @@ export function UsersScreen() {
                         style={{ justifyContent: "flex-end", gap: 6 }}
                       >
                         {can("users.update") && (
+                          <Button variant="ghost" onClick={() => setEditFor(u)}>
+                            Edit
+                          </Button>
+                        )}
+                        {can("users.update") && (
                           <Button
                             variant="ghost"
                             onClick={() => setResetFor(u)}
@@ -198,8 +204,84 @@ export function UsersScreen() {
         />
       )}
 
+      {editFor && (
+        <EditUserModal
+          user={editFor}
+          onClose={() => setEditFor(null)}
+          onDone={() => {
+            setEditFor(null);
+            users.reload();
+            notify("User updated");
+          }}
+        />
+      )}
+
       {toast && <Toast message={toast} />}
     </div>
+  );
+}
+
+function EditUserModal({
+  user,
+  onClose,
+  onDone,
+}: {
+  user: UserSummary;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const core = useCore();
+  const [username, setUsername] = useState(user.username);
+  const [email, setEmail] = useState(user.email);
+  const [fullName, setFullName] = useState(user.fullName);
+  const save = useAction(
+    () =>
+      core.updateUserDetails({
+        userId: user.id,
+        patch: { username, email, fullName },
+      }),
+    { onSuccess: onDone },
+  );
+  const fieldErr = save.error?.fields;
+  return (
+    <Modal title={`Edit · ${user.username}`} onClose={onClose}>
+      <Field label="Username" error={fieldErr?.username}>
+        <input
+          className="input"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+        />
+      </Field>
+      <Field label="Full name">
+        <input
+          className="input"
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+        />
+      </Field>
+      <Field label="Email">
+        <input
+          className="input"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+      </Field>
+      {save.error && !fieldErr && (
+        <div className="alert danger">{save.error.message}</div>
+      )}
+      <div className="actions">
+        <Button onClick={onClose}>Cancel</Button>
+        <Button
+          variant="primary"
+          disabled={!username.trim() || !fullName.trim()}
+          loading={save.loading}
+          onClick={save.run}
+        >
+          Save
+        </Button>
+      </div>
+    </Modal>
   );
 }
 

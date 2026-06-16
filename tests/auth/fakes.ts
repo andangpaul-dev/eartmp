@@ -97,6 +97,46 @@ export class InMemoryRoleRepository implements RoleRepository {
   async list(): Promise<Role[]> {
     return [...this.byId.values()];
   }
+  private seq = 0;
+  async create(data: { name: string; description?: string }): Promise<Role> {
+    const role: Role = {
+      id: `role-${++this.seq}`,
+      name: data.name,
+      ...(data.description ? { description: data.description } : {}),
+      permissions: [],
+    };
+    this.byId.set(role.id, role);
+    return { ...role };
+  }
+  async update(
+    id: string,
+    patch: { name?: string; description?: string },
+  ): Promise<Role> {
+    const role = { ...(this.byId.get(id) as Role), ...patch };
+    this.byId.set(id, role);
+    return { ...role };
+  }
+  async softDelete(id: string): Promise<void> {
+    this.byId.delete(id);
+  }
+  async setPermissions(
+    roleId: string,
+    permissionKeys: string[],
+  ): Promise<Role> {
+    const role = this.byId.get(roleId) as Role;
+    role.permissions = permissionKeys.map((key, i) => ({
+      id: `perm-${i}`,
+      key,
+      label: key,
+    }));
+    this.byId.set(roleId, role);
+    return { ...role };
+  }
+  async countUsers(): Promise<number> {
+    return this.users;
+  }
+  /** Test knob: number of users to report as assigned (for delete guards). */
+  users = 0;
 }
 
 export const adminRole: Role = {

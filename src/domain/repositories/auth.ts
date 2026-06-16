@@ -22,6 +22,16 @@ export interface RoleRepository {
   findByName(name: string): Promise<Role | null>;
   /** All roles with permissions hydrated. */
   list(): Promise<Role[]>;
+  create(data: { name: string; description?: string }): Promise<Role>;
+  update(
+    id: string,
+    patch: { name?: string; description?: string },
+  ): Promise<Role>;
+  softDelete(id: string): Promise<void>;
+  /** Replace the role's permission set with the given permission keys. */
+  setPermissions(roleId: string, permissionKeys: string[]): Promise<Role>;
+  /** Count live users currently assigned this role (guards deletion). */
+  countUsers(roleId: string): Promise<number>;
 }
 
 export interface PermissionRepository {

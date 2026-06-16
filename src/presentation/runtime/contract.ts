@@ -55,7 +55,7 @@ import type {
 } from "../../domain/repositories/grading";
 import type { GraduationRequirements } from "../../domain/services/GraduationEligibility";
 import type { UserSummary } from "../../application/use-cases/auth/ManageUsers";
-import type { Role } from "../../domain/entities/auth";
+import type { Role, Permission } from "../../domain/entities/auth";
 
 // Re-exported so presentation code imports these shapes from the contract
 // (the single seam) rather than reaching into application/domain paths.
@@ -84,6 +84,7 @@ export type {
   GraduationRequirements,
   UserSummary,
   Role,
+  Permission,
 };
 
 /** Transcript bytes are transported base64-encoded (JSON can't carry Uint8Array). */
@@ -391,6 +392,26 @@ export interface CoreApi {
     userId: string;
     newPassword: string;
   }): Promise<void>;
+  updateUserDetails(input: {
+    userId: string;
+    patch: { username?: string; email?: string; fullName?: string };
+  }): Promise<{ id: string }>;
+  // role administration (roles.assign) + permission catalogue (roles.read)
+  listPermissions(input: Record<string, never>): Promise<Permission[]>;
+  createRole(input: {
+    name: string;
+    description?: string;
+    permissionKeys?: string[];
+  }): Promise<Role>;
+  updateRole(input: {
+    id: string;
+    patch: { name?: string; description?: string };
+  }): Promise<Role>;
+  deleteRole(input: { id: string }): Promise<void>;
+  setRolePermissions(input: {
+    roleId: string;
+    permissionKeys: string[];
+  }): Promise<Role>;
 }
 
 /** Generic transport shape the IPC client/host share. */

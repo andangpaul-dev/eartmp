@@ -158,6 +158,63 @@ export class PrismaRoleRepository implements RoleRepository {
     });
     return rows.map(toRole);
   }
+
+  async create(data: { name: string; description?: string }): Promise<Role> {
+    const row = await this.db.role.create({
+      data: { name: data.name, description: data.description ?? null },
+      include: roleInclude,
+    });
+    return toRole(row);
+  }
+
+  async update(
+    id: string,
+    patch: { name?: string; description?: string },
+  ): Promise<Role> {
+    const row = await this.db.role.update({
+      where: { id },
+      data: {
+        ...(patch.name !== undefined ? { name: patch.name } : {}),
+        ...(patch.description !== undefined
+          ? { description: patch.description }
+          : {}),
+      },
+      include: roleInclude,
+    });
+    return toRole(row);
+  }
+
+  async softDelete(id: string): Promise<void> {
+    await this.db.role.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+  }
+
+  async setPermissions(
+    roleId: string,
+    permissionKeys: string[],
+  ): Promise<Role> {
+    const perms = await this.db.permission.findMany({
+      where: { key: { in: permissionKeys }, deletedAt: null },
+      select: { id: true },
+    });
+    await this.db.$transaction([
+      this.db.rolePermission.deleteMany({ where: { roleId } }),
+      this.db.rolePermission.createMany({
+        data: perms.map((p) => ({ roleId, permissionId: p.id })),
+      }),
+    ]);
+    const row = await this.db.role.findFirst({
+      where: { id: roleId, deletedAt: null },
+      include: roleInclude,
+    });
+    return toRole(row!);
+  }
+
+  async countUsers(roleId: string): Promise<number> {
+    return this.db.user.count({ where: { roleId, deletedAt: null } });
+  }
 }
 
 export class PrismaPermissionRepository implements PermissionRepository {

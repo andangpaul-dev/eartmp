@@ -153,9 +153,18 @@ import {
   ActivateUser,
   AssignRole,
   ResetUserPassword,
+  UpdateUserDetails,
   ListUsers,
   ListRoles,
 } from "../application/use-cases/auth/ManageUsers";
+import {
+  CreateRole,
+  UpdateRole,
+  DeleteRole,
+  SetRolePermissions,
+  ListPermissions,
+} from "../application/use-cases/auth/ManageRoles";
+import { PrismaPermissionRepository } from "../infrastructure/repositories/PrismaAuthRepositories";
 import { buildDefaultRegistry } from "../domain/settings/SettingsRegistry";
 import { AuthorizationError } from "../domain/errors/auth";
 import { TranscriptError } from "../domain/errors/transcript";
@@ -312,6 +321,13 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
   const activateUser = new ActivateUser(users, audit);
   const assignRole = new AssignRole(users, roles, audit);
   const resetUserPassword = new ResetUserPassword(users, hasher, audit);
+  const updateUserDetails = new UpdateUserDetails(users, audit);
+  const permissionsRepo = new PrismaPermissionRepository(db);
+  const createRole = new CreateRole(roles, audit);
+  const updateRole = new UpdateRole(roles, audit);
+  const deleteRole = new DeleteRole(roles, audit);
+  const setRolePermissions = new SetRolePermissions(roles, audit);
+  const listPermissions = new ListPermissions(permissionsRepo);
 
   // The transcript-signing key is sealed at rest. It is unsealed ONCE per host
   // session with the institution passphrase and held in memory; a lost
@@ -526,6 +542,21 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     [
       "resetUserPassword",
       (i, s) => authorize(resetUserPassword, i as never, s),
+    ],
+    [
+      "updateUserDetails",
+      async (i, s) => {
+        const u = await authorize(updateUserDetails, i as never, s);
+        return { id: (u as { id: string }).id }; // never return the hash
+      },
+    ],
+    ["listPermissions", (i, s) => authorize(listPermissions, i as never, s)],
+    ["createRole", (i, s) => authorize(createRole, i as never, s)],
+    ["updateRole", (i, s) => authorize(updateRole, i as never, s)],
+    ["deleteRole", (i, s) => authorize(deleteRole, i as never, s)],
+    [
+      "setRolePermissions",
+      (i, s) => authorize(setRolePermissions, i as never, s),
     ],
   ]);
 
