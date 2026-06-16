@@ -15,6 +15,8 @@ import {
   type ProcessSemesterInput,
 } from "../ProcessSemesterResults";
 import type { AuthorizedUseCase } from "../../authorization/AuthorizedUseCase";
+import type { StudentRepository } from "../../../domain/repositories/records";
+import type { LevelRepository } from "../../../domain/repositories/structure";
 
 export interface ProcessSemesterUseCaseInput {
   studentId: string;
@@ -33,15 +35,36 @@ export class ProcessSemester implements AuthorizedUseCase<
   constructor(
     private readonly uow: UnitOfWork,
     private readonly grading: GradingConfigService,
+    // Optional reads to resolve a per-level grade scale (Feature 2). When the
+    // student's current level carries a gradeScaleId, it is used unless the
+    // operator passed an explicit override.
+    private readonly students?: StudentRepository,
+    private readonly levels?: LevelRepository,
   ) {}
+
+  /**
+   * Effective grade-scale ref, in precedence order:
+   *   1. an explicit operator override (input.gradeScaleRef),
+   *   2. the student's current level's gradeScaleId (per-level grading),
+   *   3. the institution default (undefined ⇒ GradingConfigService default).
+   */
+  private async resolveGradeScaleRef(
+    input: ProcessSemesterUseCaseInput,
+  ): Promise<{ id?: string; name?: string } | undefined> {
+    if (input.gradeScaleRef) return input.gradeScaleRef;
+    if (!this.students || !this.levels) return undefined;
+    const student = await this.students.findById(input.studentId);
+    if (!student?.levelId) return undefined;
+    const level = await this.levels.findById(student.levelId);
+    return level?.gradeScaleId ? { id: level.gradeScaleId } : undefined;
+  }
 
   async execute(
     input: ProcessSemesterUseCaseInput,
     session: SessionContext,
   ): Promise<GpaSummary> {
-    const { scale, id } = await this.grading.loadGradeScaleWithId(
-      input.gradeScaleRef,
-    );
+    const ref = await this.resolveGradeScaleRef(input);
+    const { scale, id } = await this.grading.loadGradeScaleWithId(ref);
     const process = new ProcessSemesterResults(this.uow);
     const inner: ProcessSemesterInput = {
       studentId: input.studentId,

@@ -196,7 +196,8 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     new PrismaDepartmentRepository(db),
   );
   const listProgrammes = new ListProgrammes(new PrismaProgrammeRepository(db));
-  const listLevels = new ListLevels(new PrismaLevelRepository(db));
+  const levelRepo = new PrismaLevelRepository(db);
+  const listLevels = new ListLevels(levelRepo);
   const listSessions = new ListSessions(
     new PrismaAcademicSessionRepository(db),
   );
@@ -204,7 +205,13 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
   const listCourses = new ListCourses(courses);
   const enterResult = new EnterResult(results, grading, audit);
   const getStudentSemesterResults = new GetStudentSemesterResults(results);
-  const processSemester = new ProcessSemester(uow, grading);
+  // students + levelRepo let ProcessSemester resolve a per-level grade scale.
+  const processSemester = new ProcessSemester(
+    uow,
+    grading,
+    students,
+    levelRepo,
+  );
   const lockSemesterResults = new LockSemesterResults(results, audit);
   const unlockResult = new UnlockResult(results, audit);
   const importResults = new ImportResults(grading, uow);
