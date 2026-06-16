@@ -87,14 +87,37 @@ describe("Role administration", () => {
     const updated = await new SetRolePermissions(roles, audit).execute(
       {
         roleId: adminRole.id,
-        permissionKeys: ["students.read", "results.read"],
+        permissionKeys: ["students.read", "results.read", "roles.assign"],
       },
       admin,
     );
     expect(updated.permissions.map((p) => p.key).sort()).toEqual([
       "results.read",
+      "roles.assign",
       "students.read",
     ]);
+  });
+
+  it("refuses to remove the LAST roles.assign (anti-lockout)", async () => {
+    // adminRole is the only role and holds roles.assign.
+    await expect(
+      new SetRolePermissions(roles, audit).execute(
+        { roleId: adminRole.id, permissionKeys: ["students.read"] },
+        admin,
+      ),
+    ).rejects.toThrow(/roles\.assign/);
+  });
+
+  it("allows removing roles.assign when another role still has it", async () => {
+    await new CreateRole(roles, audit).execute(
+      { name: "MANAGER", permissionKeys: ["roles.assign"] },
+      admin,
+    );
+    const updated = await new SetRolePermissions(roles, audit).execute(
+      { roleId: adminRole.id, permissionKeys: ["students.read"] },
+      admin,
+    );
+    expect(updated.permissions.map((p) => p.key)).toEqual(["students.read"]);
   });
 
   it("lists the permission catalogue (roles.read), denied otherwise", async () => {

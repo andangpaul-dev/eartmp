@@ -143,6 +143,26 @@ export class SetRolePermissions implements AuthorizedUseCase<
   async execute(input: SetRolePermissionsInput, session: SessionContext) {
     const role = await this.roles.findById(input.roleId);
     if (!role) throw new ValidationError("Role not found.");
+
+    // Anti-lockout invariant: at least one role must always retain
+    // `roles.assign`, or nobody could ever manage roles again.
+    const hadAssign = role.permissions.some((p) => p.key === "roles.assign");
+    const keepsAssign = input.permissionKeys.includes("roles.assign");
+    if (hadAssign && !keepsAssign) {
+      const others = (await this.roles.list()).filter(
+        (r) => r.id !== input.roleId,
+      );
+      const someoneElseCanManage = others.some((r) =>
+        r.permissions.some((p) => p.key === "roles.assign"),
+      );
+      if (!someoneElseCanManage) {
+        throw new ValidationError(
+          'At least one role must keep the "roles.assign" permission — ' +
+            "removing it here would lock out all role management.",
+        );
+      }
+    }
+
     const updated = await this.roles.setPermissions(
       input.roleId,
       input.permissionKeys,

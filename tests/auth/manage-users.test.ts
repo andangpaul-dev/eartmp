@@ -177,6 +177,16 @@ describe("AssignRole", () => {
     ).rejects.toThrow(/role does not exist/);
   });
 
+  it("refuses to change your own role (anti self-lockout)", async () => {
+    const users = new InMemoryUserRepository([existing]);
+    await expect(
+      new AssignRole(users, roles(), new CapturingAudit()).execute(
+        { userId: "admin", roleId: "role-viewer" },
+        admin,
+      ),
+    ).rejects.toThrow(/your own role/);
+  });
+
   it("requires roles.assign through the seam", async () => {
     const uc = new AssignRole(
       new InMemoryUserRepository([existing]),

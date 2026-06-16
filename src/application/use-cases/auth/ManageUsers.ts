@@ -324,6 +324,12 @@ export class AssignRole implements AuthorizedUseCase<AssignRoleInput, void> {
     input: AssignRoleInput,
     session: SessionContext,
   ): Promise<void> {
+    // Changing your own role can strip your admin permissions and lock you out.
+    if (input.userId === session.actorId) {
+      throw new AuthorizationError(
+        "You cannot change your own role (ask another administrator).",
+      );
+    }
     if (!(await this.roles.findById(input.roleId))) {
       throw ValidationError.field("roleId", "Selected role does not exist.");
     }
