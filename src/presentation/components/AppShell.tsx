@@ -143,7 +143,7 @@ export function AppShell({
                   key={n.key}
                   className={`nav-item ${route === n.key ? "active" : ""}`}
                   disabled={!allowed}
-                  title={allowed ? undefined : `Requires "${n.perm}"`}
+                  title={allowed ? n.label : `Requires "${n.perm}"`}
                   onClick={() => allowed && setRoute(n.key)}
                 >
                   <Icon name={n.icon} size={17} />

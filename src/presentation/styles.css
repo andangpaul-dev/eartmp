@@ -741,3 +741,68 @@ table.data tr:hover td {
 .weight-bad {
   color: var(--danger-fg);
 }
+
+/* ---- Responsive breakpoints ----
+   The window min is 1024×680, but it can be resized smaller (and the same UI
+   runs in the browser during dev), so the layout degrades gracefully: the
+   sidebar collapses to an icon rail and two-column forms stack. */
+@media (max-width: 1024px) {
+  .shell {
+    grid-template-columns: 60px 1fr;
+  }
+  /* Sidebar → icon rail: keep glyphs, drop text. */
+  .sidebar .brand > div:not(.logo),
+  .nav-group .hdr,
+  .nav-item .grow,
+  .nav-item .lock {
+    display: none;
+  }
+  .sidebar .brand {
+    justify-content: center;
+    padding: 4px 0 16px;
+  }
+  .nav-item {
+    justify-content: center;
+    gap: 0;
+    padding: 10px 0;
+  }
+  .sidebar .footer {
+    justify-content: center;
+    font-size: 0; /* collapse the label, keep the status dot */
+  }
+  .content {
+    padding: 20px 18px;
+  }
+  .topbar {
+    padding: 0 16px;
+    gap: 12px;
+  }
+  .topbar .search {
+    width: 200px;
+  }
+  /* Two-column forms stack. */
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Tablet / very small window: drop the login hero, shrink chrome further. */
+@media (max-width: 720px) {
+  .login {
+    grid-template-columns: 1fr;
+  }
+  .login .left {
+    display: none;
+  }
+  .login .panel {
+    width: 100%;
+    max-width: 360px;
+    padding: 0 20px;
+  }
+  .topbar .search {
+    width: 150px;
+  }
+  .topbar .titles .s {
+    display: none; /* keep the title, drop the subtitle */
+  }
+}
