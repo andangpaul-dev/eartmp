@@ -160,7 +160,7 @@ export function AppShell({
         ))}
         <div className="footer">
           <span className="dot" style={{ background: "var(--success-dot)" }} />
-          Offline · local SQLite
+          Offline · local SQLite · v{__APP_VERSION__}
         </div>
       </aside>
 

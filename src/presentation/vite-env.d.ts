@@ -11,3 +11,6 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+/** App version, injected by Vite from the root package.json (single source). */
+declare const __APP_VERSION__: string;

@@ -1,9 +1,17 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 const r = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
+// Same single source as vite.config.ts so UI tests rendering __APP_VERSION__
+// (e.g. the AppShell footer) resolve it.
+const pkg = JSON.parse(readFileSync(r("./package.json"), "utf8")) as {
+  version: string;
+};
+
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   resolve: {
     alias: {
       "@domain": r("./src/domain"),

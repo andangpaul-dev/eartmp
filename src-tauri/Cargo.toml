@@ -3,7 +3,10 @@
 # + the platform toolchain (MSVC on Windows). See docs/packaging-runbook.md.
 [package]
 name = "eartmp"
-version = "0.1.0"
+# Crate version only — NOT the product/bundle version. The app version is
+# single-sourced from the root package.json (tauri.conf.json reads it via
+# `version: "../package.json"`); keep this at 0.0.0 so it can't masquerade as it.
+version = "0.0.0"
 description = "EARTMP Academic Records & Transcript Management Platform"
 edition = "2021"
 rust-version = "1.77"
