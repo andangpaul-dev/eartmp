@@ -113,19 +113,39 @@ model Faculty {
 }
 
 model Department {
-  id         String      @id @default(cuid())
-  name       String
-  code       String
-  facultyId  String
-  faculty    Faculty     @relation(fields: [facultyId], references: [id])
-  programmes Programme[]
-  courses    Course[]
-  students   Student[]
-  createdAt  DateTime    @default(now())
-  updatedAt  DateTime    @updatedAt
-  deletedAt  DateTime?
+  id             String          @id @default(cuid())
+  name           String
+  code           String
+  facultyId      String
+  faculty        Faculty         @relation(fields: [facultyId], references: [id])
+  subDepartments SubDepartment[]
+  programmes     Programme[]
+  courses        Course[]
+  students       Student[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  deletedAt      DateTime?
 
   @@index([facultyId])
+}
+
+// Optional organizational unit under a Department (AD: configurable hierarchy).
+// Programmes, courses and students may belong directly to a department or to one
+// of its sub-departments.
+model SubDepartment {
+  id           String      @id @default(cuid())
+  name         String
+  code         String
+  departmentId String
+  department   Department  @relation(fields: [departmentId], references: [id])
+  programmes   Programme[]
+  courses      Course[]
+  students     Student[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  deletedAt    DateTime?
+
+  @@index([departmentId])
 }
 
 model Programme {
@@ -134,6 +154,8 @@ model Programme {
   code            String
   departmentId    String
   department      Department          @relation(fields: [departmentId], references: [id])
+  subDepartmentId String?
+  subDepartment   SubDepartment?      @relation(fields: [subDepartmentId], references: [id])
   durationLevels  Int                 @default(4)
   creditsRequired Int                 @default(0)
   levels          Level[]
@@ -145,20 +167,25 @@ model Programme {
   deletedAt       DateTime?
 
   @@index([departmentId])
+  @@index([subDepartmentId])
 }
 
 model Level {
-  id          String              @id @default(cuid())
-  name        String // e.g. "100", "200"
-  rank        Int // ordering
-  programmeId String
-  programme   Programme           @relation(fields: [programmeId], references: [id])
-  students    Student[]
-  courses     Course[]
-  enrollments StudentEnrollment[]
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-  deletedAt   DateTime?
+  id           String              @id @default(cuid())
+  name         String // e.g. "100", "200"
+  rank         Int // ordering
+  programmeId  String
+  programme    Programme           @relation(fields: [programmeId], references: [id])
+  // Per-level grade scale (configurable grading per level of study). Loose ref
+  // (no FK) so the level survives a grade-scale deletion, like Result provenance;
+  // null falls back to the institution default scale.
+  gradeScaleId String?
+  students     Student[]
+  courses      Course[]
+  enrollments  StudentEnrollment[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  deletedAt    DateTime?
 
   @@index([programmeId])
 }
@@ -208,6 +235,8 @@ model Student {
   facultyId        String?
   departmentId     String?
   department       Department?         @relation(fields: [departmentId], references: [id])
+  subDepartmentId  String?
+  subDepartment    SubDepartment?      @relation(fields: [subDepartmentId], references: [id])
   programmeId      String?
   programme        Programme?          @relation(fields: [programmeId], references: [id])
   levelId          String?
@@ -249,25 +278,28 @@ model StudentEnrollment {
 }
 
 model Course {
-  id           String      @id @default(cuid())
-  code         String
-  title        String
-  creditValue  Int
-  courseType   String      @default("CORE") // CORE|ELECTIVE|PRACTICAL|CLINICAL
-  departmentId String?
-  department   Department? @relation(fields: [departmentId], references: [id])
-  programmeId  String?
-  programme    Programme?  @relation(fields: [programmeId], references: [id])
-  levelId      String?
-  level        Level?      @relation(fields: [levelId], references: [id])
-  semesterRank Int? // which semester in the level
-  results      Result[]
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  deletedAt    DateTime?
+  id              String         @id @default(cuid())
+  code            String
+  title           String
+  creditValue     Int
+  courseType      String         @default("CORE") // CORE|ELECTIVE|PRACTICAL|CLINICAL
+  departmentId    String?
+  department      Department?    @relation(fields: [departmentId], references: [id])
+  subDepartmentId String?
+  subDepartment   SubDepartment? @relation(fields: [subDepartmentId], references: [id])
+  programmeId     String?
+  programme       Programme?     @relation(fields: [programmeId], references: [id])
+  levelId         String?
+  level           Level?         @relation(fields: [levelId], references: [id])
+  semesterRank    Int? // which semester in the level
+  results         Result[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  deletedAt       DateTime?
 
   @@index([programmeId])
   @@index([departmentId])
+  @@index([subDepartmentId])
   @@index([levelId])
 }
 
