@@ -202,7 +202,10 @@ pub fn run() {
                 let taken = {
                     let state: State<Sidecar> = app.state();
                     state.shutting_down.store(true, Ordering::SeqCst);
-                    state.child.lock().unwrap().take()
+                    // Bind to a local so the MutexGuard temporary drops before
+                    // `state` does at the block's end (avoids E0597).
+                    let child = state.child.lock().unwrap().take();
+                    child
                 };
                 if let Some(child) = taken {
                     let _ = child.kill();
