@@ -16,6 +16,7 @@ import { getPrisma } from "../infrastructure/db/prisma";
 import {
   getEncryptedPrisma,
   resolveDbSalt,
+  MissingDbSaltError,
 } from "../infrastructure/db/encryptedDatabase";
 import { bootstrapDatabase } from "../infrastructure/db/bootstrap";
 import { buildHost } from "./composition";
@@ -141,16 +142,23 @@ const server = createServer((req, res) => {
             { ok: true, data: { locked: core === null } },
             origin,
           );
-        } catch {
+        } catch (e) {
+          // A missing/empty salt next to an existing encrypted DB is NOT a wrong
+          // passphrase — surface the real, actionable message (and log it)
+          // instead of masking it as a credential error.
+          console.error("[host] unlock failed:", e);
+          const saltGone = e instanceof MissingDbSaltError;
           return send(
             res,
             200,
             {
               ok: false,
-              error: {
-                code: "UNAUTHENTICATED",
-                message: "Incorrect passphrase.",
-              },
+              error: saltGone
+                ? { code: "INTERNAL", message: (e as Error).message }
+                : {
+                    code: "UNAUTHENTICATED",
+                    message: "Incorrect passphrase.",
+                  },
             },
             origin,
           );

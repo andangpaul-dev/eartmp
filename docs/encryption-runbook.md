@@ -68,18 +68,49 @@ encrypted. Note: first-launch provisioning over the encrypted connection takes
 
 Apply `prisma/migrations/*/migration.sql` through the **keyed** connection on
 first launch, then open normally. The migration SQL is identical; only the
-connection is encrypted. No Prisma CLI/engine is needed at runtime. (Today
-`src/infrastructure/db/bootstrap.ts` applies all migrations when the schema is
-absent, keyed on the `User` table; per-migration tracking + transactional apply
-is a Tier-3 follow-up.)
+connection is encrypted. No Prisma CLI/engine is needed at runtime.
+`src/infrastructure/db/migrationRunner.ts` records each applied migration in a
+`_eartmp_migrations` table, applies each in its own transaction, splits
+statements with a quote/comment-aware splitter, and baselines a pre-existing
+untracked schema — so app updates apply only pending migrations. `bootstrap.ts`
+then seeds only when the DB was empty.
 
-## Salt provisioning
+## Salt provisioning & the salt↔DB coupling (CRITICAL)
 
-`institution.encryptionSalt` is a settings row (Phase 3). Provision a random,
-stable salt at install (≥ 16 bytes) and never change it — the key is
-`Argon2id(passphrase, salt)`, so a changed salt makes the DB unreadable.
+The per-install KDF salt lives in a **plaintext sidecar file next to the DB**:
+`<db>.salt` (e.g. `eartmp.db.salt`), managed by `resolveDbSalt(dbFile)` in
+`src/infrastructure/db/encryptedDatabase.ts`. It is **not secret** (only the
+passphrase is); a stable per-install salt stops the same passphrase deriving the
+same key across machines.
+
+The key is `Argon2id(passphrase, salt)`, so **the salt and the encrypted DB are
+an atomic pair**: lose or regenerate the salt and the DB can no longer be
+decrypted (`SQLITE_NOTADB`) — exactly as fatal as losing the passphrase. This
+actually bit us once: a `.salt` newer than its `eartmp.db` (the salt had been
+regenerated) left the DB un-openable.
+
+**Fail-loud guard (implemented).** `resolveDbSalt` mints a new salt **only on a
+genuinely fresh install** (no DB file yet). If the DB exists but the salt is
+missing or empty, it throws `MissingDbSaltError` with an actionable message
+instead of silently minting a new (wrong) salt and orphaning the DB. The host
+surfaces this distinctly on `/api/unlock` (logged + a real message, not masked
+as "incorrect passphrase"). Covered by
+`tests/infrastructure/resolve-db-salt.test.ts`.
+
+**Backup & recovery.** Two independent recovery paths:
+
+1. **Logical backup (recommended, salt-independent).** `CreateBackup` exports a
+   JSON snapshot and encrypts it under its own passphrase with a salt embedded
+   in the envelope manifest — it does **not** depend on `<db>.salt`. To recover
+   on any machine: install fresh (a new salt + empty encrypted DB are
+   provisioned), unlock, then `RestoreBackup`. This survives total loss of the
+   original salt.
+2. **Raw file copy.** If you instead copy the `eartmp.db` file directly, you
+   **must** copy `eartmp.db.salt` alongside it — back them up and restore them
+   **together**, atomically. A DB without its salt is unrecoverable.
+
 Passphrase rotation re-encrypts the DB under the new key (analogous to the
-signing-key passphrase rotation already shipped).
+signing-key passphrase rotation already shipped); the salt is unchanged by it.
 
 ## Open items
 
