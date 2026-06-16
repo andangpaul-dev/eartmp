@@ -21,6 +21,9 @@ export interface Student {
   gender?: string;
   dateOfBirth?: Date;
   nationality?: string;
+  address?: string;
+  telephone?: string;
+  email?: string;
   programmeId?: string;
   departmentId?: string;
   subDepartmentId?: string;

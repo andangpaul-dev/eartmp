@@ -48,17 +48,39 @@ export function StudentsScreen() {
   const { can } = useSession();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StudentStatus | "">("");
+  const [facultyId, setFacultyId] = useState("");
+  const [departmentId, setDepartmentId] = useState("");
+  const [subDepartmentId, setSubDepartmentId] = useState("");
   const [page, setPage] = useState(0);
   const [admitting, setAdmitting] = useState(false);
   const [selected, setSelected] = useState<Student | null>(null);
+  const [editing, setEditing] = useState<Student | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+
+  // Grouping filters: Faculty/School → Department → Sub-department.
+  const faculties = useAsync(() => core.listFaculties({}), []);
+  const filterDepts = useAsync(
+    () =>
+      facultyId ? core.listDepartments({ facultyId }) : Promise.resolve([]),
+    [facultyId],
+  );
+  const filterSubDepts = useAsync(
+    () =>
+      departmentId
+        ? core.listSubDepartments({ departmentId })
+        : Promise.resolve([]),
+    [departmentId],
+  );
 
   const where = useMemo(
     () => ({
       ...(search ? { search } : {}),
       ...(status ? { status } : {}),
+      ...(facultyId ? { facultyId } : {}),
+      ...(departmentId ? { departmentId } : {}),
+      ...(subDepartmentId ? { subDepartmentId } : {}),
     }),
-    [search, status],
+    [search, status, facultyId, departmentId, subDepartmentId],
   );
 
   const list = useAsync(
@@ -101,6 +123,66 @@ export function StudentsScreen() {
               {STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {s}
+                </option>
+              ))}
+            </select>
+            <select
+              className="select"
+              style={{ width: 150 }}
+              aria-label="Filter by faculty"
+              value={facultyId}
+              onChange={(e) => {
+                setPage(0);
+                setFacultyId(e.target.value);
+                setDepartmentId("");
+                setSubDepartmentId("");
+              }}
+            >
+              <option value="">All faculties</option>
+              {faculties.data?.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+            <select
+              className="select"
+              style={{ width: 150 }}
+              aria-label="Filter by department"
+              value={departmentId}
+              disabled={!facultyId}
+              onChange={(e) => {
+                setPage(0);
+                setDepartmentId(e.target.value);
+                setSubDepartmentId("");
+              }}
+            >
+              <option value="">
+                {facultyId ? "All departments" : "Dept…"}
+              </option>
+              {filterDepts.data?.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+            <select
+              className="select"
+              style={{ width: 150 }}
+              aria-label="Filter by sub-department"
+              value={subDepartmentId}
+              disabled={
+                !departmentId || (filterSubDepts.data?.length ?? 0) === 0
+              }
+              onChange={(e) => {
+                setPage(0);
+                setSubDepartmentId(e.target.value);
+              }}
+            >
+              <option value="">All sub-depts</option>
+              {filterSubDepts.data?.map((sd) => (
+                <option key={sd.id} value={sd.id}>
+                  {sd.name}
                 </option>
               ))}
             </select>
@@ -195,10 +277,26 @@ export function StudentsScreen() {
         <ProfileModal
           student={selected}
           onClose={() => setSelected(null)}
+          onEdit={() => {
+            setEditing(selected);
+            setSelected(null);
+          }}
           onChanged={() => {
             setSelected(null);
             list.reload();
             notify("Status updated");
+          }}
+        />
+      )}
+
+      {editing && (
+        <EditStudentModal
+          student={editing}
+          onClose={() => setEditing(null)}
+          onDone={() => {
+            setEditing(null);
+            list.reload();
+            notify("Student updated");
           }}
         />
       )}
@@ -412,10 +510,12 @@ function Cascade({
 function ProfileModal({
   student,
   onClose,
+  onEdit,
   onChanged,
 }: {
   student: Student;
   onClose: () => void;
+  onEdit: () => void;
   onChanged: () => void;
 }) {
   const core = useCore();
@@ -442,6 +542,16 @@ function ProfileModal({
       subtitle={student.matricNumber}
       onClose={onClose}
     >
+      {can("students.update") && (
+        <div className="spread" style={{ marginBottom: 12 }}>
+          <span className="muted" style={{ fontSize: 12.5 }}>
+            Admission & contact details
+          </span>
+          <Button variant="ghost" onClick={onEdit}>
+            <Icon name="config" size={14} /> Edit details
+          </Button>
+        </div>
+      )}
       <div className="stack" style={{ gap: 10 }}>
         <Row
           k="Status"
@@ -526,6 +636,249 @@ function ProfileModal({
           </div>
         </Modal>
       )}
+    </Modal>
+  );
+}
+
+// ---- Full admission + contact edit ----
+
+function EditStudentModal({
+  student,
+  onClose,
+  onDone,
+}: {
+  student: Student;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const core = useCore();
+  const [fullName, setFullName] = useState(student.fullName);
+  const [regNumber, setRegNumber] = useState(student.regNumber ?? "");
+  const [gender, setGender] = useState(student.gender ?? "");
+  const [dateOfBirth, setDateOfBirth] = useState(
+    student.dateOfBirth ? String(student.dateOfBirth).slice(0, 10) : "",
+  );
+  const [nationality, setNationality] = useState(student.nationality ?? "");
+  const [address, setAddress] = useState(student.address ?? "");
+  const [telephone, setTelephone] = useState(student.telephone ?? "");
+  const [email, setEmail] = useState(student.email ?? "");
+  const [facultyId, setFaculty] = useState(student.facultyId ?? "");
+  const [departmentId, setDepartment] = useState(student.departmentId ?? "");
+  const [subDepartmentId, setSubDepartment] = useState(
+    student.subDepartmentId ?? "",
+  );
+  const [programmeId, setProgramme] = useState(student.programmeId ?? "");
+  const [levelId, setLevel] = useState(student.levelId ?? "");
+  const [admissionSession, setSession] = useState(
+    student.admissionSession ?? "",
+  );
+
+  const faculties = useAsync(() => core.listFaculties({}), []);
+  const departments = useAsync(
+    () =>
+      facultyId ? core.listDepartments({ facultyId }) : Promise.resolve([]),
+    [facultyId],
+  );
+  const subDepartments = useAsync(
+    () =>
+      departmentId
+        ? core.listSubDepartments({ departmentId })
+        : Promise.resolve([]),
+    [departmentId],
+  );
+  const programmes = useAsync(
+    () =>
+      departmentId
+        ? core.listProgrammes({ departmentId })
+        : Promise.resolve([]),
+    [departmentId],
+  );
+  const levels = useAsync(
+    () =>
+      programmeId ? core.listLevels({ programmeId }) : Promise.resolve([]),
+    [programmeId],
+  );
+  const sessions = useAsync(() => core.listSessions({}), []);
+
+  const save = useAction(
+    () =>
+      core.updateStudent({
+        id: student.id,
+        patch: {
+          fullName,
+          regNumber,
+          gender,
+          dateOfBirth: dateOfBirth as unknown as Date, // ISO string; host coerces
+          nationality,
+          address,
+          telephone,
+          email,
+          facultyId,
+          departmentId,
+          subDepartmentId,
+          programmeId,
+          levelId,
+          admissionSession,
+        },
+      }),
+    { onSuccess: onDone },
+  );
+  const fieldErr = save.error?.fields;
+
+  return (
+    <Modal
+      title={`Edit · ${student.fullName}`}
+      subtitle={`Matric ${student.matricNumber} (immutable)`}
+      onClose={onClose}
+    >
+      <div className="form-grid">
+        <Field label="Full name" error={fieldErr?.fullName}>
+          <input
+            className="input"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+          />
+        </Field>
+        <Field label="Registration number">
+          <input
+            className="input mono"
+            value={regNumber}
+            onChange={(e) => setRegNumber(e.target.value)}
+          />
+        </Field>
+        <Field label="Gender">
+          <select
+            className="select"
+            aria-label="Gender"
+            value={gender}
+            onChange={(e) => setGender(e.target.value)}
+          >
+            <option value="">—</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+          </select>
+        </Field>
+        <Field label="Date of birth">
+          <input
+            className="input"
+            type="date"
+            aria-label="Date of birth"
+            value={dateOfBirth}
+            onChange={(e) => setDateOfBirth(e.target.value)}
+          />
+        </Field>
+        <Field label="Nationality">
+          <input
+            className="input"
+            value={nationality}
+            onChange={(e) => setNationality(e.target.value)}
+          />
+        </Field>
+        <Field label="Telephone">
+          <input
+            className="input"
+            value={telephone}
+            onChange={(e) => setTelephone(e.target.value)}
+          />
+        </Field>
+        <Field label="Email">
+          <input
+            className="input"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </Field>
+        <Field label="Address">
+          <input
+            className="input"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+          />
+        </Field>
+      </div>
+
+      <div className="form-grid">
+        <Cascade
+          label="Faculty"
+          value={facultyId}
+          options={faculties.data}
+          onChange={(v) => {
+            setFaculty(v);
+            setDepartment("");
+            setSubDepartment("");
+            setProgramme("");
+            setLevel("");
+          }}
+        />
+        <Cascade
+          label="Department"
+          value={departmentId}
+          options={departments.data}
+          disabled={!facultyId}
+          onChange={(v) => {
+            setDepartment(v);
+            setSubDepartment("");
+            setProgramme("");
+            setLevel("");
+          }}
+        />
+        <Cascade
+          label="Sub-department"
+          value={subDepartmentId}
+          options={subDepartments.data}
+          disabled={!departmentId}
+          onChange={setSubDepartment}
+        />
+        <Cascade
+          label="Programme"
+          value={programmeId}
+          options={programmes.data}
+          disabled={!departmentId}
+          onChange={(v) => {
+            setProgramme(v);
+            setLevel("");
+          }}
+        />
+        <Cascade
+          label="Level"
+          value={levelId}
+          options={levels.data}
+          disabled={!programmeId}
+          onChange={setLevel}
+        />
+        <Field label="Admission session">
+          <select
+            className="select"
+            aria-label="Admission session"
+            value={admissionSession}
+            onChange={(e) => setSession(e.target.value)}
+          >
+            <option value="">—</option>
+            {sessions.data?.map((s) => (
+              <option key={s.id} value={s.name}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+
+      {save.error && !fieldErr && (
+        <div className="alert danger">{save.error.message}</div>
+      )}
+      <div className="actions">
+        <Button onClick={onClose}>Cancel</Button>
+        <Button
+          variant="primary"
+          disabled={!fullName.trim()}
+          loading={save.loading}
+          onClick={save.run}
+        >
+          Save changes
+        </Button>
+      </div>
     </Modal>
   );
 }

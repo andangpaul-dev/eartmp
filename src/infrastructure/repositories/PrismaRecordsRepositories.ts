@@ -38,6 +38,9 @@ type StudentRow = {
   gender: string | null;
   dateOfBirth: Date | null;
   nationality: string | null;
+  address: string | null;
+  telephone: string | null;
+  email: string | null;
   facultyId: string | null;
   departmentId: string | null;
   subDepartmentId: string | null;
@@ -56,6 +59,9 @@ function toStudent(r: StudentRow): Student {
     gender: r.gender ?? undefined,
     dateOfBirth: r.dateOfBirth ?? undefined,
     nationality: r.nationality ?? undefined,
+    address: r.address ?? undefined,
+    telephone: r.telephone ?? undefined,
+    email: r.email ?? undefined,
     facultyId: r.facultyId ?? undefined,
     departmentId: r.departmentId ?? undefined,
     subDepartmentId: r.subDepartmentId ?? undefined,
@@ -64,6 +70,40 @@ function toStudent(r: StudentRow): Student {
     admissionSession: r.admissionSession ?? undefined,
     status: r.status as StudentStatus,
   };
+}
+
+/** Map a Student patch to Prisma write data — shared by update + tryUpdate so
+ *  both persist the SAME full field set (no silently-dropped edits). */
+function studentWriteData(
+  patch: Partial<Omit<Student, "id">>,
+): Record<string, unknown> {
+  const keys: (keyof Omit<Student, "id">)[] = [
+    "regNumber",
+    "fullName",
+    "gender",
+    "dateOfBirth",
+    "nationality",
+    "address",
+    "telephone",
+    "email",
+    "facultyId",
+    "departmentId",
+    "subDepartmentId",
+    "programmeId",
+    "levelId",
+    "admissionSession",
+    "status",
+  ];
+  const data: Record<string, unknown> = {};
+  for (const k of keys) {
+    if (patch[k] !== undefined) data[k] = patch[k];
+  }
+  // dateOfBirth crosses the IPC boundary as an ISO string — coerce to a Date
+  // (and treat empty string as cleared) for Prisma.
+  if (typeof data.dateOfBirth === "string") {
+    data.dateOfBirth = data.dateOfBirth ? new Date(data.dateOfBirth) : null;
+  }
+  return data;
 }
 
 export class PrismaStudentRepository
@@ -80,6 +120,9 @@ export class PrismaStudentRepository
         gender: data.gender,
         dateOfBirth: data.dateOfBirth,
         nationality: data.nationality,
+        address: data.address,
+        telephone: data.telephone,
+        email: data.email,
         facultyId: data.facultyId,
         departmentId: data.departmentId,
         subDepartmentId: data.subDepartmentId,
@@ -95,36 +138,7 @@ export class PrismaStudentRepository
   async update(id: string, patch: Partial<Omit<Student, "id">>) {
     const r = await this.db.student.update({
       where: { id },
-      data: {
-        ...(patch.regNumber !== undefined
-          ? { regNumber: patch.regNumber }
-          : {}),
-        ...(patch.fullName !== undefined ? { fullName: patch.fullName } : {}),
-        ...(patch.gender !== undefined ? { gender: patch.gender } : {}),
-        ...(patch.dateOfBirth !== undefined
-          ? { dateOfBirth: patch.dateOfBirth }
-          : {}),
-        ...(patch.nationality !== undefined
-          ? { nationality: patch.nationality }
-          : {}),
-        ...(patch.facultyId !== undefined
-          ? { facultyId: patch.facultyId }
-          : {}),
-        ...(patch.departmentId !== undefined
-          ? { departmentId: patch.departmentId }
-          : {}),
-        ...(patch.subDepartmentId !== undefined
-          ? { subDepartmentId: patch.subDepartmentId }
-          : {}),
-        ...(patch.programmeId !== undefined
-          ? { programmeId: patch.programmeId }
-          : {}),
-        ...(patch.levelId !== undefined ? { levelId: patch.levelId } : {}),
-        ...(patch.admissionSession !== undefined
-          ? { admissionSession: patch.admissionSession }
-          : {}),
-        ...(patch.status !== undefined ? { status: patch.status } : {}),
-      },
+      data: studentWriteData(patch),
     });
     return toStudent(r);
   }
@@ -152,7 +166,9 @@ export class PrismaStudentRepository
     const f = query.where ?? {};
     const where: Prisma.StudentWhereInput = {
       deletedAt: null,
+      ...(f.facultyId ? { facultyId: f.facultyId } : {}),
       ...(f.departmentId ? { departmentId: f.departmentId } : {}),
+      ...(f.subDepartmentId ? { subDepartmentId: f.subDepartmentId } : {}),
       ...(f.programmeId ? { programmeId: f.programmeId } : {}),
       ...(f.levelId ? { levelId: f.levelId } : {}),
       ...(f.status ? { status: f.status } : {}),
@@ -194,21 +210,7 @@ export class PrismaStudentRepository
   ): Promise<number> {
     const res = await this.db.student.updateMany({
       where: { id, version: expectedVersion, deletedAt: null },
-      data: {
-        ...(patch.status !== undefined ? { status: patch.status } : {}),
-        ...(patch.fullName !== undefined ? { fullName: patch.fullName } : {}),
-        ...(patch.regNumber !== undefined
-          ? { regNumber: patch.regNumber }
-          : {}),
-        ...(patch.departmentId !== undefined
-          ? { departmentId: patch.departmentId }
-          : {}),
-        ...(patch.programmeId !== undefined
-          ? { programmeId: patch.programmeId }
-          : {}),
-        ...(patch.levelId !== undefined ? { levelId: patch.levelId } : {}),
-        version: { increment: 1 },
-      },
+      data: { ...studentWriteData(patch), version: { increment: 1 } },
     });
     if (res.count === 0) throw new ConcurrencyError();
     return expectedVersion + 1;

@@ -17,7 +17,9 @@ export interface Page<T> {
 }
 
 export interface StudentFilter {
+  facultyId?: string;
   departmentId?: string;
+  subDepartmentId?: string;
   programmeId?: string;
   levelId?: string;
   status?: StudentStatus;
