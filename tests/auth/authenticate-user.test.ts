@@ -55,6 +55,20 @@ describe("AuthenticateUser", () => {
     expect(audit.entries[0]).toMatchObject({ action: "LOGIN", entity: "User" });
   });
 
+  it("carries the user's institution scope onto the session", async () => {
+    const { uc } = build([makeUser({ institutionId: "inst-B" })]);
+    const session = await uc.execute({ username: "admin", password: "secret" });
+    expect(session.institutionId).toBe("inst-B");
+    expect(session.isGlobal).toBe(false);
+  });
+
+  it("a user with no institution is a global session", async () => {
+    const { uc } = build([makeUser()]);
+    const session = await uc.execute({ username: "admin", password: "secret" });
+    expect(session.institutionId).toBeUndefined();
+    expect(session.isGlobal).toBe(true);
+  });
+
   it("fails generically for a wrong password (no session, no audit)", async () => {
     const { uc, audit } = build([makeUser()]);
     await expect(

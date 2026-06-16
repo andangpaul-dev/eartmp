@@ -140,7 +140,8 @@ export class CreateDepartment implements AuthorizedUseCase<
   async execute(input: CreateDepartmentInput, session: SessionContext) {
     StructureRules.requireNonEmpty(input.name, "Department name");
     StructureRules.requireNonEmpty(input.code, "Department code");
-    if (!(await this.faculties.findById(input.facultyId))) {
+    const faculty = await this.faculties.findById(input.facultyId);
+    if (!faculty) {
       throw new StructureError("Parent faculty does not exist or is deleted.");
     }
     if (await this.departments.findByCode(input.code)) {
@@ -152,6 +153,10 @@ export class CreateDepartment implements AuthorizedUseCase<
       name: input.name,
       code: input.code,
       facultyId: input.facultyId,
+      // Inherit the institution from the faculty (denormalized tenant scope).
+      ...(faculty.institutionId
+        ? { institutionId: faculty.institutionId }
+        : {}),
     });
     await audit(this.auditLog, session, "CREATE", "Department", created.id, {
       code: created.code,
@@ -231,7 +236,8 @@ export class CreateProgramme implements AuthorizedUseCase<
   async execute(input: CreateProgrammeInput, session: SessionContext) {
     StructureRules.requireNonEmpty(input.name, "Programme name");
     StructureRules.requireNonEmpty(input.code, "Programme code");
-    if (!(await this.departments.findById(input.departmentId))) {
+    const department = await this.departments.findById(input.departmentId);
+    if (!department) {
       throw new StructureError(
         "Parent department does not exist or is deleted.",
       );
@@ -247,6 +253,9 @@ export class CreateProgramme implements AuthorizedUseCase<
       departmentId: input.departmentId,
       ...(input.subDepartmentId
         ? { subDepartmentId: input.subDepartmentId }
+        : {}),
+      ...(department.institutionId
+        ? { institutionId: department.institutionId }
         : {}),
       durationLevels: input.durationLevels ?? 4,
       creditsRequired: input.creditsRequired ?? 0,

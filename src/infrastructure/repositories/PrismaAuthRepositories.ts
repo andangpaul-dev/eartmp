@@ -34,6 +34,7 @@ type PrismaUserRow = {
   fullName: string;
   passwordHash: string;
   roleId: string;
+  institutionId: string | null;
   isActive: boolean;
   lastLoginAt: Date | null;
 };
@@ -46,6 +47,7 @@ function toUser(row: PrismaUserRow): UserAccount {
     fullName: row.fullName,
     passwordHash: row.passwordHash,
     roleId: row.roleId,
+    ...(row.institutionId ? { institutionId: row.institutionId } : {}),
     isActive: row.isActive,
     lastLoginAt: row.lastLoginAt ?? undefined,
   };
@@ -86,6 +88,7 @@ export class PrismaUserRepository implements UserRepository {
         fullName: data.fullName,
         passwordHash: data.passwordHash,
         roleId: data.roleId,
+        institutionId: data.institutionId ?? null,
         isActive: data.isActive,
       },
     });
@@ -103,6 +106,9 @@ export class PrismaUserRepository implements UserRepository {
           ? { passwordHash: patch.passwordHash }
           : {}),
         ...(patch.roleId !== undefined ? { roleId: patch.roleId } : {}),
+        ...(patch.institutionId !== undefined
+          ? { institutionId: patch.institutionId }
+          : {}),
         ...(patch.isActive !== undefined ? { isActive: patch.isActive } : {}),
         ...(patch.lastLoginAt !== undefined
           ? { lastLoginAt: patch.lastLoginAt }

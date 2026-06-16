@@ -16,6 +16,8 @@ export interface Department {
   name: string;
   code: string;
   facultyId: string;
+  /** Denormalized institution (inherited from the faculty). */
+  institutionId?: string;
 }
 
 /** Optional organizational unit under a Department. */
@@ -24,6 +26,7 @@ export interface SubDepartment {
   name: string;
   code: string;
   departmentId: string;
+  institutionId?: string;
 }
 
 export interface Programme {
@@ -33,6 +36,7 @@ export interface Programme {
   departmentId: string;
   /** Optional sub-department the programme belongs to (within its department). */
   subDepartmentId?: string;
+  institutionId?: string;
   durationLevels: number;
   creditsRequired: number;
 }

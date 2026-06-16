@@ -46,6 +46,7 @@ type StudentRow = {
   subDepartmentId: string | null;
   programmeId: string | null;
   levelId: string | null;
+  institutionId: string | null;
   admissionSession: string | null;
   status: string;
 };
@@ -65,6 +66,7 @@ function toStudent(r: StudentRow): Student {
     facultyId: r.facultyId ?? undefined,
     departmentId: r.departmentId ?? undefined,
     subDepartmentId: r.subDepartmentId ?? undefined,
+    institutionId: r.institutionId ?? undefined,
     programmeId: r.programmeId ?? undefined,
     levelId: r.levelId ?? undefined,
     admissionSession: r.admissionSession ?? undefined,
@@ -89,6 +91,7 @@ function studentWriteData(
     "facultyId",
     "departmentId",
     "subDepartmentId",
+    "institutionId",
     "programmeId",
     "levelId",
     "admissionSession",
@@ -111,7 +114,29 @@ export class PrismaStudentRepository
 {
   constructor(private readonly db: Db) {}
 
+  /** Resolve the denormalized institution from the student's placement. */
+  private async resolveInstitution(
+    data: Pick<
+      Student,
+      "institutionId" | "facultyId" | "departmentId" | "programmeId"
+    >,
+  ): Promise<string | null> {
+    if (data.institutionId) return data.institutionId;
+    if (data.facultyId) {
+      const f = await this.db.faculty.findFirst({
+        where: { id: data.facultyId },
+        select: { institutionId: true },
+      });
+      if (f?.institutionId) return f.institutionId;
+    }
+    return resolveInstitutionId(this.db, {
+      departmentId: data.departmentId,
+      programmeId: data.programmeId,
+    });
+  }
+
   async create(data: Omit<Student, "id">): Promise<Student> {
+    const institutionId = await this.resolveInstitution(data);
     const r = await this.db.student.create({
       data: {
         matricNumber: data.matricNumber,
@@ -128,6 +153,7 @@ export class PrismaStudentRepository
         subDepartmentId: data.subDepartmentId,
         programmeId: data.programmeId,
         levelId: data.levelId,
+        institutionId,
         admissionSession: data.admissionSession,
         status: data.status,
       },
@@ -227,6 +253,7 @@ type CourseRow = {
   subDepartmentId: string | null;
   programmeId: string | null;
   levelId: string | null;
+  institutionId: string | null;
   semesterRank: number | null;
 };
 
@@ -241,14 +268,50 @@ function toCourse(r: CourseRow): Course {
     subDepartmentId: r.subDepartmentId ?? undefined,
     programmeId: r.programmeId ?? undefined,
     levelId: r.levelId ?? undefined,
+    institutionId: r.institutionId ?? undefined,
     semesterRank: r.semesterRank ?? undefined,
   };
+}
+
+/** Resolve a denormalized institution from a placement's parent ids. */
+async function resolveInstitutionId(
+  db: Db,
+  ids: {
+    departmentId?: string;
+    subDepartmentId?: string;
+    programmeId?: string;
+  },
+): Promise<string | null> {
+  if (ids.departmentId) {
+    const d = await db.department.findFirst({
+      where: { id: ids.departmentId },
+      select: { institutionId: true },
+    });
+    if (d?.institutionId) return d.institutionId;
+  }
+  if (ids.subDepartmentId) {
+    const sd = await db.subDepartment.findFirst({
+      where: { id: ids.subDepartmentId },
+      select: { institutionId: true },
+    });
+    if (sd?.institutionId) return sd.institutionId;
+  }
+  if (ids.programmeId) {
+    const p = await db.programme.findFirst({
+      where: { id: ids.programmeId },
+      select: { institutionId: true },
+    });
+    if (p?.institutionId) return p.institutionId;
+  }
+  return null;
 }
 
 export class PrismaCourseRepository implements CourseRepository {
   constructor(private readonly db: Db) {}
 
   async create(data: Omit<Course, "id">): Promise<Course> {
+    const institutionId =
+      data.institutionId ?? (await resolveInstitutionId(this.db, data));
     const r = await this.db.course.create({
       data: {
         code: data.code,
@@ -259,6 +322,7 @@ export class PrismaCourseRepository implements CourseRepository {
         subDepartmentId: data.subDepartmentId,
         programmeId: data.programmeId,
         levelId: data.levelId,
+        institutionId,
         semesterRank: data.semesterRank,
       },
     });

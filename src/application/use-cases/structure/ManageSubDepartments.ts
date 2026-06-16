@@ -37,7 +37,8 @@ export class CreateSubDepartment implements AuthorizedUseCase<
   async execute(input: CreateSubDepartmentInput, session: SessionContext) {
     StructureRules.requireNonEmpty(input.name, "Sub-department name");
     StructureRules.requireNonEmpty(input.code, "Sub-department code");
-    if (!(await this.departments.findById(input.departmentId))) {
+    const department = await this.departments.findById(input.departmentId);
+    if (!department) {
       throw new StructureError(
         "Parent department does not exist or is deleted.",
       );
@@ -51,6 +52,9 @@ export class CreateSubDepartment implements AuthorizedUseCase<
       name: input.name,
       code: input.code,
       departmentId: input.departmentId,
+      ...(department.institutionId
+        ? { institutionId: department.institutionId }
+        : {}),
     });
     await this.audit.record({
       userId: session.actorId,

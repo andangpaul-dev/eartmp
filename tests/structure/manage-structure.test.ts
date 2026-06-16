@@ -164,6 +164,26 @@ describe("ListFaculties", () => {
   });
 });
 
+describe("institution scope inheritance (Phase A)", () => {
+  it("departments, sub-departments and programmes inherit the faculty's institution", async () => {
+    const f = await new CreateFaculty(faculties, audit).execute(
+      { name: "Sci", code: "SCI", institutionId: "inst-1" },
+      admin,
+    );
+    expect(f.institutionId).toBe("inst-1");
+    const d = await new CreateDepartment(departments, faculties, audit).execute(
+      { name: "CS", code: "CS", facultyId: f.id },
+      admin,
+    );
+    expect(d.institutionId).toBe("inst-1");
+    const p = await new CreateProgramme(programmes, departments, audit).execute(
+      { name: "BSc", code: "BSC", departmentId: d.id },
+      admin,
+    );
+    expect(p.institutionId).toBe("inst-1");
+  });
+});
+
 describe("Update use-cases (management)", () => {
   it("renames a faculty and rejects a clashing code", async () => {
     const create = new CreateFaculty(faculties, audit);

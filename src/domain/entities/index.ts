@@ -28,6 +28,7 @@ export interface Student {
   departmentId?: string;
   subDepartmentId?: string;
   facultyId?: string;
+  institutionId?: string;
   levelId?: string;
   admissionSession?: string;
   status: StudentStatus;
@@ -43,6 +44,7 @@ export interface Course {
   subDepartmentId?: string;
   programmeId?: string;
   levelId?: string;
+  institutionId?: string;
   semesterRank?: number;
 }
 

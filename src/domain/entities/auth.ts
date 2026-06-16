@@ -23,6 +23,8 @@ export interface UserAccount {
   fullName: string;
   passwordHash: string; // Argon2id — never plaintext
   roleId: string;
+  /** Tenant scope; undefined = global operator (sees all institutions). */
+  institutionId?: string;
   isActive: boolean;
   lastLoginAt?: Date;
 }

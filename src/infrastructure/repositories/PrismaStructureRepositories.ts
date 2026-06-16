@@ -100,8 +100,15 @@ export class PrismaDepartmentRepository implements DepartmentRepository {
     name: string;
     code: string;
     facultyId: string;
+    institutionId: string | null;
   }): Department {
-    return { id: r.id, name: r.name, code: r.code, facultyId: r.facultyId };
+    return {
+      id: r.id,
+      name: r.name,
+      code: r.code,
+      facultyId: r.facultyId,
+      ...(r.institutionId ? { institutionId: r.institutionId } : {}),
+    };
   }
   async create(data: Omit<Department, "id">) {
     return this.map(await this.db.department.create({ data }));
@@ -153,12 +160,14 @@ export class PrismaSubDepartmentRepository implements SubDepartmentRepository {
     name: string;
     code: string;
     departmentId: string;
+    institutionId: string | null;
   }): SubDepartment {
     return {
       id: r.id,
       name: r.name,
       code: r.code,
       departmentId: r.departmentId,
+      ...(r.institutionId ? { institutionId: r.institutionId } : {}),
     };
   }
   async create(data: Omit<SubDepartment, "id">) {
@@ -210,6 +219,7 @@ export class PrismaProgrammeRepository implements ProgrammeRepository {
     code: string;
     departmentId: string;
     subDepartmentId: string | null;
+    institutionId: string | null;
     durationLevels: number;
     creditsRequired: number;
   }): Programme {
@@ -219,6 +229,7 @@ export class PrismaProgrammeRepository implements ProgrammeRepository {
       code: r.code,
       departmentId: r.departmentId,
       ...(r.subDepartmentId ? { subDepartmentId: r.subDepartmentId } : {}),
+      ...(r.institutionId ? { institutionId: r.institutionId } : {}),
       durationLevels: r.durationLevels,
       creditsRequired: r.creditsRequired,
     };

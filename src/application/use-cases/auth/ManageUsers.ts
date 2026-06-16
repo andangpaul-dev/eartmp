@@ -35,6 +35,8 @@ export interface CreateUserInput {
   fullName: string;
   roleId: string;
   password: string;
+  /** Optional tenant scope; omitted = global operator. */
+  institutionId?: string;
 }
 
 export class CreateUser implements AuthorizedUseCase<
@@ -83,6 +85,7 @@ export class CreateUser implements AuthorizedUseCase<
       email: input.email,
       fullName: input.fullName,
       roleId: input.roleId,
+      ...(input.institutionId ? { institutionId: input.institutionId } : {}),
       passwordHash,
       isActive: true,
     });

@@ -64,6 +64,11 @@ export class AuthenticateUser implements AuthorizedUseCase<
       recordId: user.id,
     });
 
-    return SessionContext.create(user.id, role.name, rolePermissionKeys(role));
+    return SessionContext.create(
+      user.id,
+      role.name,
+      rolePermissionKeys(role),
+      user.institutionId,
+    );
   }
 }

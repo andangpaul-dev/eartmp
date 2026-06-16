@@ -14,6 +14,8 @@ export class SessionContext {
     public readonly roleName: string,
     private readonly permissions: ReadonlySet<string>,
     public readonly isAnonymous: boolean,
+    /** The institution this actor is scoped to; undefined = global operator. */
+    public readonly institutionId: string | undefined,
   ) {}
 
   /** Build an authenticated session from resolved permission keys. */
@@ -21,6 +23,7 @@ export class SessionContext {
     actorId: string,
     roleName: string,
     permissionKeys: string[],
+    institutionId?: string,
   ): SessionContext {
     if (!actorId) {
       throw new Error("SessionContext requires an actor id.");
@@ -30,12 +33,18 @@ export class SessionContext {
       roleName,
       new Set(permissionKeys),
       false,
+      institutionId,
     );
   }
 
   /** The unauthenticated session used only for public use-cases. */
   static anonymous(): SessionContext {
-    return new SessionContext("", "", new Set(), true);
+    return new SessionContext("", "", new Set(), true, undefined);
+  }
+
+  /** True for a global operator (not scoped to a single institution). */
+  get isGlobal(): boolean {
+    return this.institutionId === undefined;
   }
 
   has(permission: string): boolean {
