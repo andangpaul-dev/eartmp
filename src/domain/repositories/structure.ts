@@ -6,6 +6,7 @@
 import type {
   Faculty,
   Department,
+  SubDepartment,
   Programme,
   Level,
   AcademicSession,
@@ -33,6 +34,21 @@ export interface DepartmentRepository {
   findByCode(code: string): Promise<Department | null>;
   listByFaculty(facultyId: string): Promise<Department[]>;
   hasLiveProgrammes(departmentId: string): Promise<boolean>;
+  hasLiveSubDepartments(departmentId: string): Promise<boolean>;
+}
+
+export interface SubDepartmentRepository {
+  create(data: Omit<SubDepartment, "id">): Promise<SubDepartment>;
+  update(
+    id: string,
+    patch: Partial<Omit<SubDepartment, "id">>,
+  ): Promise<SubDepartment>;
+  softDelete(id: string): Promise<void>;
+  findById(id: string): Promise<SubDepartment | null>;
+  findByCode(code: string): Promise<SubDepartment | null>;
+  listByDepartment(departmentId: string): Promise<SubDepartment[]>;
+  /** True if any live programme/course/student still references this sub-dept. */
+  hasLiveChildren(subDepartmentId: string): Promise<boolean>;
 }
 
 export interface ProgrammeRepository {

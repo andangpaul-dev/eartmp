@@ -17,11 +17,21 @@ export interface Department {
   facultyId: string;
 }
 
+/** Optional organizational unit under a Department. */
+export interface SubDepartment {
+  id: string;
+  name: string;
+  code: string;
+  departmentId: string;
+}
+
 export interface Programme {
   id: string;
   name: string;
   code: string;
   departmentId: string;
+  /** Optional sub-department the programme belongs to (within its department). */
+  subDepartmentId?: string;
   durationLevels: number;
   creditsRequired: number;
 }
@@ -31,6 +41,8 @@ export interface Level {
   name: string;
   rank: number;
   programmeId: string;
+  /** Optional per-level grade scale (loose ref); null ⇒ institution default. */
+  gradeScaleId?: string;
 }
 
 export interface AcademicSession {

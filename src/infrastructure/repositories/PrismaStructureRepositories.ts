@@ -8,6 +8,7 @@ import type { PrismaClient } from "@prisma/client";
 import type {
   Faculty,
   Department,
+  SubDepartment,
   Programme,
   Level,
   AcademicSession,
@@ -16,6 +17,7 @@ import type {
 import type {
   FacultyRepository,
   DepartmentRepository,
+  SubDepartmentRepository,
   ProgrammeRepository,
   LevelRepository,
   AcademicSessionRepository,
@@ -106,6 +108,69 @@ export class PrismaDepartmentRepository implements DepartmentRepository {
       (await this.db.programme.count({ where: { departmentId, ...live } })) > 0
     );
   }
+  async hasLiveSubDepartments(departmentId: string): Promise<boolean> {
+    return (
+      (await this.db.subDepartment.count({
+        where: { departmentId, ...live },
+      })) > 0
+    );
+  }
+}
+
+export class PrismaSubDepartmentRepository implements SubDepartmentRepository {
+  constructor(private readonly db: PrismaClient) {}
+  private map(r: {
+    id: string;
+    name: string;
+    code: string;
+    departmentId: string;
+  }): SubDepartment {
+    return {
+      id: r.id,
+      name: r.name,
+      code: r.code,
+      departmentId: r.departmentId,
+    };
+  }
+  async create(data: Omit<SubDepartment, "id">) {
+    return this.map(await this.db.subDepartment.create({ data }));
+  }
+  async update(id: string, patch: Partial<Omit<SubDepartment, "id">>) {
+    return this.map(
+      await this.db.subDepartment.update({ where: { id }, data: patch }),
+    );
+  }
+  async softDelete(id: string): Promise<void> {
+    await this.db.subDepartment.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+  }
+  async findById(id: string) {
+    const r = await this.db.subDepartment.findFirst({ where: { id, ...live } });
+    return r ? this.map(r) : null;
+  }
+  async findByCode(code: string) {
+    const r = await this.db.subDepartment.findFirst({
+      where: { code, ...live },
+    });
+    return r ? this.map(r) : null;
+  }
+  async listByDepartment(departmentId: string) {
+    const rows = await this.db.subDepartment.findMany({
+      where: { departmentId, ...live },
+      orderBy: { code: "asc" },
+    });
+    return rows.map((r) => this.map(r));
+  }
+  async hasLiveChildren(subDepartmentId: string): Promise<boolean> {
+    const [programmes, courses, students] = await Promise.all([
+      this.db.programme.count({ where: { subDepartmentId, ...live } }),
+      this.db.course.count({ where: { subDepartmentId, ...live } }),
+      this.db.student.count({ where: { subDepartmentId, ...live } }),
+    ]);
+    return programmes + courses + students > 0;
+  }
 }
 
 export class PrismaProgrammeRepository implements ProgrammeRepository {
@@ -115,6 +180,7 @@ export class PrismaProgrammeRepository implements ProgrammeRepository {
     name: string;
     code: string;
     departmentId: string;
+    subDepartmentId: string | null;
     durationLevels: number;
     creditsRequired: number;
   }): Programme {
@@ -123,6 +189,7 @@ export class PrismaProgrammeRepository implements ProgrammeRepository {
       name: r.name,
       code: r.code,
       departmentId: r.departmentId,
+      ...(r.subDepartmentId ? { subDepartmentId: r.subDepartmentId } : {}),
       durationLevels: r.durationLevels,
       creditsRequired: r.creditsRequired,
     };
@@ -168,8 +235,15 @@ export class PrismaLevelRepository implements LevelRepository {
     name: string;
     rank: number;
     programmeId: string;
+    gradeScaleId: string | null;
   }): Level {
-    return { id: r.id, name: r.name, rank: r.rank, programmeId: r.programmeId };
+    return {
+      id: r.id,
+      name: r.name,
+      rank: r.rank,
+      programmeId: r.programmeId,
+      ...(r.gradeScaleId ? { gradeScaleId: r.gradeScaleId } : {}),
+    };
   }
   async create(data: Omit<Level, "id">) {
     return this.map(await this.db.level.create({ data }));

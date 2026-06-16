@@ -216,6 +216,7 @@ type CourseRow = {
   creditValue: number;
   courseType: string;
   departmentId: string | null;
+  subDepartmentId: string | null;
   programmeId: string | null;
   levelId: string | null;
   semesterRank: number | null;
@@ -229,6 +230,7 @@ function toCourse(r: CourseRow): Course {
     creditValue: r.creditValue,
     courseType: r.courseType as Course["courseType"],
     departmentId: r.departmentId ?? undefined,
+    subDepartmentId: r.subDepartmentId ?? undefined,
     programmeId: r.programmeId ?? undefined,
     levelId: r.levelId ?? undefined,
     semesterRank: r.semesterRank ?? undefined,
@@ -246,6 +248,7 @@ export class PrismaCourseRepository implements CourseRepository {
         creditValue: data.creditValue,
         courseType: data.courseType,
         departmentId: data.departmentId,
+        subDepartmentId: data.subDepartmentId,
         programmeId: data.programmeId,
         levelId: data.levelId,
         semesterRank: data.semesterRank,
@@ -267,6 +270,9 @@ export class PrismaCourseRepository implements CourseRepository {
           : {}),
         ...(patch.departmentId !== undefined
           ? { departmentId: patch.departmentId }
+          : {}),
+        ...(patch.subDepartmentId !== undefined
+          ? { subDepartmentId: patch.subDepartmentId }
           : {}),
         ...(patch.programmeId !== undefined
           ? { programmeId: patch.programmeId }
@@ -302,6 +308,7 @@ export class PrismaCourseRepository implements CourseRepository {
     const where: Prisma.CourseWhereInput = {
       deletedAt: null,
       ...(f.departmentId ? { departmentId: f.departmentId } : {}),
+      ...(f.subDepartmentId ? { subDepartmentId: f.subDepartmentId } : {}),
       ...(f.programmeId ? { programmeId: f.programmeId } : {}),
       ...(f.levelId ? { levelId: f.levelId } : {}),
       ...(f.courseType ? { courseType: f.courseType } : {}),

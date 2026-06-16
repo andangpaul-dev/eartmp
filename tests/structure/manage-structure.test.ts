@@ -6,6 +6,9 @@ import {
   CreateProgramme,
   CreateLevel,
   ListFaculties,
+  UpdateFaculty,
+  UpdateProgramme,
+  UpdateLevel,
 } from "../../src/application/use-cases/structure/ManageStructure";
 import { authorize } from "../../src/application/authorization/AuthorizedUseCase";
 import { StructureError } from "../../src/domain/errors/structure";
@@ -158,5 +161,72 @@ describe("ListFaculties", () => {
     await new DeleteFaculty(faculties, audit).execute({ id: a.id }, admin);
     const list = await new ListFaculties(faculties).execute({}, admin);
     expect(list.map((f) => f.code)).toEqual(["B"]);
+  });
+});
+
+describe("Update use-cases (management)", () => {
+  it("renames a faculty and rejects a clashing code", async () => {
+    const create = new CreateFaculty(faculties, audit);
+    const a = await create.execute({ name: "A", code: "AAA" }, admin);
+    await create.execute({ name: "B", code: "BBB" }, admin);
+    const uc = new UpdateFaculty(faculties, audit);
+    const renamed = await uc.execute(
+      { id: a.id, patch: { name: "Alpha" } },
+      admin,
+    );
+    expect(renamed.name).toBe("Alpha");
+    await expect(
+      uc.execute({ id: a.id, patch: { code: "BBB" } }, admin),
+    ).rejects.toThrow(/already in use/);
+  });
+
+  it("assigns a per-level grade scale and can clear it", async () => {
+    const f = await new CreateFaculty(faculties, audit).execute(
+      { name: "Sci", code: "SCI" },
+      admin,
+    );
+    const d = await new CreateDepartment(departments, faculties, audit).execute(
+      { name: "CS", code: "CS", facultyId: f.id },
+      admin,
+    );
+    const p = await new CreateProgramme(programmes, departments, audit).execute(
+      { name: "BSc", code: "BSC", departmentId: d.id },
+      admin,
+    );
+    const l = await new CreateLevel(levels, programmes, audit).execute(
+      { name: "100", rank: 1, programmeId: p.id },
+      admin,
+    );
+    const uc = new UpdateLevel(levels, audit);
+    const withScale = await uc.execute(
+      { id: l.id, patch: { gradeScaleId: "gs-100" } },
+      admin,
+    );
+    expect(withScale.gradeScaleId).toBe("gs-100");
+    const cleared = await uc.execute(
+      { id: l.id, patch: { gradeScaleId: null } },
+      admin,
+    );
+    expect(cleared.gradeScaleId).toBeUndefined();
+  });
+
+  it("moves a programme into a sub-department via update", async () => {
+    const f = await new CreateFaculty(faculties, audit).execute(
+      { name: "Sci", code: "SCI" },
+      admin,
+    );
+    const d = await new CreateDepartment(departments, faculties, audit).execute(
+      { name: "CS", code: "CS", facultyId: f.id },
+      admin,
+    );
+    const p = await new CreateProgramme(programmes, departments, audit).execute(
+      { name: "BSc", code: "BSC", departmentId: d.id },
+      admin,
+    );
+    const moved = await new UpdateProgramme(programmes, audit).execute(
+      { id: p.id, patch: { subDepartmentId: "sd-1" } },
+      admin,
+    );
+    expect(moved.subDepartmentId).toBe("sd-1");
   });
 });

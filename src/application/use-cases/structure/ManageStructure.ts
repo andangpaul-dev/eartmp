@@ -180,6 +180,11 @@ export class DeleteDepartment implements AuthorizedUseCase<
         "Cannot delete a department that still has programmes.",
       );
     }
+    if (await this.departments.hasLiveSubDepartments(input.id)) {
+      throw new StructureError(
+        "Cannot delete a department that still has sub-departments.",
+      );
+    }
     await this.departments.softDelete(input.id);
     await audit(this.auditLog, session, "DELETE", "Department", input.id);
   }
@@ -206,6 +211,7 @@ export interface CreateProgrammeInput {
   name: string;
   code: string;
   departmentId: string;
+  subDepartmentId?: string;
   durationLevels?: number;
   creditsRequired?: number;
 }
@@ -237,6 +243,9 @@ export class CreateProgramme implements AuthorizedUseCase<
       name: input.name,
       code: input.code,
       departmentId: input.departmentId,
+      ...(input.subDepartmentId
+        ? { subDepartmentId: input.subDepartmentId }
+        : {}),
       durationLevels: input.durationLevels ?? 4,
       creditsRequired: input.creditsRequired ?? 0,
     });
@@ -337,5 +346,207 @@ export class ListLevels implements AuthorizedUseCase<ListLevelsInput, Level[]> {
   constructor(private readonly levels: LevelRepository) {}
   async execute(input: ListLevelsInput) {
     return this.levels.listByProgramme(input.programmeId);
+  }
+}
+
+// --- Rename / edit (management completeness) --------------------------------
+
+async function findByCodeClash(
+  repo: { findByCode(code: string): Promise<{ id: string } | null> },
+  code: string,
+  selfId: string,
+): Promise<boolean> {
+  const clash = await repo.findByCode(code);
+  return clash !== null && clash.id !== selfId;
+}
+
+export interface UpdateFacultyInput {
+  id: string;
+  patch: { name?: string; code?: string };
+}
+export class UpdateFaculty implements AuthorizedUseCase<
+  UpdateFacultyInput,
+  Faculty
+> {
+  readonly name = "UpdateFaculty";
+  readonly requiredPermissions = MANAGE;
+  constructor(
+    private readonly faculties: FacultyRepository,
+    private readonly auditLog: AuditLogPort,
+  ) {}
+  async execute(input: UpdateFacultyInput, session: SessionContext) {
+    const before = await this.faculties.findById(input.id);
+    if (!before) throw new StructureError("Faculty not found.");
+    if (input.patch.name !== undefined)
+      StructureRules.requireNonEmpty(input.patch.name, "Faculty name");
+    if (input.patch.code !== undefined) {
+      StructureRules.requireNonEmpty(input.patch.code, "Faculty code");
+      if (await findByCodeClash(this.faculties, input.patch.code, input.id))
+        throw new StructureError(
+          `Faculty code "${input.patch.code}" already in use.`,
+        );
+    }
+    const updated = await this.faculties.update(input.id, input.patch);
+    await audit(this.auditLog, session, "UPDATE", "Faculty", input.id, updated);
+    return updated;
+  }
+}
+
+export interface UpdateDepartmentInput {
+  id: string;
+  patch: { name?: string; code?: string };
+}
+export class UpdateDepartment implements AuthorizedUseCase<
+  UpdateDepartmentInput,
+  Department
+> {
+  readonly name = "UpdateDepartment";
+  readonly requiredPermissions = MANAGE;
+  constructor(
+    private readonly departments: DepartmentRepository,
+    private readonly auditLog: AuditLogPort,
+  ) {}
+  async execute(input: UpdateDepartmentInput, session: SessionContext) {
+    const before = await this.departments.findById(input.id);
+    if (!before) throw new StructureError("Department not found.");
+    if (input.patch.name !== undefined)
+      StructureRules.requireNonEmpty(input.patch.name, "Department name");
+    if (input.patch.code !== undefined) {
+      StructureRules.requireNonEmpty(input.patch.code, "Department code");
+      if (await findByCodeClash(this.departments, input.patch.code, input.id))
+        throw new StructureError(
+          `Department code "${input.patch.code}" already in use.`,
+        );
+    }
+    const updated = await this.departments.update(input.id, input.patch);
+    await audit(
+      this.auditLog,
+      session,
+      "UPDATE",
+      "Department",
+      input.id,
+      updated,
+    );
+    return updated;
+  }
+}
+
+export interface UpdateProgrammeInput {
+  id: string;
+  patch: {
+    name?: string;
+    code?: string;
+    subDepartmentId?: string | null;
+    durationLevels?: number;
+    creditsRequired?: number;
+  };
+}
+export class UpdateProgramme implements AuthorizedUseCase<
+  UpdateProgrammeInput,
+  Programme
+> {
+  readonly name = "UpdateProgramme";
+  readonly requiredPermissions = MANAGE;
+  constructor(
+    private readonly programmes: ProgrammeRepository,
+    private readonly auditLog: AuditLogPort,
+  ) {}
+  async execute(input: UpdateProgrammeInput, session: SessionContext) {
+    const before = await this.programmes.findById(input.id);
+    if (!before) throw new StructureError("Programme not found.");
+    if (input.patch.name !== undefined)
+      StructureRules.requireNonEmpty(input.patch.name, "Programme name");
+    if (input.patch.code !== undefined) {
+      StructureRules.requireNonEmpty(input.patch.code, "Programme code");
+      if (await findByCodeClash(this.programmes, input.patch.code, input.id))
+        throw new StructureError(
+          `Programme code "${input.patch.code}" already in use.`,
+        );
+    }
+    // null clears the sub-department; undefined leaves it unchanged.
+    const patch: Partial<Omit<Programme, "id">> = {
+      ...(input.patch.name !== undefined ? { name: input.patch.name } : {}),
+      ...(input.patch.code !== undefined ? { code: input.patch.code } : {}),
+      ...(input.patch.durationLevels !== undefined
+        ? { durationLevels: input.patch.durationLevels }
+        : {}),
+      ...(input.patch.creditsRequired !== undefined
+        ? { creditsRequired: input.patch.creditsRequired }
+        : {}),
+      ...(input.patch.subDepartmentId !== undefined
+        ? { subDepartmentId: input.patch.subDepartmentId ?? undefined }
+        : {}),
+    };
+    const updated = await this.programmes.update(input.id, patch);
+    await audit(
+      this.auditLog,
+      session,
+      "UPDATE",
+      "Programme",
+      input.id,
+      updated,
+    );
+    return updated;
+  }
+}
+
+export interface UpdateLevelInput {
+  id: string;
+  patch: { name?: string; rank?: number; gradeScaleId?: string | null };
+}
+export class UpdateLevel implements AuthorizedUseCase<UpdateLevelInput, Level> {
+  readonly name = "UpdateLevel";
+  readonly requiredPermissions = MANAGE;
+  constructor(
+    private readonly levels: LevelRepository,
+    private readonly auditLog: AuditLogPort,
+  ) {}
+  async execute(input: UpdateLevelInput, session: SessionContext) {
+    const before = await this.levels.findById(input.id);
+    if (!before) throw new StructureError("Level not found.");
+    if (input.patch.name !== undefined)
+      StructureRules.requireNonEmpty(input.patch.name, "Level name");
+    if (input.patch.rank !== undefined) {
+      StructureRules.requirePositiveRank(input.patch.rank);
+      if (
+        input.patch.rank !== before.rank &&
+        (await this.levels.existsRank(before.programmeId, input.patch.rank))
+      ) {
+        throw new StructureError(
+          `A level with rank ${input.patch.rank} already exists in this programme.`,
+        );
+      }
+    }
+    const patch: Partial<Omit<Level, "id">> = {
+      ...(input.patch.name !== undefined ? { name: input.patch.name } : {}),
+      ...(input.patch.rank !== undefined ? { rank: input.patch.rank } : {}),
+      // null clears the per-level grade scale (back to default).
+      ...(input.patch.gradeScaleId !== undefined
+        ? { gradeScaleId: input.patch.gradeScaleId ?? undefined }
+        : {}),
+    };
+    const updated = await this.levels.update(input.id, patch);
+    await audit(this.auditLog, session, "UPDATE", "Level", input.id, {
+      gradeScaleId: updated.gradeScaleId ?? null,
+    });
+    return updated;
+  }
+}
+
+export interface DeleteLevelInput {
+  id: string;
+}
+export class DeleteLevel implements AuthorizedUseCase<DeleteLevelInput, void> {
+  readonly name = "DeleteLevel";
+  readonly requiredPermissions = MANAGE;
+  constructor(
+    private readonly levels: LevelRepository,
+    private readonly auditLog: AuditLogPort,
+  ) {}
+  async execute(input: DeleteLevelInput, session: SessionContext) {
+    const level = await this.levels.findById(input.id);
+    if (!level) throw new StructureError("Level not found.");
+    await this.levels.softDelete(input.id);
+    await audit(this.auditLog, session, "DELETE", "Level", input.id);
   }
 }

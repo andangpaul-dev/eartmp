@@ -28,6 +28,7 @@ export interface CreateCourseInput {
   creditValue: number;
   courseType: CourseType;
   departmentId?: string;
+  subDepartmentId?: string;
   programmeId?: string;
   levelId?: string;
   semesterRank?: number;

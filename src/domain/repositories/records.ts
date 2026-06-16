@@ -41,6 +41,7 @@ export interface StudentRepository {
 
 export interface CourseFilter {
   departmentId?: string;
+  subDepartmentId?: string;
   programmeId?: string;
   levelId?: string;
   courseType?: string;

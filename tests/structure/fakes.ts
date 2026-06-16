@@ -6,6 +6,7 @@
 import type {
   Faculty,
   Department,
+  SubDepartment,
   Programme,
   Level,
   AcademicSession,
@@ -14,6 +15,7 @@ import type {
 import type {
   FacultyRepository,
   DepartmentRepository,
+  SubDepartmentRepository,
   ProgrammeRepository,
   LevelRepository,
   AcademicSessionRepository,
@@ -99,6 +101,40 @@ export class FakeDepartmentRepo implements DepartmentRepository {
   async hasLiveProgrammes(departmentId: string) {
     return (this.programmes?.s.live() ?? []).some(
       (p) => p.departmentId === departmentId,
+    );
+  }
+  subDepartments?: FakeSubDepartmentRepo;
+  async hasLiveSubDepartments(departmentId: string) {
+    return (this.subDepartments?.s.live() ?? []).some(
+      (sd) => sd.departmentId === departmentId,
+    );
+  }
+}
+
+export class FakeSubDepartmentRepo implements SubDepartmentRepository {
+  readonly s = new Store<SubDepartment>();
+  programmes?: FakeProgrammeRepo;
+  async create(d: Omit<SubDepartment, "id">) {
+    return this.s.add(d, "sd");
+  }
+  async update(id: string, p: Partial<Omit<SubDepartment, "id">>) {
+    return this.s.patch(id, p);
+  }
+  async softDelete(id: string) {
+    this.s.remove(id);
+  }
+  async findById(id: string) {
+    return this.s.get(id);
+  }
+  async findByCode(code: string) {
+    return this.s.live().find((sd) => sd.code === code) ?? null;
+  }
+  async listByDepartment(departmentId: string) {
+    return this.s.live().filter((sd) => sd.departmentId === departmentId);
+  }
+  async hasLiveChildren(subDepartmentId: string) {
+    return (this.programmes?.s.live() ?? []).some(
+      (p) => p.subDepartmentId === subDepartmentId,
     );
   }
 }
