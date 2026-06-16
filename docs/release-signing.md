@@ -74,6 +74,7 @@ signed update artifacts each release.
    `"updater:default"`, `"process:allow-restart"`.
 5. Generate the signing keypair (asymmetric; separate from the OS code-signing
    cert):
+
    ```bash
    npm run tauri signer generate -- -w "$HOME/.eartmp/updater.key"
    ```
@@ -81,6 +82,7 @@ signed update artifacts each release.
    - Put the **public** key in `tauri.conf.release.json` → `plugins.updater.pubkey`.
    - Keep the **private** key + its password as CI secrets:
      `TAURI_SIGNING_PRIVATE_KEY`, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+
 6. Point `plugins.updater.endpoints` at the real release host. The
    `{{target}}/{{arch}}/{{current_version}}` template lets the server decide
    whether an update applies.
