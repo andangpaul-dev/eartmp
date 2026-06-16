@@ -17,6 +17,7 @@ import {
   EmptyState,
   Icon,
 } from "../components/ui";
+import { StudentPicker } from "../components/StudentPicker";
 import type { Student } from "../../domain/entities";
 
 export function ResultsScreen() {
@@ -255,61 +256,6 @@ export function ResultsScreen() {
 
       {toast && <Toast message={toast} />}
     </div>
-  );
-}
-
-function StudentPicker({
-  value,
-  onChange,
-}: {
-  value: Student | null;
-  onChange: (s: Student) => void;
-}) {
-  const core = useCore();
-  const [q, setQ] = useState("");
-  const found = useAsync(
-    () =>
-      q.length >= 2
-        ? core.listStudents({ where: { search: q }, take: 6 })
-        : Promise.resolve(null),
-    [q],
-  );
-  return (
-    <Field label="Student">
-      <input
-        className="input"
-        aria-label="Find student"
-        placeholder={value ? value.fullName : "Search matric/name…"}
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-      />
-      {found.data && found.data.items.length > 0 && (
-        <div
-          className="card"
-          style={{
-            position: "absolute",
-            zIndex: 10,
-            marginTop: 4,
-            padding: 4,
-            width: 240,
-          }}
-        >
-          {found.data.items.map((s) => (
-            <button
-              key={s.id}
-              className="btn ghost"
-              style={{ width: "100%", justifyContent: "flex-start" }}
-              onClick={() => {
-                onChange(s);
-                setQ("");
-              }}
-            >
-              <span className="mono">{s.matricNumber}</span>&nbsp;· {s.fullName}
-            </button>
-          ))}
-        </div>
-      )}
-    </Field>
   );
 }
 
