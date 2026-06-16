@@ -78,7 +78,9 @@ an **absolute** `DATABASE_URL` under the app-data dir (Prisma resolves a relativ
 `file:` path against the schema dir, not cwd — a real gotcha found during the
 isolated run). A **watchdog** restarts the sidecar (same port) if it exits
 unexpectedly, up to a bounded number of attempts; the child is killed on app
-exit. The shell injects the chosen base into the window
+exit. The shell passes `EARTMP_LOG_DIR` (app-data `logs/`) so the headless
+sidecar mirrors its console output to a rotating `host.log` (5 MB → `host.log.1`)
+for post-hoc diagnosis. The shell injects the chosen base into the window
 (`window.__EARTMP_API_BASE__`) before the frontend loads, so the webview never
 discovers the port itself.
 

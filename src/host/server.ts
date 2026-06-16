@@ -22,6 +22,11 @@ import { buildHost } from "./composition";
 import { createCore, type Core } from "./dispatcher";
 import { toCoreError } from "./errors";
 import { resolveHostPort, handshakeLine } from "./hostPort";
+import { startFileLoggingFromEnv } from "./logger";
+
+// Mirror console output to a rotating app-data log file when the shell provides
+// a directory (no-op in dev). Installed first so all startup logs are captured.
+startFileLoggingFromEnv();
 
 const PORT = resolveHostPort();
 const MIGRATIONS_DIR = process.env.EARTMP_MIGRATIONS_DIR ?? "prisma/migrations";

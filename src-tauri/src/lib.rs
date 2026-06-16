@@ -73,6 +73,10 @@ fn spawn_host(app: &tauri::AppHandle, port: u16) -> Result<CommandChild, String>
     std::fs::create_dir_all(&data_dir).map_err(|e| format!("create data dir: {e}"))?;
     let db_url = format!("file:{}", strip(data_dir.join("eartmp.db")));
 
+    // Per-user log dir so the headless sidecar's output is inspectable after the
+    // fact (a packaged app has no terminal).
+    let log_dir = strip(data_dir.join("logs"));
+
     let mut cmd = app
         .shell()
         .sidecar("eartmp-node")
@@ -80,7 +84,8 @@ fn spawn_host(app: &tauri::AppHandle, port: u16) -> Result<CommandChild, String>
         .arg(server_arg)
         .env("EARTMP_HOST_PORT", port.to_string())
         .env("DATABASE_URL", db_url)
-        .env("EARTMP_MIGRATIONS_DIR", migrations_dir);
+        .env("EARTMP_MIGRATIONS_DIR", migrations_dir)
+        .env("EARTMP_LOG_DIR", log_dir);
 
     // UAT/test builds (the `uat` cargo feature, on by default): seed sample data
     // and auto-unlock the encrypted DB with the documented default passphrase so
