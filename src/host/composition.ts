@@ -132,6 +132,13 @@ import {
   UpdateInstitution,
 } from "../application/use-cases/config/ManageInstitution";
 import {
+  ListInstitutions,
+  CreateInstitution,
+  UpdateInstitutionById,
+  DeleteInstitution,
+  SetDefaultInstitution,
+} from "../application/use-cases/config/ManageInstitutions";
+import {
   GetSetting,
   SetSetting,
 } from "../application/use-cases/config/ManageSettings";
@@ -290,6 +297,11 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
   // --- M6: configuration + security ---
   const getInstitution = new GetInstitution(institutions);
   const updateInstitution = new UpdateInstitution(institutions, audit);
+  const listInstitutions = new ListInstitutions(institutions);
+  const createInstitution = new CreateInstitution(institutions, audit);
+  const updateInstitutionById = new UpdateInstitutionById(institutions, audit);
+  const deleteInstitution = new DeleteInstitution(institutions, audit);
+  const setDefaultInstitution = new SetDefaultInstitution(institutions, audit);
   const getSetting = new GetSetting(settings, settingsRegistry);
   const setSetting = new SetSetting(settings, settingsRegistry, audit);
   const listGradeScales = new ListGradeScales(gradeScales);
@@ -504,6 +516,23 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     ["getAuditLog", (i, s) => authorize(getAuditLog, i as never, s)],
     ["verifyAuditChain", (i, s) => authorize(verifyAuditChain, i as never, s)],
     ["getInstitution", (i, s) => authorize(getInstitution, i as never, s)],
+    ["listInstitutions", (i, s) => authorize(listInstitutions, i as never, s)],
+    [
+      "createInstitution",
+      (i, s) => authorize(createInstitution, i as never, s),
+    ],
+    [
+      "updateInstitutionById",
+      (i, s) => authorize(updateInstitutionById, i as never, s),
+    ],
+    [
+      "deleteInstitution",
+      (i, s) => authorize(deleteInstitution, i as never, s),
+    ],
+    [
+      "setDefaultInstitution",
+      (i, s) => authorize(setDefaultInstitution, i as never, s),
+    ],
     [
       "updateInstitution",
       (i, s) => authorize(updateInstitution, i as never, s),

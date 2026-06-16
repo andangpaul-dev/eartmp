@@ -103,14 +103,14 @@ const institution: Institution = {
   calendarType: "SEMESTER",
   transcriptNumberRule: "TR-{year}-{seq:000000}",
 };
-const institutions: InstitutionRepository = {
+const institutions = {
   async get() {
     return institution;
   },
   async update() {
     return institution;
   },
-};
+} as unknown as InstitutionRepository;
 
 const assembler: ReportDataAssembler = {
   async assemble(_studentId, transcriptNumber): Promise<ReportData> {

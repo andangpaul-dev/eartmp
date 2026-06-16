@@ -795,6 +795,41 @@ table.data tr:hover td {
   color: var(--text-strong);
 }
 
+/* ---- Institution organigram ---- */
+.org-tree {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.org-faculty {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  color: var(--text-strong);
+  padding: 7px 6px;
+  cursor: pointer;
+  border-radius: var(--r-control);
+}
+.org-faculty:hover {
+  background: var(--surface-2);
+}
+.org-depts {
+  list-style: none;
+  margin: 0 0 6px 26px;
+  padding: 4px 0 4px 12px;
+  border-left: 2px solid var(--hairline);
+  font-size: 12.5px;
+  color: var(--text);
+}
+.org-depts li {
+  padding: 3px 0;
+}
+
 /* ---- Permission editor ---- */
 .perm-grid {
   display: grid;

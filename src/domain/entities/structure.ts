@@ -8,6 +8,7 @@ export interface Faculty {
   id: string;
   name: string;
   code: string;
+  institutionId?: string;
 }
 
 export interface Department {

@@ -191,7 +191,11 @@ export interface CoreApi {
   listSubDepartments(input: { departmentId: string }): Promise<SubDepartment[]>;
 
   // structure management (Feature 2) — all gated structure.manage / courses.*
-  createFaculty(input: { name: string; code: string }): Promise<Faculty>;
+  createFaculty(input: {
+    name: string;
+    code: string;
+    institutionId?: string;
+  }): Promise<Faculty>;
   updateFaculty(input: {
     id: string;
     patch: { name?: string; code?: string };
@@ -360,6 +364,19 @@ export interface CoreApi {
   updateInstitution(input: {
     patch: Partial<Institution>;
   }): Promise<Institution>;
+  // multi-institution management (institution.manage / settings.read)
+  listInstitutions(input: Record<string, never>): Promise<Institution[]>;
+  createInstitution(input: {
+    name: string;
+    code?: string;
+    calendarType?: string;
+  }): Promise<Institution>;
+  updateInstitutionById(input: {
+    id: string;
+    patch: Partial<Institution>;
+  }): Promise<Institution>;
+  deleteInstitution(input: { id: string }): Promise<void>;
+  setDefaultInstitution(input: { id: string }): Promise<void>;
   getSetting(input: { key: string }): Promise<unknown>;
   setSetting(input: { key: string; value: unknown }): Promise<void>;
   listGradeScales(input: Record<string, never>): Promise<StoredGradeScale[]>;

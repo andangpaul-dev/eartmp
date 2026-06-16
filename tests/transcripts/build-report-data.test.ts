@@ -22,14 +22,14 @@ const institution: Institution = {
   motto: "Knowledge",
   calendarType: "SEMESTER",
 };
-const institutions: InstitutionRepository = {
+const institutions = {
   async get() {
     return institution;
   },
   async update() {
     return institution;
   },
-};
+} as unknown as InstitutionRepository;
 
 const names: TranscriptNameResolver = {
   async programmeName(id) {

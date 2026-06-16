@@ -26,15 +26,44 @@ import type {
 
 const live = { deletedAt: null } as const;
 
+function toFaculty(r: {
+  id: string;
+  name: string;
+  code: string;
+  institutionId: string | null;
+}): Faculty {
+  return {
+    id: r.id,
+    name: r.name,
+    code: r.code,
+    ...(r.institutionId ? { institutionId: r.institutionId } : {}),
+  };
+}
+
 export class PrismaFacultyRepository implements FacultyRepository {
   constructor(private readonly db: PrismaClient) {}
   async create(data: Omit<Faculty, "id">): Promise<Faculty> {
-    const r = await this.db.faculty.create({ data });
-    return { id: r.id, name: r.name, code: r.code };
+    const r = await this.db.faculty.create({
+      data: {
+        name: data.name,
+        code: data.code,
+        institutionId: data.institutionId ?? null,
+      },
+    });
+    return toFaculty(r);
   }
   async update(id: string, patch: Partial<Omit<Faculty, "id">>) {
-    const r = await this.db.faculty.update({ where: { id }, data: patch });
-    return { id: r.id, name: r.name, code: r.code };
+    const r = await this.db.faculty.update({
+      where: { id },
+      data: {
+        ...(patch.name !== undefined ? { name: patch.name } : {}),
+        ...(patch.code !== undefined ? { code: patch.code } : {}),
+        ...(patch.institutionId !== undefined
+          ? { institutionId: patch.institutionId }
+          : {}),
+      },
+    });
+    return toFaculty(r);
   }
   async softDelete(id: string): Promise<void> {
     await this.db.faculty.update({
@@ -44,18 +73,18 @@ export class PrismaFacultyRepository implements FacultyRepository {
   }
   async findById(id: string): Promise<Faculty | null> {
     const r = await this.db.faculty.findFirst({ where: { id, ...live } });
-    return r ? { id: r.id, name: r.name, code: r.code } : null;
+    return r ? toFaculty(r) : null;
   }
   async findByCode(code: string): Promise<Faculty | null> {
     const r = await this.db.faculty.findFirst({ where: { code, ...live } });
-    return r ? { id: r.id, name: r.name, code: r.code } : null;
+    return r ? toFaculty(r) : null;
   }
   async list(): Promise<Faculty[]> {
     const rows = await this.db.faculty.findMany({
       where: live,
       orderBy: { code: "asc" },
     });
-    return rows.map((r) => ({ id: r.id, name: r.name, code: r.code }));
+    return rows.map(toFaculty);
   }
   async hasLiveDepartments(facultyId: string): Promise<boolean> {
     return (

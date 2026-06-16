@@ -16,6 +16,8 @@ import type {
 type InstitutionRow = {
   id: string;
   name: string;
+  code: string | null;
+  isDefault: boolean;
   motto: string | null;
   accreditationNo: string | null;
   address: string | null;
@@ -33,6 +35,8 @@ function toInstitution(row: InstitutionRow): Institution {
   return {
     id: row.id,
     name: row.name,
+    code: row.code ?? undefined,
+    isDefault: row.isDefault,
     motto: row.motto ?? undefined,
     accreditationNo: row.accreditationNo ?? undefined,
     address: row.address ?? undefined,
@@ -51,10 +55,15 @@ export class PrismaInstitutionRepository implements InstitutionRepository {
   constructor(private readonly db: PrismaClient) {}
 
   async get(): Promise<Institution | null> {
-    const row = await this.db.institution.findFirst({
-      where: { deletedAt: null },
-      orderBy: { createdAt: "asc" },
-    });
+    // The default institution drives transcripts; fall back to the earliest.
+    const row =
+      (await this.db.institution.findFirst({
+        where: { isDefault: true, deletedAt: null },
+      })) ??
+      (await this.db.institution.findFirst({
+        where: { deletedAt: null },
+        orderBy: { createdAt: "asc" },
+      }));
     return row ? toInstitution(row) : null;
   }
 
@@ -94,6 +103,98 @@ export class PrismaInstitutionRepository implements InstitutionRepository {
       },
     });
     return toInstitution(row);
+  }
+
+  // --- multi-institution management ---
+
+  private writeData(patch: Partial<Institution>): Record<string, unknown> {
+    const keys: (keyof Institution)[] = [
+      "name",
+      "code",
+      "isDefault",
+      "motto",
+      "accreditationNo",
+      "address",
+      "telephone",
+      "email",
+      "website",
+      "logoPath",
+      "sealPath",
+      "registrarSignPath",
+      "calendarType",
+      "transcriptNumberRule",
+    ];
+    const data: Record<string, unknown> = {};
+    for (const k of keys) if (patch[k] !== undefined) data[k] = patch[k];
+    return data;
+  }
+
+  async list(): Promise<Institution[]> {
+    const rows = await this.db.institution.findMany({
+      where: { deletedAt: null },
+      orderBy: [{ isDefault: "desc" }, { name: "asc" }],
+    });
+    return rows.map(toInstitution);
+  }
+
+  async findById(id: string): Promise<Institution | null> {
+    const row = await this.db.institution.findFirst({
+      where: { id, deletedAt: null },
+    });
+    return row ? toInstitution(row) : null;
+  }
+
+  async create(
+    data: Partial<Institution> & { name: string },
+  ): Promise<Institution> {
+    const isFirst =
+      (await this.db.institution.count({
+        where: { deletedAt: null },
+      })) === 0;
+    const row = await this.db.institution.create({
+      data: {
+        ...this.writeData(data),
+        name: data.name,
+        // The very first institution becomes the default automatically.
+        isDefault: data.isDefault ?? isFirst,
+        calendarType: data.calendarType ?? "SEMESTER",
+      },
+    });
+    return toInstitution(row);
+  }
+
+  async updateById(
+    id: string,
+    patch: Partial<Institution>,
+  ): Promise<Institution> {
+    const row = await this.db.institution.update({
+      where: { id },
+      data: this.writeData(patch),
+    });
+    return toInstitution(row);
+  }
+
+  async softDelete(id: string): Promise<void> {
+    await this.db.institution.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+  }
+
+  async setDefault(id: string): Promise<void> {
+    await this.db.$transaction([
+      this.db.institution.updateMany({
+        where: { isDefault: true, deletedAt: null },
+        data: { isDefault: false },
+      }),
+      this.db.institution.update({ where: { id }, data: { isDefault: true } }),
+    ]);
+  }
+
+  async countLiveFaculties(institutionId: string): Promise<number> {
+    return this.db.faculty.count({
+      where: { institutionId, deletedAt: null },
+    });
   }
 }
 

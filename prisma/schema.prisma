@@ -69,6 +69,9 @@ model User {
 model Institution {
   id                   String    @id @default(cuid())
   name                 String
+  code                 String?
+  isDefault            Boolean   @default(false)
+  faculties            Faculty[]
   motto                String?
   accreditationNo      String?
   address              String?
@@ -103,13 +106,17 @@ model Setting {
 // unique indexes (`WHERE deletedAt IS NULL`) added in the migration, so a
 // soft-deleted code can be re-used. Repositories use findFirst, not findUnique.
 model Faculty {
-  id          String       @id @default(cuid())
-  name        String
-  code        String
-  departments Department[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  deletedAt   DateTime?
+  id            String       @id @default(cuid())
+  name          String
+  code          String
+  institutionId String?
+  institution   Institution? @relation(fields: [institutionId], references: [id])
+  departments   Department[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  deletedAt     DateTime?
+
+  @@index([institutionId])
 }
 
 model Department {

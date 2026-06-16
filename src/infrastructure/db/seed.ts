@@ -230,6 +230,8 @@ async function seedInstitution(prisma: PrismaClient): Promise<void> {
     create: {
       id: INSTITUTION_ID,
       name: "Example University",
+      code: "EXU",
+      isDefault: true,
       calendarType: "SEMESTER",
     },
   });

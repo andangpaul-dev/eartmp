@@ -8,14 +8,58 @@ import type {
 } from "../../src/domain/repositories/config";
 
 export class InMemoryInstitutionRepository implements InstitutionRepository {
-  constructor(private institution: Institution | null) {}
+  readonly rows: Institution[] = [];
+  private seq = 0;
+  faculties = 0; // test knob for countLiveFaculties
+  constructor(institution: Institution | null) {
+    if (institution) this.rows.push({ ...institution, isDefault: true });
+  }
   async get(): Promise<Institution | null> {
-    return this.institution ? { ...this.institution } : null;
+    const def = this.rows.find((r) => r.isDefault) ?? this.rows[0];
+    return def ? { ...def } : null;
   }
   async update(patch: Partial<Institution>): Promise<Institution> {
-    if (!this.institution) throw new Error("not provisioned");
-    this.institution = { ...this.institution, ...patch };
-    return { ...this.institution };
+    const def = this.rows.find((r) => r.isDefault) ?? this.rows[0];
+    if (!def) throw new Error("not provisioned");
+    Object.assign(def, patch);
+    return { ...def };
+  }
+  async list(): Promise<Institution[]> {
+    return this.rows.map((r) => ({ ...r }));
+  }
+  async findById(id: string): Promise<Institution | null> {
+    const r = this.rows.find((x) => x.id === id);
+    return r ? { ...r } : null;
+  }
+  async create(
+    data: Partial<Institution> & { name: string },
+  ): Promise<Institution> {
+    const inst: Institution = {
+      id: `inst-${++this.seq}`,
+      calendarType: "SEMESTER",
+      ...data,
+      isDefault: data.isDefault ?? this.rows.length === 0,
+    };
+    this.rows.push(inst);
+    return { ...inst };
+  }
+  async updateById(
+    id: string,
+    patch: Partial<Institution>,
+  ): Promise<Institution> {
+    const r = this.rows.find((x) => x.id === id)!;
+    Object.assign(r, patch);
+    return { ...r };
+  }
+  async softDelete(id: string): Promise<void> {
+    const i = this.rows.findIndex((x) => x.id === id);
+    if (i >= 0) this.rows.splice(i, 1);
+  }
+  async setDefault(id: string): Promise<void> {
+    for (const r of this.rows) r.isDefault = r.id === id;
+  }
+  async countLiveFaculties(): Promise<number> {
+    return this.faculties;
   }
 }
 

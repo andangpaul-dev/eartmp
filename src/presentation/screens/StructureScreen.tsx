@@ -17,6 +17,7 @@ export function StructureScreen() {
   const core = useCore();
   const { can } = useSession();
   const manage = can("structure.manage");
+  const [institutionId, setInstitutionId] = useState("");
   const [facultyId, setFacultyId] = useState<string | null>(null);
   const [departmentId, setDepartmentId] = useState<string | null>(null);
   const [subDepartmentId, setSubDepartmentId] = useState<string | null>(null);
@@ -35,7 +36,13 @@ export function StructureScreen() {
     }
   };
 
-  const faculties = useAsync(() => core.listFaculties({}), []);
+  const institutions = useAsync(() => core.listInstitutions({}), []);
+  const allFaculties = useAsync(() => core.listFaculties({}), []);
+  // Scope faculties to the chosen institution (empty = all).
+  const facultyItems = (allFaculties.data ?? []).filter(
+    (f) => !institutionId || f.institutionId === institutionId,
+  );
+  const faculties = { ...allFaculties, data: facultyItems };
   const departments = useAsync(
     () =>
       facultyId ? core.listDepartments({ facultyId }) : Promise.resolve([]),
@@ -74,6 +81,40 @@ export function StructureScreen() {
 
   return (
     <div className="stack">
+      <Card>
+        <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+          <Field label="Institution">
+            <select
+              className="select"
+              aria-label="Institution"
+              value={institutionId}
+              onChange={(e) => {
+                setInstitutionId(e.target.value);
+                setFacultyId(null);
+                setDepartmentId(null);
+                setSubDepartmentId(null);
+                setProgrammeId(null);
+              }}
+            >
+              <option value="">All institutions</option>
+              {institutions.data?.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.name}
+                  {i.isDefault ? " (default)" : ""}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {manage && (
+            <span className="muted" style={{ alignSelf: "flex-end" }}>
+              {institutionId
+                ? "New faculties are added under this institution."
+                : "Showing all faculties — pick an institution to scope new ones."}
+            </span>
+          )}
+        </div>
+      </Card>
+
       <div className="form-grid">
         {/* Faculties */}
         <Panel
@@ -90,7 +131,11 @@ export function StructureScreen() {
           canManage={manage}
           onAdd={(name, code) =>
             guard(async () => {
-              await core.createFaculty({ name, code });
+              await core.createFaculty({
+                name,
+                code,
+                ...(institutionId ? { institutionId } : {}),
+              });
               faculties.reload();
             }, "Faculty created")
           }

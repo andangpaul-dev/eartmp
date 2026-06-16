@@ -48,6 +48,7 @@ async function audit(
 export interface CreateFacultyInput {
   name: string;
   code: string;
+  institutionId?: string;
 }
 export class CreateFaculty implements AuthorizedUseCase<
   CreateFacultyInput,
@@ -68,6 +69,7 @@ export class CreateFaculty implements AuthorizedUseCase<
     const created = await this.faculties.create({
       name: input.name,
       code: input.code,
+      ...(input.institutionId ? { institutionId: input.institutionId } : {}),
     });
     await audit(this.auditLog, session, "CREATE", "Faculty", created.id, {
       code: created.code,

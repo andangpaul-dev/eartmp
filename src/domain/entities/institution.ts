@@ -14,6 +14,8 @@ export const CALENDAR_TYPES: readonly CalendarType[] = [
 export interface Institution {
   id: string;
   name: string;
+  code?: string;
+  isDefault?: boolean;
   motto?: string;
   accreditationNo?: string;
   address?: string;

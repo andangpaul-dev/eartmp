@@ -76,8 +76,16 @@ export async function seedDemoData(prisma: PrismaClient): Promise<boolean> {
   });
   if (exists) return false; // structure already seeded
 
+  // Link the demo faculty to the default institution so the organigram shows it.
+  const institution = await prisma.institution.findFirst({
+    where: { isDefault: true, deletedAt: null },
+  });
   const faculty = await prisma.faculty.create({
-    data: { name: "Faculty of Science", code: FACULTY_CODE },
+    data: {
+      name: "Faculty of Science",
+      code: FACULTY_CODE,
+      institutionId: institution?.id ?? null,
+    },
   });
   const dept = await prisma.department.create({
     data: { name: "Computer Science", code: "CSC", facultyId: faculty.id },
