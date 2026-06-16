@@ -56,6 +56,20 @@ class FakeStore implements TranscriptStore {
   async nextTranscriptNumber(rule: string) {
     return expandNumberRule(rule, 2026, this.rows.length + 1);
   }
+  async listRecords(filter?: { status?: string }) {
+    return this.rows
+      .filter((r) => !filter?.status || r.status === filter.status)
+      .map((r) => ({
+        id: r.id,
+        transcriptNumber: r.transcriptNumber,
+        studentId: r.studentId,
+        matricNumber: "M/1",
+        studentName: "Ada Lovelace",
+        type: r.type,
+        status: r.status,
+        generatedAt: "2026-01-01T00:00:00.000Z",
+      }));
+  }
 }
 
 const template: StoredTemplate = {

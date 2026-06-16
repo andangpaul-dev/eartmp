@@ -34,7 +34,10 @@ import type { GpaSummary } from "../../domain/services/GpaEngine";
 import type { ImportReport } from "../../application/use-cases/results/ImportResults";
 import type { RawRow } from "../../application/ports/SpreadsheetReaderPort";
 import type { AcademicSummary } from "../../application/use-cases/results/GetAcademicSummary";
-import type { StoredTranscript } from "../../domain/repositories/transcripts";
+import type {
+  StoredTranscript,
+  TranscriptRecord,
+} from "../../domain/repositories/transcripts";
 import type { VerifyResult } from "../../application/use-cases/transcripts/VerifyTranscript";
 import type { EligibilityReport } from "../../domain/services/GraduationEligibility";
 import type { GraduateResult } from "../../application/use-cases/graduation/Graduation";
@@ -59,6 +62,7 @@ export type {
   RawRow,
   AcademicSummary,
   StoredTranscript,
+  TranscriptRecord,
   VerifyResult,
   EligibilityReport,
   GraduateResult,
@@ -212,6 +216,11 @@ export interface CoreApi {
   // transcripts: generate (DRAFT) → verify (Ed25519) → approve → export.
   // Generate/verify need the signing key unsealed.
   listTranscripts(input: { studentId: string }): Promise<StoredTranscript[]>;
+  /** Cross-student registry of treated transcripts (the Records screen). */
+  listTranscriptRecords(input: {
+    status?: string;
+    search?: string;
+  }): Promise<TranscriptRecord[]>;
   generateTranscript(input: {
     studentId: string;
     type?: string;

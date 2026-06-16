@@ -26,6 +26,26 @@ export interface NewTranscript {
   status: string;
 }
 
+/**
+ * Cross-student registry row — a transcript enriched with the issuing student's
+ * identity and its issue date, for the Records screen. A read model: it never
+ * carries the snapshot/signature, only what the registry lists.
+ */
+export interface TranscriptRecord {
+  id: string;
+  transcriptNumber: string;
+  studentId: string;
+  matricNumber: string;
+  studentName: string;
+  type: string;
+  status: string;
+  generatedAt: string; // ISO
+}
+
+export interface TranscriptRecordFilter {
+  status?: string;
+}
+
 export interface TranscriptStore {
   create(data: NewTranscript): Promise<StoredTranscript>;
   findById(id: string): Promise<StoredTranscript | null>;
@@ -34,6 +54,9 @@ export interface TranscriptStore {
   updateStatus(id: string, status: string): Promise<StoredTranscript>;
   /** Expand the institution numbering rule to the next unique number. */
   nextTranscriptNumber(rule: string): Promise<string>;
+  /** All transcripts (newest first), enriched with student identity, for the
+   *  Records registry. Optionally narrowed by status. */
+  listRecords(filter?: TranscriptRecordFilter): Promise<TranscriptRecord[]>;
 }
 
 export interface StoredTemplate {

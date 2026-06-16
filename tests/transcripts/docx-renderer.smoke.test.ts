@@ -88,6 +88,9 @@ describe("ExportTranscript with DocxRenderer", () => {
       async nextTranscriptNumber() {
         return "TR-1";
       },
+      async listRecords() {
+        return [];
+      },
     };
     const exporter = new ExportTranscript(
       store,

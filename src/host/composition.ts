@@ -93,6 +93,7 @@ import {
   RevokeTranscript,
 } from "../application/use-cases/transcripts/VerifyTranscript";
 import { ExportTranscript } from "../application/use-cases/transcripts/ExportTranscript";
+import { ListTranscriptRecords } from "../application/use-cases/transcripts/ListTranscriptRecords";
 import {
   EvaluateGraduation,
   GraduateStudent,
@@ -395,6 +396,9 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     requirePerm(s, "transcripts.read");
     return transcripts.findByStudent((i as { studentId: string }).studentId);
   });
+  registry.set("listTranscriptRecords", (i, s) =>
+    authorize(new ListTranscriptRecords(transcripts), i as never, s),
+  );
 
   registry.set("keyState", async (_i, s) => {
     requirePerm(s, "transcripts.read");

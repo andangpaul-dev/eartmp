@@ -10,6 +10,8 @@ import type {
   TranscriptStore,
   StoredTranscript,
   NewTranscript,
+  TranscriptRecord,
+  TranscriptRecordFilter,
   TranscriptTemplateStore,
   StoredTemplate,
   NewTemplate,
@@ -96,6 +98,31 @@ export class PrismaTranscriptRepository implements TranscriptStore {
   async nextTranscriptNumber(rule: string): Promise<string> {
     const seq = (await this.db.transcript.count()) + 1;
     return expandNumberRule(rule, new Date().getFullYear(), seq);
+  }
+
+  async listRecords(
+    filter?: TranscriptRecordFilter,
+  ): Promise<TranscriptRecord[]> {
+    const rows = await this.db.transcript.findMany({
+      where: {
+        deletedAt: null,
+        ...(filter?.status ? { status: filter.status } : {}),
+      },
+      orderBy: { generatedAt: "desc" },
+      include: {
+        student: { select: { matricNumber: true, fullName: true } },
+      },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      transcriptNumber: r.transcriptNumber,
+      studentId: r.studentId,
+      matricNumber: r.student.matricNumber,
+      studentName: r.student.fullName,
+      type: r.type,
+      status: r.status,
+      generatedAt: r.generatedAt.toISOString(),
+    }));
   }
 }
 

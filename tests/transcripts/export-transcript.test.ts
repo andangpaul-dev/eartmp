@@ -54,6 +54,9 @@ function storeWith(status: string, snap = snapshot): TranscriptStore {
     async nextTranscriptNumber() {
       return "TR-1";
     },
+    async listRecords() {
+      return [];
+    },
   };
 }
 

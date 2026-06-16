@@ -52,6 +52,7 @@ export function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
     importResults: async () => ({}) as never,
     getAcademicSummary: async () => ({}) as never,
     listTranscripts: async () => [],
+    listTranscriptRecords: async () => [],
     generateTranscript: async () => ({}) as never,
     verifyTranscript: async () => ({
       valid: true,

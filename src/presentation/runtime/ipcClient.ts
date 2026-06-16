@@ -156,6 +156,7 @@ export const ipcClient: CoreApi = {
   importResults: (input) => rpc("importResults", input),
   getAcademicSummary: (input) => rpc("getAcademicSummary", input),
   listTranscripts: (input) => rpc("listTranscripts", input),
+  listTranscriptRecords: (input) => rpc("listTranscriptRecords", input),
   generateTranscript: (input) => rpc("generateTranscript", input),
   verifyTranscript: (input) => rpc("verifyTranscript", input),
   approveTranscript: (input) => rpc("approveTranscript", input),
