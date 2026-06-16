@@ -8,11 +8,6 @@
  */
 import { SessionContext } from "../../../domain/value-objects/SessionContext";
 import type { RawRow } from "../../ports/SpreadsheetReaderPort";
-import type {
-  StudentRepository,
-  CourseRepository,
-  ResultRepository,
-} from "../../../domain/repositories/records";
 import type { GradingConfigService } from "../../services/GradingConfigService";
 import type { UnitOfWork } from "../../ports/UnitOfWork";
 import type { AuthorizedUseCase } from "../../authorization/AuthorizedUseCase";
@@ -51,9 +46,6 @@ export class ImportResults implements AuthorizedUseCase<
   readonly requiredPermissions = ["results.import"];
 
   constructor(
-    private readonly students: StudentRepository,
-    private readonly courses: CourseRepository,
-    private readonly results: ResultRepository,
     private readonly grading: GradingConfigService,
     private readonly uow: UnitOfWork,
   ) {}
@@ -64,89 +56,99 @@ export class ImportResults implements AuthorizedUseCase<
   ): Promise<ImportReport> {
     const structure = await this.grading.loadAssessmentStructure();
     const components = structure.toComponents();
-    const seen = new Set<string>();
-    const errors: RowError[] = [];
-    const valid: ValidEntry[] = [];
 
-    for (let i = 0; i < input.rows.length; i++) {
-      const row = input.rows[i]!;
-      const messages: string[] = [];
-      const matric = String(row.matricNumber ?? "").trim();
-      const code = String(row.courseCode ?? "").trim();
-      if (!matric) messages.push("Missing matricNumber.");
-      if (!code) messages.push("Missing courseCode.");
+    // Validation and the commit run in ONE transaction so the lock-check and
+    // existing-result lookup see the same snapshot the writes commit against —
+    // no TOCTOU window where a concurrent import locks or creates a row between
+    // "valid" and "written" (AD10.2/F-1). A dry run takes the same read path and
+    // simply writes nothing.
+    return this.uow.run(async (repos) => {
+      const seen = new Set<string>();
+      const errors: RowError[] = [];
+      const valid: ValidEntry[] = [];
 
-      const student = matric ? await this.students.findByMatric(matric) : null;
-      if (matric && !student) messages.push(`Unknown student "${matric}".`);
-      const course = code ? await this.courses.findByCode(code) : null;
-      if (code && !course) messages.push(`Unknown course "${code}".`);
+      for (let i = 0; i < input.rows.length; i++) {
+        const row = input.rows[i]!;
+        const messages: string[] = [];
+        const matric = String(row.matricNumber ?? "").trim();
+        const code = String(row.courseCode ?? "").trim();
+        if (!matric) messages.push("Missing matricNumber.");
+        if (!code) messages.push("Missing courseCode.");
 
-      if (matric && code) {
-        const key = `${matric}::${code}`;
-        if (seen.has(key))
-          messages.push("Duplicate row for this student/course.");
-        else seen.add(key);
-      }
+        const student = matric
+          ? await repos.students.findByMatric(matric)
+          : null;
+        if (matric && !student) messages.push(`Unknown student "${matric}".`);
+        const course = code ? await repos.courses.findByCode(code) : null;
+        if (code && !course) messages.push(`Unknown course "${code}".`);
 
-      // Build + validate component scores.
-      const componentScores = components.map((c) => ({
-        key: c.key,
-        score: Number(row[c.key]),
-      }));
-      for (const c of components) {
-        const v = row[c.key];
-        if (v === undefined || v === "" || Number.isNaN(Number(v))) {
-          messages.push(`Missing/invalid score for "${c.key}".`);
+        if (matric && code) {
+          const key = `${matric}::${code}`;
+          if (seen.has(key))
+            messages.push("Duplicate row for this student/course.");
+          else seen.add(key);
         }
-      }
 
-      let finalScore: number | undefined;
-      if (messages.length === 0) {
-        try {
-          finalScore = structure.computeFinalScore(componentScores);
-        } catch (e) {
-          messages.push((e as Error).message);
+        // Build + validate component scores.
+        const componentScores = components.map((c) => ({
+          key: c.key,
+          score: Number(row[c.key]),
+        }));
+        for (const c of components) {
+          const v = row[c.key];
+          if (v === undefined || v === "" || Number.isNaN(Number(v))) {
+            messages.push(`Missing/invalid score for "${c.key}".`);
+          }
         }
-      }
 
-      let existingId: string | undefined;
-      if (messages.length === 0 && student && course) {
-        const existing = (
-          await this.results.findByStudentAndSemester(
-            student.id,
-            input.semesterId,
-          )
-        ).find((r) => r.courseId === course.id);
-        if (existing?.isLocked) {
-          messages.push("Existing result is locked; unlock before importing.");
+        let finalScore: number | undefined;
+        if (messages.length === 0) {
+          try {
+            finalScore = structure.computeFinalScore(componentScores);
+          } catch (e) {
+            messages.push((e as Error).message);
+          }
+        }
+
+        let existingId: string | undefined;
+        if (messages.length === 0 && student && course) {
+          const existing = (
+            await repos.results.findByStudentAndSemester(
+              student.id,
+              input.semesterId,
+            )
+          ).find((r) => r.courseId === course.id);
+          if (existing?.isLocked) {
+            messages.push(
+              "Existing result is locked; unlock before importing.",
+            );
+          } else {
+            existingId = existing?.id;
+          }
+        }
+
+        if (messages.length > 0) {
+          errors.push({ row: i + 1, messages });
         } else {
-          existingId = existing?.id;
+          valid.push({
+            studentId: student!.id,
+            courseId: course!.id,
+            componentScores,
+            finalScore: finalScore!,
+            ...(existingId ? { existingId } : {}),
+          });
         }
       }
 
-      if (messages.length > 0) {
-        errors.push({ row: i + 1, messages });
-      } else {
-        valid.push({
-          studentId: student!.id,
-          courseId: course!.id,
-          componentScores,
-          finalScore: finalScore!,
-          ...(existingId ? { existingId } : {}),
-        });
-      }
-    }
+      const base: ImportReport = {
+        totalRows: input.rows.length,
+        validRows: valid.length,
+        imported: 0,
+        errors,
+      };
 
-    const base: ImportReport = {
-      totalRows: input.rows.length,
-      validRows: valid.length,
-      imported: 0,
-      errors,
-    };
+      if (input.dryRun || errors.length > 0) return base;
 
-    if (input.dryRun || errors.length > 0) return base;
-
-    await this.uow.run(async (repos) => {
       for (const v of valid) {
         if (v.existingId) {
           await repos.results.updateScores(v.existingId, {
@@ -171,8 +173,8 @@ export class ImportResults implements AuthorizedUseCase<
         recordId: input.semesterId,
         newValue: { imported: valid.length },
       });
-    });
 
-    return { ...base, imported: valid.length };
+      return { ...base, imported: valid.length };
+    });
   }
 }

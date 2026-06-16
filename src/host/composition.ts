@@ -206,13 +206,7 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
   const processSemester = new ProcessSemester(uow, grading);
   const lockSemesterResults = new LockSemesterResults(results, audit);
   const unlockResult = new UnlockResult(results, audit);
-  const importResults = new ImportResults(
-    students,
-    courses,
-    results,
-    grading,
-    uow,
-  );
+  const importResults = new ImportResults(grading, uow);
 
   // --- M5: summary / transcripts / graduation / audit ---
   const institutions = new PrismaInstitutionRepository(db);

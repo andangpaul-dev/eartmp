@@ -53,8 +53,10 @@ async function setup() {
   );
 
   const results = new FakeResultRepo();
-  const uow = fakeUow({ results });
-  const uc = new ImportResults(students, courses, results, grading, uow);
+  // Validation + commit now run inside the unit of work, so the tx repos must
+  // include students/courses (the use-case reads everything through `repos`).
+  const uow = fakeUow({ students, courses, results });
+  const uc = new ImportResults(grading, uow);
   return { uc, results };
 }
 
