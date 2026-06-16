@@ -7,6 +7,7 @@
  */
 import { SessionContext } from "../../../domain/value-objects/SessionContext";
 import { AuthorizationError } from "../../../domain/errors/auth";
+import { ValidationError } from "../../../domain/errors/validation";
 import type { UserAccount, Role } from "../../../domain/entities/auth";
 import type {
   UserRepository,
@@ -56,16 +57,25 @@ export class CreateUser implements AuthorizedUseCase<
   ): Promise<UserAccount> {
     const username = input.username.trim();
     if (username.length < 3) {
-      throw new Error("Username must be at least 3 characters.");
+      throw ValidationError.field(
+        "username",
+        "Username must be at least 3 characters.",
+      );
     }
     if (input.password.length < 8) {
-      throw new Error("Password must be at least 8 characters.");
+      throw ValidationError.field(
+        "password",
+        "Password must be at least 8 characters.",
+      );
     }
     if (await this.users.findByUsername(username)) {
-      throw new Error(`Username "${username}" already exists.`);
+      throw ValidationError.field(
+        "username",
+        `Username "${username}" already exists.`,
+      );
     }
     if (!(await this.roles.findById(input.roleId))) {
-      throw new Error("Selected role does not exist.");
+      throw ValidationError.field("roleId", "Selected role does not exist.");
     }
     const passwordHash = await this.hasher.hash(input.password);
     const created = await this.users.create({
@@ -175,7 +185,10 @@ export class ResetUserPassword implements AuthorizedUseCase<
     session: SessionContext,
   ): Promise<void> {
     if (input.newPassword.length < 8) {
-      throw new Error("Password must be at least 8 characters.");
+      throw ValidationError.field(
+        "newPassword",
+        "Password must be at least 8 characters.",
+      );
     }
     const passwordHash = await this.hasher.hash(input.newPassword);
     await this.users.update(input.userId, { passwordHash });
@@ -260,7 +273,7 @@ export class AssignRole implements AuthorizedUseCase<AssignRoleInput, void> {
     session: SessionContext,
   ): Promise<void> {
     if (!(await this.roles.findById(input.roleId))) {
-      throw new Error("Selected role does not exist.");
+      throw ValidationError.field("roleId", "Selected role does not exist.");
     }
     await this.users.update(input.userId, { roleId: input.roleId });
     await this.audit.record({

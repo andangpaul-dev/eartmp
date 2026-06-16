@@ -88,6 +88,29 @@ describe("CreateUser", () => {
     ).rejects.toThrow(/role does not exist/);
   });
 
+  it("attaches the offending input name to validation errors (form fields)", async () => {
+    const users = new InMemoryUserRepository([existing]);
+    const uc = new CreateUser(
+      users,
+      roles(),
+      new FakeHasher(),
+      new CapturingAudit(),
+    );
+    const base = { email: "x@e.edu", fullName: "X", roleId: "role-viewer" };
+    await expect(
+      uc.execute({ ...base, username: "ab", password: "password1" }, admin),
+    ).rejects.toMatchObject({ fields: { username: expect.any(String) } });
+    await expect(
+      uc.execute({ ...base, username: "amy", password: "short" }, admin),
+    ).rejects.toMatchObject({ fields: { password: expect.any(String) } });
+    await expect(
+      uc.execute(
+        { ...base, username: "amy", roleId: "nope", password: "password1" },
+        admin,
+      ),
+    ).rejects.toMatchObject({ fields: { roleId: expect.any(String) } });
+  });
+
   it("is denied through the seam without users.create", async () => {
     const uc = new CreateUser(
       new InMemoryUserRepository(),

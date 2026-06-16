@@ -39,13 +39,19 @@ export class AdmitStudent implements AuthorizedUseCase<
     session: SessionContext,
   ): Promise<AdmitStudentResult> {
     if (input.matricNumber.trim().length === 0) {
-      throw new RecordsError("Matric number must not be empty.");
+      throw new RecordsError("Matric number must not be empty.", {
+        matricNumber: "Matric number must not be empty.",
+      });
+    }
+    if (input.fullName.trim().length === 0) {
+      throw new RecordsError("Full name must not be empty.", {
+        fullName: "Full name must not be empty.",
+      });
     }
     return this.uow.run(async (repos) => {
       if (await repos.students.findByMatric(input.matricNumber)) {
-        throw new RecordsError(
-          `Matric number "${input.matricNumber}" is already in use.`,
-        );
+        const msg = `Matric number "${input.matricNumber}" is already in use.`;
+        throw new RecordsError(msg, { matricNumber: msg });
       }
       const student = await repos.students.create({
         matricNumber: input.matricNumber,

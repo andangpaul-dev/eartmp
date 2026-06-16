@@ -76,15 +76,18 @@ export class CreateStudent implements AuthorizedUseCase<
   ) {}
   async execute(input: CreateStudentInput, session: SessionContext) {
     if (input.matricNumber.trim().length === 0) {
-      throw new RecordsError("Matric number must not be empty.");
+      throw new RecordsError("Matric number must not be empty.", {
+        matricNumber: "Matric number must not be empty.",
+      });
     }
     if (input.fullName.trim().length === 0) {
-      throw new RecordsError("Full name must not be empty.");
+      throw new RecordsError("Full name must not be empty.", {
+        fullName: "Full name must not be empty.",
+      });
     }
     if (await this.students.findByMatric(input.matricNumber)) {
-      throw new RecordsError(
-        `Matric number "${input.matricNumber}" is already in use.`,
-      );
+      const msg = `Matric number "${input.matricNumber}" is already in use.`;
+      throw new RecordsError(msg, { matricNumber: msg });
     }
     const created = await this.students.create({ ...input, status: "ACTIVE" });
     await this.audit.record({

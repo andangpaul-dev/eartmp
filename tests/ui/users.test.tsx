@@ -5,6 +5,7 @@ import type {
   UserSummary,
   Role,
 } from "../../src/presentation/runtime/contract";
+import { CoreApiError } from "../../src/presentation/runtime/ipcClient";
 import { renderScreen } from "./harness";
 
 const user = (over: Partial<UserSummary> = {}): UserSummary => ({
@@ -62,6 +63,33 @@ describe("UsersScreen", () => {
         expect.objectContaining({ username: "carol", roleId: "r-admin" }),
       ),
     );
+  });
+
+  it("shows a per-field error when createUser rejects with fields", async () => {
+    const createUser = vi.fn(async () => {
+      throw new CoreApiError({
+        code: "VALIDATION",
+        message: 'Username "carol" already exists.',
+        fields: { username: 'Username "carol" already exists.' },
+      });
+    });
+    const { user: u } = renderScreen(<UsersScreen />, {
+      permissions: adminPerms,
+      core: {
+        listUsers: async () => [],
+        listRoles: async () => roles,
+        createUser,
+      },
+    });
+    await u.click(await screen.findByRole("button", { name: /new user/i }));
+    await u.type(await screen.findByLabelText(/username/i), "carol");
+    await u.type(screen.getByLabelText(/full name/i), "Carol Coder");
+    await u.type(screen.getByLabelText(/email/i), "c@e.edu");
+    await u.type(screen.getByLabelText(/temporary password/i), "password1");
+    await u.click(screen.getByRole("button", { name: /^create user$/i }));
+    // The message renders inline on the Username field (.err inside its label).
+    const err = await screen.findByText(/already exists/i);
+    expect(err).toHaveClass("err");
   });
 
   it("disables Deactivate for your own account", async () => {

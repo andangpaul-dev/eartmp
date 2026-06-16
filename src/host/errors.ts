@@ -20,6 +20,7 @@ function classify(name: string, message: string): CoreErrorCode {
   if (/locked/i.test(message)) return "LOCKED";
 
   const VALIDATION_ERRORS = new Set([
+    "ValidationError",
     "RecordsError",
     "StructureError",
     "SettingsError",

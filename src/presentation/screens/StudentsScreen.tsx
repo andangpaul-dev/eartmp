@@ -260,8 +260,12 @@ function AdmitModal({
     { onSuccess: onDone },
   );
 
+  // Prefer per-field messages from the host (CoreError.fields); fall back to
+  // mapping a bare CONFLICT to the matric field (its only unique key).
   const matricError =
-    submit.error?.code === "CONFLICT" ? submit.error.message : undefined;
+    submit.error?.fields?.matricNumber ??
+    (submit.error?.code === "CONFLICT" ? submit.error.message : undefined);
+  const fullNameError = submit.error?.fields?.fullName;
   const valid =
     matricNumber && fullName && programmeId && levelId && fromSession;
 
@@ -278,7 +282,7 @@ function AdmitModal({
           onChange={(e) => setMatric(e.target.value)}
         />
       </Field>
-      <Field label="Full name">
+      <Field label="Full name" error={fullNameError}>
         <input
           className="input"
           value={fullName}
@@ -352,7 +356,7 @@ function AdmitModal({
         </select>
       </Field>
 
-      {submit.error && submit.error.code !== "CONFLICT" && (
+      {submit.error && !matricError && !fullNameError && (
         <div className="alert danger">{submit.error.message}</div>
       )}
 

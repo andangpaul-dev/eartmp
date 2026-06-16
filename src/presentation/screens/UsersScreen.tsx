@@ -224,6 +224,7 @@ function CreateUserModal({
     { onSuccess: onDone },
   );
   const complete = username && fullName && email && roleId && password;
+  const fieldErr = save.error?.fields;
 
   return (
     <Modal
@@ -231,7 +232,7 @@ function CreateUserModal({
       subtitle="The password is hashed (Argon2id); it's never stored in plaintext."
       onClose={onClose}
     >
-      <Field label="Username">
+      <Field label="Username" error={fieldErr?.username}>
         <input
           className="input"
           value={username}
@@ -253,7 +254,7 @@ function CreateUserModal({
           onChange={(e) => setEmail(e.target.value)}
         />
       </Field>
-      <Field label="Role">
+      <Field label="Role" error={fieldErr?.roleId}>
         <select
           className="select"
           aria-label="Role"
@@ -267,7 +268,10 @@ function CreateUserModal({
           ))}
         </select>
       </Field>
-      <Field label="Temporary password (min 8 chars)">
+      <Field
+        label="Temporary password (min 8 chars)"
+        error={fieldErr?.password}
+      >
         <input
           className="input"
           type="password"
@@ -275,7 +279,9 @@ function CreateUserModal({
           onChange={(e) => setPassword(e.target.value)}
         />
       </Field>
-      {save.error && <div className="alert danger">{save.error.message}</div>}
+      {save.error && !fieldErr && (
+        <div className="alert danger">{save.error.message}</div>
+      )}
       <div className="actions">
         <Button onClick={onClose}>Cancel</Button>
         <Button
@@ -312,7 +318,10 @@ function ResetPasswordModal({
       subtitle="Sets a new password (Argon2id). Share it securely; the user should change it."
       onClose={onClose}
     >
-      <Field label="New password (min 8 chars)">
+      <Field
+        label="New password (min 8 chars)"
+        error={save.error?.fields?.newPassword}
+      >
         <input
           className="input"
           type="password"
@@ -321,7 +330,9 @@ function ResetPasswordModal({
           onChange={(e) => setNewPassword(e.target.value)}
         />
       </Field>
-      {save.error && <div className="alert danger">{save.error.message}</div>}
+      {save.error && !save.error.fields && (
+        <div className="alert danger">{save.error.message}</div>
+      )}
       <div className="actions">
         <Button onClick={onClose}>Cancel</Button>
         <Button

@@ -42,7 +42,7 @@ describe("CreateStudent", () => {
     ).rejects.toBeInstanceOf(RecordsError);
     await expect(
       uc.execute({ matricNumber: "M/1", fullName: "Dup" }, admin),
-    ).rejects.toThrow(/already in use/);
+    ).rejects.toMatchObject({ fields: { matricNumber: /already in use/ } });
     await new DeleteStudent(students, audit).execute({ id: s.id }, admin);
     const again = await uc.execute(
       { matricNumber: "M/1", fullName: "Ada2" },
