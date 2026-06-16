@@ -95,6 +95,10 @@ export interface ExportedDoc {
 export interface KeyState {
   sealed: boolean;
 }
+export interface KeyStatus {
+  provisioned: boolean;
+  sealed: boolean;
+}
 
 // --- envelope + errors (mirrored from the host) ----------------------------
 
@@ -335,6 +339,12 @@ export interface CoreApi {
   keyState(input: Record<string, never>): Promise<KeyState>;
   unsealKey(input: { passphrase: string }): Promise<KeyState>;
   sealKey(input: Record<string, never>): Promise<KeyState>;
+  // admin key management (security.manage)
+  keyStatus(input: Record<string, never>): Promise<KeyStatus>;
+  provisionSigningKey(input: {
+    passphrase: string;
+    replaceExisting?: boolean;
+  }): Promise<{ provisioned: true }>;
 
   // graduation: evaluate (transparent criteria) → clear (irreversible)
   evaluateGraduation(input: { studentId: string }): Promise<EligibilityReport>;

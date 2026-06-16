@@ -43,10 +43,12 @@ describe("ImportStudentsScreen", () => {
     const input = screen.getByLabelText("Spreadsheet file");
     await user.upload(input, file);
 
+    // Wait for parseWorkbook to resolve (rows shown) before validating.
+    await screen.findByText(/rows parsed/i, undefined, { timeout: 5000 });
     const validateBtn = await screen.findByRole("button", {
       name: /validate/i,
     });
-    await waitFor(() => expect(validateBtn).toBeEnabled());
+    await waitFor(() => expect(validateBtn).toBeEnabled(), { timeout: 5000 });
     await user.click(validateBtn);
 
     await waitFor(() =>

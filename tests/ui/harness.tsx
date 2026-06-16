@@ -96,6 +96,8 @@ export function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
       contentType: "application/pdf",
     }),
     keyState: async () => ({ sealed: true }),
+    keyStatus: async () => ({ provisioned: true, sealed: true }),
+    provisionSigningKey: async () => ({ provisioned: true as const }),
     unsealKey: async () => ({ sealed: false }),
     sealKey: async () => ({ sealed: true }),
     evaluateGraduation: async () => ({ eligible: false, criteria: [] }),

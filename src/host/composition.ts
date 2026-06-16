@@ -144,6 +144,9 @@ import {
   SetDefaultAssessmentConfig,
 } from "../application/use-cases/config/ManageAssessmentConfigs";
 import { ChangeKeyPassphrase } from "../application/use-cases/security/ChangeKeyPassphrase";
+import { ProvisionSigningKey } from "../application/use-cases/security/ProvisionSigningKey";
+import { CryptoSigningKeyFactory } from "../infrastructure/crypto/CryptoSigningKeyFactory";
+import { SETTING_KEYS } from "../domain/settings/SettingsRegistry";
 import {
   CreateUser,
   DeactivateUser,
@@ -291,6 +294,13 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     settings,
     settingsRegistry,
     box,
+    audit,
+  );
+  const provisionSigningKey = new ProvisionSigningKey(
+    settings,
+    settingsRegistry,
+    box,
+    new CryptoSigningKeyFactory(),
     audit,
   );
 
@@ -552,6 +562,25 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
   registry.set("keyState", async (_i, s) => {
     requirePerm(s, "transcripts.read");
     return { sealed: signer === null };
+  });
+  // Admin key management (Feature 4): report whether a key exists + its seal
+  // state, and (re)provision a keypair under an admin-chosen passphrase.
+  registry.set("keyStatus", async (_i, s) => {
+    requirePerm(s, "security.manage");
+    const raw = await settings.getRaw(SETTING_KEYS.transcriptPublicKey);
+    const pub =
+      raw === null
+        ? (settingsRegistry.defaultValue(SETTING_KEYS.transcriptPublicKey) ??
+          "")
+        : settingsRegistry.deserialize(SETTING_KEYS.transcriptPublicKey, raw);
+    const provisioned = typeof pub === "string" && pub.length > 0;
+    return { provisioned, sealed: signer === null };
+  });
+  registry.set("provisionSigningKey", async (i, s) => {
+    const result = await authorize(provisionSigningKey, i as never, s);
+    // A freshly provisioned key must be re-unsealed before use this session.
+    signer = null;
+    return result;
   });
   registry.set("unsealKey", async (i, s) => {
     requirePerm(s, "transcripts.generate");

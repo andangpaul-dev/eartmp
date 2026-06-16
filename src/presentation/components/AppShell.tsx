@@ -21,6 +21,7 @@ export type Route =
   | "graduation"
   | "structure"
   | "config"
+  | "security"
   | "users"
   | "audit";
 
@@ -105,6 +106,13 @@ const NAV: NavDef[] = [
     group: "Administration",
   },
   {
+    key: "security",
+    label: "Security & keys",
+    icon: "key",
+    perm: "security.manage",
+    group: "Administration",
+  },
+  {
     key: "users",
     label: "Users & roles",
     icon: "admin",
@@ -132,6 +140,7 @@ const TITLES: Record<Route, { t: string; s: string }> = {
   graduation: { t: "Graduation", s: "Eligibility & clearance" },
   structure: { t: "Academic structure", s: "Faculties, departments & courses" },
   config: { t: "Configuration", s: "Grading, assessment & institution" },
+  security: { t: "Security & keys", s: "Signing key & passphrase" },
   users: { t: "Users & roles", s: "Access control" },
   audit: { t: "Audit log", s: "Append-only, tamper-evident" },
 };
