@@ -7,11 +7,8 @@
 import { SessionContext } from "../../../domain/value-objects/SessionContext";
 import { RecordsError } from "../../../domain/errors/records";
 import type { StudentEnrollment } from "../../../domain/entities/enrollment";
-import type {
-  StudentRepository,
-  StudentEnrollmentRepository,
-} from "../../../domain/repositories/records";
-import type { AuditLogPort } from "../../../domain/repositories";
+import type { UnitOfWork, TransactionalRepos } from "../../ports/UnitOfWork";
+import type { StudentEnrollmentRepository } from "../../../domain/repositories/records";
 import type { AuthorizedUseCase } from "../../authorization/AuthorizedUseCase";
 
 interface OpenEnrollmentInput {
@@ -21,20 +18,23 @@ interface OpenEnrollmentInput {
   fromSession: string;
 }
 
-/** Shared logic: close the current enrollment (if any), open a new current one. */
+/**
+ * Shared logic: close the current enrollment (if any), open a new current one,
+ * and mirror placement onto the student row. The three writes run against the
+ * transaction's repos so they commit together — a failure can never leave a
+ * student with no current enrollment or a stale placement mirror (F-1/F-22).
+ */
 async function openEnrollment(
-  enrollments: StudentEnrollmentRepository,
-  students: StudentRepository,
-  audit: AuditLogPort,
+  repos: TransactionalRepos,
   session: SessionContext,
   action: string,
   input: OpenEnrollmentInput,
 ): Promise<StudentEnrollment> {
-  const student = await students.findById(input.studentId);
+  const student = await repos.students.findById(input.studentId);
   if (!student) throw new RecordsError("Student not found.");
 
-  await enrollments.closeCurrent(input.studentId, input.fromSession);
-  const created = await enrollments.create({
+  await repos.enrollments.closeCurrent(input.studentId, input.fromSession);
+  const created = await repos.enrollments.create({
     studentId: input.studentId,
     programmeId: input.programmeId,
     levelId: input.levelId,
@@ -42,11 +42,11 @@ async function openEnrollment(
     isCurrent: true,
   });
   // Mirror placement onto the student row.
-  await students.update(input.studentId, {
+  await repos.students.update(input.studentId, {
     programmeId: input.programmeId,
     levelId: input.levelId,
   });
-  await audit.record({
+  await repos.audit.record({
     userId: session.actorId,
     action,
     entity: "StudentEnrollment",
@@ -67,19 +67,10 @@ export class EnrollStudent implements AuthorizedUseCase<
 > {
   readonly name = "EnrollStudent";
   readonly requiredPermissions = ["students.update"];
-  constructor(
-    private readonly enrollments: StudentEnrollmentRepository,
-    private readonly students: StudentRepository,
-    private readonly audit: AuditLogPort,
-  ) {}
+  constructor(private readonly uow: UnitOfWork) {}
   execute(input: EnrollStudentInput, session: SessionContext) {
-    return openEnrollment(
-      this.enrollments,
-      this.students,
-      this.audit,
-      session,
-      "ENROLL",
-      input,
+    return this.uow.run((repos) =>
+      openEnrollment(repos, session, "ENROLL", input),
     );
   }
 }
@@ -96,31 +87,22 @@ export class TransferStudent implements AuthorizedUseCase<
 > {
   readonly name = "TransferStudent";
   readonly requiredPermissions = ["students.update"];
-  constructor(
-    private readonly enrollments: StudentEnrollmentRepository,
-    private readonly students: StudentRepository,
-    private readonly audit: AuditLogPort,
-  ) {}
+  constructor(private readonly uow: UnitOfWork) {}
   async execute(input: TransferStudentInput, session: SessionContext) {
-    const current = await this.enrollments.findCurrent(input.studentId);
-    if (!current) {
-      throw new RecordsError(
-        "Cannot transfer a student with no current enrollment.",
-      );
-    }
-    return openEnrollment(
-      this.enrollments,
-      this.students,
-      this.audit,
-      session,
-      "TRANSFER",
-      {
+    return this.uow.run(async (repos) => {
+      const current = await repos.enrollments.findCurrent(input.studentId);
+      if (!current) {
+        throw new RecordsError(
+          "Cannot transfer a student with no current enrollment.",
+        );
+      }
+      return openEnrollment(repos, session, "TRANSFER", {
         studentId: input.studentId,
         programmeId: input.toProgrammeId,
         levelId: input.toLevelId,
         fromSession: input.asOfSession,
-      },
-    );
+      });
+    });
   }
 }
 
