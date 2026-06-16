@@ -18,6 +18,7 @@ export type Route =
   | "transcripts"
   | "records"
   | "graduation"
+  | "structure"
   | "config"
   | "users"
   | "audit";
@@ -82,6 +83,13 @@ const NAV: NavDef[] = [
     group: "Academic",
   },
   {
+    key: "structure",
+    label: "Structure",
+    icon: "dashboard",
+    perm: "structure.read",
+    group: "Administration",
+  },
+  {
     key: "config",
     label: "Configuration",
     icon: "config",
@@ -113,6 +121,7 @@ const TITLES: Record<Route, { t: string; s: string }> = {
   transcripts: { t: "Transcripts", s: "Generate, verify & export" },
   records: { t: "Records", s: "All treated transcripts" },
   graduation: { t: "Graduation", s: "Eligibility & clearance" },
+  structure: { t: "Academic structure", s: "Faculties, departments & courses" },
   config: { t: "Configuration", s: "Grading, assessment & institution" },
   users: { t: "Users & roles", s: "Access control" },
   audit: { t: "Audit log", s: "Append-only, tamper-evident" },
