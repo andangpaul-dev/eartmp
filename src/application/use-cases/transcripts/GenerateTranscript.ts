@@ -7,6 +7,7 @@
  */
 import { SessionContext } from "../../../domain/value-objects/SessionContext";
 import { TranscriptError } from "../../../domain/errors/transcript";
+import { UniqueConstraintError } from "../../../domain/errors/persistence";
 import { bindTemplate } from "../../../domain/services/TranscriptBinder";
 import type {
   TranscriptStore,
@@ -21,6 +22,11 @@ import type { AuthorizedUseCase } from "../../authorization/AuthorizedUseCase";
 import type { ReportDataAssembler } from "./BuildReportData";
 
 const DEFAULT_NUMBER_RULE = "TR-{year}-{seq:000000}";
+
+// Two operators generating at once can derive the same sequence; the DB's
+// UNIQUE(transcriptNumber) rejects the loser. Re-derive and retry a bounded
+// number of times before giving up.
+const MAX_NUMBER_ATTEMPTS = 5;
 
 export interface GenerateTranscriptInput {
   studentId: string;
@@ -59,16 +65,6 @@ export class GenerateTranscript implements AuthorizedUseCase<
     if (!template)
       throw new TranscriptError("No transcript template configured.");
 
-    const rule = institution.transcriptNumberRule ?? DEFAULT_NUMBER_RULE;
-    const transcriptNumber = await this.transcripts.nextTranscriptNumber(rule);
-    const issuedAt = this.clock.now().toISOString();
-
-    const reportData = await this.builder.assemble(
-      input.studentId,
-      transcriptNumber,
-      issuedAt,
-    );
-
     let layout: unknown;
     try {
       layout = JSON.parse(template.layout);
@@ -77,31 +73,63 @@ export class GenerateTranscript implements AuthorizedUseCase<
         `Template "${template.name}" has corrupt layout JSON.`,
       );
     }
-    const resolvedDoc = bindTemplate(layout, reportData);
 
-    // Snapshot freezes data + resolved layout so re-issue is exact (ADR-006).
-    const snapshot = JSON.stringify({
-      reportData,
-      resolvedDoc,
-      templateName: template.name,
-      templateVersion: template.version,
-      issuedAt,
-    });
-    const sig = this.signer.sign(snapshot);
-    const verificationHash = JSON.stringify({
-      signature: sig.signature,
-      keyId: sig.keyId,
-    });
+    const rule = institution.transcriptNumberRule ?? DEFAULT_NUMBER_RULE;
 
-    const created = await this.transcripts.create({
-      transcriptNumber,
-      studentId: input.studentId,
-      templateId: template.id,
-      type: input.type ?? "ACADEMIC_TRANSCRIPT",
-      snapshot,
-      verificationHash,
-      status: "DRAFT",
-    });
+    // The number is embedded in (and signed into) the snapshot, so a collision
+    // means re-deriving the number AND re-signing — hence the whole build is
+    // inside the retry loop.
+    let created: StoredTranscript | undefined;
+    let transcriptNumber = "";
+    for (let attempt = 1; ; attempt++) {
+      transcriptNumber = await this.transcripts.nextTranscriptNumber(rule);
+      const issuedAt = this.clock.now().toISOString();
+
+      const reportData = await this.builder.assemble(
+        input.studentId,
+        transcriptNumber,
+        issuedAt,
+      );
+      const resolvedDoc = bindTemplate(layout, reportData);
+
+      // Snapshot freezes data + resolved layout so re-issue is exact (ADR-006).
+      const snapshot = JSON.stringify({
+        reportData,
+        resolvedDoc,
+        templateName: template.name,
+        templateVersion: template.version,
+        issuedAt,
+      });
+      const sig = this.signer.sign(snapshot);
+      const verificationHash = JSON.stringify({
+        signature: sig.signature,
+        keyId: sig.keyId,
+      });
+
+      try {
+        created = await this.transcripts.create({
+          transcriptNumber,
+          studentId: input.studentId,
+          templateId: template.id,
+          type: input.type ?? "ACADEMIC_TRANSCRIPT",
+          snapshot,
+          verificationHash,
+          status: "DRAFT",
+        });
+        break;
+      } catch (e) {
+        const racedNumber =
+          e instanceof UniqueConstraintError &&
+          (e.field === "transcriptNumber" || e.field === undefined);
+        if (racedNumber && attempt < MAX_NUMBER_ATTEMPTS) continue;
+        if (racedNumber) {
+          throw new TranscriptError(
+            "Could not allocate a unique transcript number; please retry.",
+          );
+        }
+        throw e;
+      }
+    }
 
     await this.audit.record({
       userId: session.actorId,

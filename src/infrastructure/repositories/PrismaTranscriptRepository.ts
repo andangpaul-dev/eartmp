@@ -5,6 +5,7 @@
  */
 import type { PrismaClient } from "@prisma/client";
 import { expandNumberRule } from "../../domain/services/TranscriptNumber";
+import { UniqueConstraintError } from "../../domain/errors/persistence";
 import type {
   TranscriptStore,
   StoredTranscript,
@@ -44,8 +45,25 @@ export class PrismaTranscriptRepository implements TranscriptStore {
   constructor(private readonly db: PrismaClient) {}
 
   async create(data: NewTranscript): Promise<StoredTranscript> {
-    const r = await this.db.transcript.create({ data });
-    return toTranscript(r);
+    try {
+      const r = await this.db.transcript.create({ data });
+      return toTranscript(r);
+    } catch (e) {
+      // P2002 = unique-constraint violation. The transcriptNumber is the only
+      // user-facing unique key here; surface it typed so the caller can retry a
+      // raced number rather than failing the issue.
+      const meta = e as { code?: string; meta?: { target?: unknown } };
+      if (meta?.code === "P2002") {
+        const target = meta.meta?.target;
+        const field = Array.isArray(target)
+          ? String(target[0])
+          : typeof target === "string"
+            ? target
+            : undefined;
+        throw new UniqueConstraintError(field ?? "transcriptNumber");
+      }
+      throw e;
+    }
   }
   async findById(id: string): Promise<StoredTranscript | null> {
     const r = await this.db.transcript.findFirst({

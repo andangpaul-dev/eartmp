@@ -11,3 +11,21 @@ export class ConcurrencyError extends Error {
     this.name = "ConcurrencyError";
   }
 }
+
+/**
+ * Thrown when a write violates a UNIQUE constraint (a duplicate key). `field`
+ * names the conflicting column when the adapter can identify it, so callers can
+ * decide whether the collision is retryable (e.g. a raced transcript number) or
+ * a genuine duplicate to surface to the user.
+ */
+export class UniqueConstraintError extends Error {
+  constructor(
+    readonly field?: string,
+    message = field
+      ? `A record with this ${field} already exists.`
+      : "A record with this value already exists.",
+  ) {
+    super(message);
+    this.name = "UniqueConstraintError";
+  }
+}

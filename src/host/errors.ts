@@ -13,6 +13,7 @@ function classify(name: string, message: string): CoreErrorCode {
   if (name === "AuthorizationError") return "FORBIDDEN";
   if (name === "AuthenticationError") return "UNAUTHENTICATED";
   if (name === "ConcurrencyError") return "CONFLICT";
+  if (name === "UniqueConstraintError") return "CONFLICT";
   // Message-driven refinement for the domain error families.
   if (/already (in use|exists)/i.test(message)) return "CONFLICT";
   if (/not found/i.test(message)) return "NOT_FOUND";

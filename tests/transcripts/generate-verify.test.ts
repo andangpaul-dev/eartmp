@@ -8,6 +8,7 @@ import {
 } from "../../src/application/use-cases/transcripts/VerifyTranscript";
 import { CryptoSignatureService } from "../../src/infrastructure/crypto/CryptoSignatureService";
 import { TranscriptError } from "../../src/domain/errors/transcript";
+import { UniqueConstraintError } from "../../src/domain/errors/persistence";
 import { SessionContext } from "../../src/domain/value-objects/SessionContext";
 import { CapturingAudit } from "../auth/fakes";
 import type {
@@ -150,6 +151,35 @@ describe("GenerateTranscript", () => {
     expect(r.signatureValid).toBe(true); // signature checks out
     expect(r.valid).toBe(false); // …but a DRAFT isn't an official issue
     expect(r.status).toBe("DRAFT");
+  });
+
+  it("retries the number when a concurrent issue takes it (UNIQUE race)", async () => {
+    // Simulate a raced number: the first create collides, the retry succeeds.
+    let throwOnce = true;
+    const original = store.create.bind(store);
+    store.create = async (d: NewTranscript) => {
+      if (throwOnce) {
+        throwOnce = false;
+        throw new UniqueConstraintError("transcriptNumber");
+      }
+      return original(d);
+    };
+    const t = await generate.execute({ studentId: "s1" }, admin);
+    // First derived number was TR-2026-000001 (count 0 → seq 1); after the
+    // collision the loser re-derives — still seq 1 here since nothing persisted,
+    // but the point is the issue succeeds rather than throwing.
+    expect(t.status).toBe("DRAFT");
+    expect(t.transcriptNumber).toMatch(/^TR-2026-\d{6}$/);
+    expect(throwOnce).toBe(false);
+  });
+
+  it("gives up after repeated number collisions", async () => {
+    store.create = async () => {
+      throw new UniqueConstraintError("transcriptNumber");
+    };
+    await expect(
+      generate.execute({ studentId: "s1" }, admin),
+    ).rejects.toBeInstanceOf(TranscriptError);
   });
 
   it("verification FAILS when the snapshot is tampered", async () => {
