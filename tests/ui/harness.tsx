@@ -42,6 +42,12 @@ export function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
     listSemesters: async () => [],
     listCourses: async () => emptyPage,
     listSubDepartments: async () => [],
+    importStudents: async () => ({
+      totalRows: 0,
+      validRows: 0,
+      imported: 0,
+      errors: [],
+    }),
     createFaculty: async () => ({}) as never,
     updateFaculty: async () => ({}) as never,
     deleteFaculty: async () => {},

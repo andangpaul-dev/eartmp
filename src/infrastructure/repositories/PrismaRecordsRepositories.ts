@@ -40,6 +40,7 @@ type StudentRow = {
   nationality: string | null;
   facultyId: string | null;
   departmentId: string | null;
+  subDepartmentId: string | null;
   programmeId: string | null;
   levelId: string | null;
   admissionSession: string | null;
@@ -57,6 +58,7 @@ function toStudent(r: StudentRow): Student {
     nationality: r.nationality ?? undefined,
     facultyId: r.facultyId ?? undefined,
     departmentId: r.departmentId ?? undefined,
+    subDepartmentId: r.subDepartmentId ?? undefined,
     programmeId: r.programmeId ?? undefined,
     levelId: r.levelId ?? undefined,
     admissionSession: r.admissionSession ?? undefined,
@@ -80,6 +82,7 @@ export class PrismaStudentRepository
         nationality: data.nationality,
         facultyId: data.facultyId,
         departmentId: data.departmentId,
+        subDepartmentId: data.subDepartmentId,
         programmeId: data.programmeId,
         levelId: data.levelId,
         admissionSession: data.admissionSession,
@@ -109,6 +112,9 @@ export class PrismaStudentRepository
           : {}),
         ...(patch.departmentId !== undefined
           ? { departmentId: patch.departmentId }
+          : {}),
+        ...(patch.subDepartmentId !== undefined
+          ? { subDepartmentId: patch.subDepartmentId }
           : {}),
         ...(patch.programmeId !== undefined
           ? { programmeId: patch.programmeId }

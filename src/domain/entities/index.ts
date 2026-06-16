@@ -23,6 +23,7 @@ export interface Student {
   nationality?: string;
   programmeId?: string;
   departmentId?: string;
+  subDepartmentId?: string;
   facultyId?: string;
   levelId?: string;
   admissionSession?: string;

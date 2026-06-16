@@ -15,7 +15,7 @@ describe("AppShell navigation gating", () => {
     );
 
     expect(
-      await screen.findByRole("button", { name: /students/i }),
+      await screen.findByRole("button", { name: /^students$/i }),
     ).toBeEnabled();
     // No transcripts.read → the Transcripts nav item is locked.
     expect(screen.getByRole("button", { name: /transcripts/i })).toBeDisabled();

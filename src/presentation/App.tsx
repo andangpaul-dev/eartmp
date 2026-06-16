@@ -13,6 +13,7 @@ import { DashboardScreen } from "./screens/DashboardScreen";
 import { StudentsScreen } from "./screens/StudentsScreen";
 import { ResultsScreen } from "./screens/ResultsScreen";
 import { ImportScreen } from "./screens/ImportScreen";
+import { ImportStudentsScreen } from "./screens/ImportStudentsScreen";
 import { SummaryScreen } from "./screens/SummaryScreen";
 import { TranscriptsScreen } from "./screens/TranscriptsScreen";
 import { RecordsScreen } from "./screens/RecordsScreen";
@@ -28,6 +29,7 @@ const SCREEN_NAMES: Record<Route, string> = {
   students: "Students",
   results: "Results",
   import: "Import results",
+  importStudents: "Import students",
   summary: "Academic summary",
   transcripts: "Transcripts",
   records: "Records",
@@ -77,6 +79,8 @@ export function App() {
       <ResultsScreen />
     ) : route === "import" ? (
       <ImportScreen />
+    ) : route === "importStudents" ? (
+      <ImportStudentsScreen />
     ) : route === "summary" ? (
       <SummaryScreen />
     ) : route === "transcripts" ? (

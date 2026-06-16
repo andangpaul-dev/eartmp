@@ -106,6 +106,7 @@ import {
 } from "../application/use-cases/results/ManageResults";
 import { ProcessSemester } from "../application/use-cases/results/ProcessSemester";
 import { ImportResults } from "../application/use-cases/results/ImportResults";
+import { ImportStudents } from "../application/use-cases/records/ImportStudents";
 import { GetAcademicSummary } from "../application/use-cases/results/GetAcademicSummary";
 import { GraduationConfigService } from "../application/services/GraduationConfigService";
 import { BuildReportData } from "../application/use-cases/transcripts/BuildReportData";
@@ -242,6 +243,7 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
   const lockSemesterResults = new LockSemesterResults(results, audit);
   const unlockResult = new UnlockResult(results, audit);
   const importResults = new ImportResults(grading, uow);
+  const importStudents = new ImportStudents(uow);
 
   // --- M5: summary / transcripts / graduation / audit ---
   const institutions = new PrismaInstitutionRepository(db);
@@ -460,6 +462,7 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     ],
     ["unlockResult", (i, s) => authorize(unlockResult, i as never, s)],
     ["importResults", (i, s) => authorize(importResults, i as never, s)],
+    ["importStudents", (i, s) => authorize(importStudents, i as never, s)],
     ["getAcademicSummary", (i, s) => authorize(academic, i as never, s)],
     [
       "approveTranscript",

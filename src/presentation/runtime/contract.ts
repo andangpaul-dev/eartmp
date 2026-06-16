@@ -33,6 +33,7 @@ import type {
 } from "../../domain/value-objects/AssessmentStructure";
 import type { GpaSummary } from "../../domain/services/GpaEngine";
 import type { ImportReport } from "../../application/use-cases/results/ImportResults";
+import type { StudentImportReport } from "../../application/use-cases/records/ImportStudents";
 import type { RawRow } from "../../application/ports/SpreadsheetReaderPort";
 import type { AcademicSummary } from "../../application/use-cases/results/GetAcademicSummary";
 import type {
@@ -66,6 +67,7 @@ export type {
   Level,
   Course,
   ImportReport,
+  StudentImportReport,
   RawRow,
   AcademicSummary,
   StoredTranscript,
@@ -290,6 +292,16 @@ export interface CoreApi {
     rows: RawRow[];
     dryRun?: boolean;
   }): Promise<ImportReport>;
+  importStudents(input: {
+    rows: RawRow[];
+    facultyId?: string;
+    departmentId?: string;
+    subDepartmentId?: string;
+    programmeId?: string;
+    levelId?: string;
+    admissionSession?: string;
+    dryRun?: boolean;
+  }): Promise<StudentImportReport>;
 
   // academic summary (CGPA is a display-only aggregate, 2 dp)
   getAcademicSummary(input: { studentId: string }): Promise<AcademicSummary>;

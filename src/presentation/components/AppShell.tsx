@@ -14,6 +14,7 @@ export type Route =
   | "students"
   | "results"
   | "import"
+  | "importStudents"
   | "summary"
   | "transcripts"
   | "records"
@@ -52,6 +53,13 @@ const NAV: NavDef[] = [
     label: "Import results",
     icon: "results",
     perm: "results.import",
+    group: "Records",
+  },
+  {
+    key: "importStudents",
+    label: "Import students",
+    icon: "students",
+    perm: "students.create",
     group: "Records",
   },
   {
@@ -117,6 +125,7 @@ const TITLES: Record<Route, { t: string; s: string }> = {
   students: { t: "Students", s: "Records & admission" },
   results: { t: "Results", s: "Entry & processing" },
   import: { t: "Import results", s: "Spreadsheet import" },
+  importStudents: { t: "Import students", s: "Bulk upload by placement" },
   summary: { t: "Academic summary", s: "Semester GPA & cumulative CGPA" },
   transcripts: { t: "Transcripts", s: "Generate, verify & export" },
   records: { t: "Records", s: "All treated transcripts" },
