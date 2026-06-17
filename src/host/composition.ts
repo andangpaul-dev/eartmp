@@ -155,7 +155,10 @@ import {
 import { ChangeKeyPassphrase } from "../application/use-cases/security/ChangeKeyPassphrase";
 import { ProvisionSigningKey } from "../application/use-cases/security/ProvisionSigningKey";
 import { CryptoSigningKeyFactory } from "../infrastructure/crypto/CryptoSigningKeyFactory";
-import { SETTING_KEYS } from "../domain/settings/SettingsRegistry";
+import {
+  hasOwnSigningKey,
+  resolveSigningPublic,
+} from "../domain/settings/signingKeys";
 import {
   CreateUser,
   DeactivateUser,
@@ -362,14 +365,30 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     settingsRegistry,
     box,
   );
-  let signer: SignaturePort | null = null;
-  const requireSigner = (): SignaturePort => {
-    if (!signer)
+  // Phase F: per-institution unsealed signers, keyed by institutionId; the empty
+  // string is the shared global key. An institution with no dedicated key maps to
+  // the global slot, so single-institution deployments behave exactly as before.
+  const GLOBAL_SLOT = "";
+  const signers = new Map<string, SignaturePort>();
+  const slotFor = async (institutionId?: string | null): Promise<string> =>
+    institutionId && (await hasOwnSigningKey(settings, institutionId))
+      ? institutionId
+      : GLOBAL_SLOT;
+  // Sign path: resolve the unsealed signer for the issuing institution.
+  const resolveSigner = async (
+    institutionId: string,
+  ): Promise<SignaturePort> => {
+    const s = signers.get(await slotFor(institutionId));
+    if (!s)
       throw new TranscriptError(
         "Signing key is sealed — unseal it with the institution passphrase first.",
       );
-    return signer;
+    return s;
   };
+  // Verify path: a verify-only signer from the institution's public key (no unseal).
+  const resolveVerifier = (
+    institutionId?: string,
+  ): Promise<SignaturePort | null> => keyProvider.getVerifier(institutionId);
 
   const registry = new Map<string, Handler>([
     ["changePassword", (i, s) => authorize(changePassword, i as never, s)],
@@ -636,43 +655,55 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     authorize(new ListTranscriptRecords(transcripts), i as never, s),
   );
 
-  registry.set("keyState", async (_i, s) => {
+  // The seal state is per-institution (Phase F): the chip/Transcripts screen ask
+  // about the caller's institution (or an explicit one), falling back to the
+  // global key for unscoped operators / single-institution deployments.
+  registry.set("keyState", async (i, s) => {
     requirePerm(s, "transcripts.read");
-    return { sealed: signer === null };
+    const target =
+      (i as { institutionId?: string }).institutionId ?? s?.institutionId;
+    return { sealed: !signers.has(await slotFor(target)) };
   });
-  // Admin key management (Feature 4): report whether a key exists + its seal
-  // state, and (re)provision a keypair under an admin-chosen passphrase.
-  registry.set("keyStatus", async (_i, s) => {
+  // Admin key management (Feature 4 / Phase F): report whether a key exists + its
+  // seal state for the global key or a specific institution's dedicated key.
+  registry.set("keyStatus", async (i, s) => {
     requirePerm(s, "security.manage");
-    const raw = await settings.getRaw(SETTING_KEYS.transcriptPublicKey);
-    const pub =
-      raw === null
-        ? (settingsRegistry.defaultValue(SETTING_KEYS.transcriptPublicKey) ??
-          "")
-        : settingsRegistry.deserialize(SETTING_KEYS.transcriptPublicKey, raw);
-    const provisioned = typeof pub === "string" && pub.length > 0;
-    return { provisioned, sealed: signer === null };
+    const institutionId = (i as { institutionId?: string }).institutionId;
+    if (institutionId) {
+      const provisioned = await hasOwnSigningKey(settings, institutionId);
+      return {
+        provisioned,
+        sealed: !signers.has(await slotFor(institutionId)),
+        institutionId,
+      };
+    }
+    const pub = await resolveSigningPublic(settings, settingsRegistry);
+    return { provisioned: pub.length > 0, sealed: !signers.has(GLOBAL_SLOT) };
   });
   registry.set("provisionSigningKey", async (i, s) => {
     const result = await authorize(provisionSigningKey, i as never, s);
     // A freshly provisioned key must be re-unsealed before use this session.
-    signer = null;
+    const institutionId = (i as { institutionId?: string }).institutionId;
+    signers.delete(institutionId ?? GLOBAL_SLOT);
     return result;
   });
   registry.set("unsealKey", async (i, s) => {
     requirePerm(s, "transcripts.generate");
-    signer = await keyProvider.getSigner(
-      (i as { passphrase: string }).passphrase,
-    );
+    const input = i as { passphrase: string; institutionId?: string };
+    const slot = await slotFor(input.institutionId ?? s?.institutionId);
+    const useInst = slot === GLOBAL_SLOT ? undefined : slot;
+    signers.set(slot, await keyProvider.getSigner(input.passphrase, useInst));
     return { sealed: false };
   });
-  registry.set("sealKey", async (_i, s) => {
+  registry.set("sealKey", async (i, s) => {
     requirePerm(s, "transcripts.generate");
-    signer = null;
+    const target =
+      (i as { institutionId?: string }).institutionId ?? s?.institutionId;
+    signers.delete(await slotFor(target));
     return { sealed: true };
   });
 
-  // Generate + verify need the unsealed signer; approve/export do not. The
+  // Generate + verify resolve the issuing institution's key (Phase F). The
   // use-cases still run through `authorize` so the permission gate is uniform.
   registry.set("generateTranscript", (i, s) =>
     authorize(
@@ -681,7 +712,7 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
         templates,
         institutions,
         reportBuilder,
-        requireSigner(),
+        resolveSigner,
         clock,
         audit,
         students,
@@ -692,7 +723,7 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
   );
   registry.set("verifyTranscript", (i, s) =>
     authorize(
-      new VerifyTranscript(transcripts, requireSigner()),
+      new VerifyTranscript(transcripts, resolveVerifier),
       i as never,
       s,
     ),

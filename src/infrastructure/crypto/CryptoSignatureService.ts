@@ -22,12 +22,12 @@ import type {
 } from "../../application/ports/SignaturePort";
 
 export class CryptoSignatureService implements SignaturePort {
-  private readonly privateKey: KeyObject;
+  private readonly privateKey: KeyObject | null;
   private readonly publicKey: KeyObject;
   readonly keyId: string;
 
-  constructor(privateKeyPem: string, publicKeyPem: string) {
-    this.privateKey = createPrivateKey(privateKeyPem);
+  constructor(privateKeyPem: string | null, publicKeyPem: string) {
+    this.privateKey = privateKeyPem ? createPrivateKey(privateKeyPem) : null;
     this.publicKey = createPublicKey(publicKeyPem);
     this.keyId = createHash("sha256")
       .update(publicKeyPem)
@@ -35,7 +35,15 @@ export class CryptoSignatureService implements SignaturePort {
       .slice(0, 16);
   }
 
+  /** A verify-only signer (public key only) — for third-party verification. */
+  static verifier(publicKeyPem: string): CryptoSignatureService {
+    return new CryptoSignatureService(null, publicKeyPem);
+  }
+
   sign(data: string): SignatureResult {
+    if (!this.privateKey) {
+      throw new Error("This signer is verify-only (no private key).");
+    }
     const sig = cryptoSign(null, Buffer.from(data, "utf8"), this.privateKey);
     return { signature: sig.toString("base64"), keyId: this.keyId };
   }

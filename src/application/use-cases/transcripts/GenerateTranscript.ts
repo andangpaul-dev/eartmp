@@ -35,6 +35,13 @@ export interface GenerateTranscriptInput {
   templateId?: string;
 }
 
+/**
+ * Resolves the unsealed signer for the issuing institution (Phase F). The host
+ * holds the in-memory signer; an institution with no dedicated key resolves to
+ * the shared global signer. Throws if the relevant key is still sealed.
+ */
+export type SignerResolver = (institutionId: string) => Promise<SignaturePort>;
+
 export class GenerateTranscript implements AuthorizedUseCase<
   GenerateTranscriptInput,
   StoredTranscript
@@ -47,7 +54,7 @@ export class GenerateTranscript implements AuthorizedUseCase<
     private readonly templates: TranscriptTemplateRepository,
     private readonly institutions: InstitutionRepository,
     private readonly builder: ReportDataAssembler,
-    private readonly signer: SignaturePort,
+    private readonly resolveSigner: SignerResolver,
     private readonly clock: ClockPort,
     private readonly audit: AuditLogPort,
     private readonly students: StudentRepository,
@@ -84,6 +91,10 @@ export class GenerateTranscript implements AuthorizedUseCase<
       );
     }
 
+    // Sign with the issuing institution's key (Phase F); the host throws if its
+    // key is still sealed, before any number is allocated.
+    const signer = await this.resolveSigner(institution.id);
+
     const rule = institution.transcriptNumberRule ?? DEFAULT_NUMBER_RULE;
 
     // The number is embedded in (and signed into) the snapshot, so a collision
@@ -113,7 +124,7 @@ export class GenerateTranscript implements AuthorizedUseCase<
         templateVersion: template.version,
         issuedAt,
       });
-      const sig = this.signer.sign(snapshot);
+      const sig = signer.sign(snapshot);
       const verificationHash = JSON.stringify({
         signature: sig.signature,
         keyId: sig.keyId,

@@ -162,12 +162,12 @@ beforeEach(() => {
     templates,
     institutions,
     assembler,
-    signer,
+    async () => signer,
     clock,
     audit,
     students,
   );
-  verify = new VerifyTranscript(store, signer);
+  verify = new VerifyTranscript(store, async () => signer);
 });
 
 describe("GenerateTranscript", () => {
@@ -284,10 +284,10 @@ describe("Lock / Revoke + verify depth", () => {
       other.privateKeyPem,
       other.publicKeyPem,
     );
-    const r = await new VerifyTranscript(store, otherSigner).execute(
-      { transcriptId: t.id },
-      admin,
-    );
+    const r = await new VerifyTranscript(
+      store,
+      async () => otherSigner,
+    ).execute({ transcriptId: t.id }, admin);
     expect(r.keyMatches).toBe(false);
     expect(r.valid).toBe(false);
   });

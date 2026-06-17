@@ -5,6 +5,11 @@
  * and rotate the operator passphrase. Gated security.manage. The raw key and
  * passphrases never leave the host; this screen only sends passphrases to seal/
  * open. A lost passphrase is unrecoverable.
+ *
+ * Phase F: a scope selector chooses the DEFAULT (global) key or an institution's
+ * DEDICATED key. An institution with no dedicated key signs with the default
+ * key; provisioning one here makes it sign with its own. Single-institution
+ * deployments simply leave the scope on “Default”.
  */
 import { useState } from "react";
 import { useCore } from "../runtime/CoreProvider";
@@ -13,7 +18,19 @@ import { Card, Button, Field, Badge, Toast, Icon } from "../components/ui";
 
 export function SecurityScreen() {
   const core = useCore();
-  const status = useAsync(() => core.keyStatus({}), []);
+  // Scope: "" = the default/global key; otherwise an institution's dedicated key.
+  const [scopeId, setScopeId] = useState("");
+  const institutionId = scopeId || undefined;
+  // Best-effort: the operator may lack institution.manage — then only the
+  // default key is manageable and the selector stays hidden.
+  const insts = useAsync(() => core.listInstitutions({}), []);
+  const institutions = insts.data ?? [];
+
+  const status = useAsync(
+    () => core.keyStatus(institutionId ? { institutionId } : {}),
+    [scopeId],
+  );
+  // For a specific institution, "provisioned" means it owns a DEDICATED key.
   const provisioned = status.data?.provisioned ?? false;
   const sealed = status.data?.sealed ?? true;
   const [toast, setToast] = useState<string | null>(null);
@@ -30,6 +47,7 @@ export function SecurityScreen() {
     () =>
       core.provisionSigningKey({
         passphrase: pass,
+        ...(institutionId ? { institutionId } : {}),
         ...(provisioned ? { replaceExisting: true } : {}),
       }),
     {
@@ -58,6 +76,7 @@ export function SecurityScreen() {
       core.changeKeyPassphrase({
         oldPassphrase: oldPass,
         newPassphrase: newPass,
+        ...(institutionId ? { institutionId } : {}),
       }),
     {
       onSuccess: () => {
@@ -74,26 +93,47 @@ export function SecurityScreen() {
   return (
     <div className="stack">
       <Card title="Transcript signing key">
+        {institutions.length > 0 && (
+          <Field label="Key scope">
+            <select
+              className="input"
+              aria-label="Signing key scope"
+              value={scopeId}
+              onChange={(e) => setScopeId(e.target.value)}
+            >
+              <option value="">Default (global) key</option>
+              {institutions.map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.name} — dedicated key
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
         {status.loading ? (
           <div className="muted">Loading…</div>
         ) : (
-          <div className="row" style={{ gap: 10 }}>
+          <div className="row" style={{ gap: 10, marginTop: 8 }}>
             {provisioned ? (
               <Badge tone="success">
                 <Icon name="key" size={13} /> Provisioned
               </Badge>
             ) : (
-              <Badge tone="danger">Not provisioned</Badge>
+              <Badge tone={institutionId ? "info" : "danger"}>
+                {institutionId ? "Uses default key" : "Not provisioned"}
+              </Badge>
             )}
-            <Badge tone={sealed ? "warn" : "info"}>
-              {sealed ? "Sealed" : "Unsealed this session"}
-            </Badge>
+            {provisioned && (
+              <Badge tone={sealed ? "warn" : "info"}>
+                {sealed ? "Sealed" : "Unsealed this session"}
+              </Badge>
+            )}
           </div>
         )}
         <div className="muted" style={{ marginTop: 10, fontSize: 12.5 }}>
-          The private key is sealed at rest and unsealed in memory for the
-          session from the Transcripts screen. A lost passphrase is
-          unrecoverable.
+          {institutionId
+            ? "A dedicated key makes this institution sign its own transcripts. Without one it signs with the default key."
+            : "The private key is sealed at rest and unsealed in memory for the session from the Transcripts screen. A lost passphrase is unrecoverable."}
         </div>
       </Card>
 

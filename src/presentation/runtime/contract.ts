@@ -99,6 +99,8 @@ export interface KeyState {
 export interface KeyStatus {
   provisioned: boolean;
   sealed: boolean;
+  /** Present when the status is for a specific institution's dedicated key. */
+  institutionId?: string;
 }
 
 // --- envelope + errors (mirrored from the host) ----------------------------
@@ -340,15 +342,21 @@ export interface CoreApi {
     preview?: boolean;
   }): Promise<ExportedDoc>;
 
-  // sealed signing-key lifecycle (lost passphrase is unrecoverable)
-  keyState(input: Record<string, never>): Promise<KeyState>;
-  unsealKey(input: { passphrase: string }): Promise<KeyState>;
-  sealKey(input: Record<string, never>): Promise<KeyState>;
+  // sealed signing-key lifecycle (lost passphrase is unrecoverable).
+  // institutionId targets a dedicated per-institution key (Phase F); omitting it
+  // uses the caller's institution / the shared global key.
+  keyState(input: { institutionId?: string }): Promise<KeyState>;
+  unsealKey(input: {
+    passphrase: string;
+    institutionId?: string;
+  }): Promise<KeyState>;
+  sealKey(input: { institutionId?: string }): Promise<KeyState>;
   // admin key management (security.manage)
-  keyStatus(input: Record<string, never>): Promise<KeyStatus>;
+  keyStatus(input: { institutionId?: string }): Promise<KeyStatus>;
   provisionSigningKey(input: {
     passphrase: string;
     replaceExisting?: boolean;
+    institutionId?: string;
   }): Promise<{ provisioned: true }>;
 
   // graduation: evaluate (transparent criteria) → clear (irreversible)
@@ -396,6 +404,7 @@ export interface CoreApi {
   changeKeyPassphrase(input: {
     oldPassphrase: string;
     newPassphrase: string;
+    institutionId?: string;
   }): Promise<void>;
 
   // users & roles administration

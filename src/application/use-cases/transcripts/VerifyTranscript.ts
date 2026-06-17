@@ -23,6 +23,16 @@ import type { AuthorizedUseCase } from "../../authorization/AuthorizedUseCase";
 export interface VerifyTranscriptInput {
   transcriptId: string;
 }
+
+/**
+ * Resolves a verify-only signer for the transcript's issuing institution (Phase
+ * F). Uses only the public key (no passphrase / unseal). Returns null when no
+ * key exists for that institution.
+ */
+export type VerifierResolver = (
+  institutionId?: string,
+) => Promise<SignaturePort | null>;
+
 export interface VerifyResult {
   /** True only if the signature verifies AND the transcript is a current,
    *  non-revoked issue signed by the current key. */
@@ -45,7 +55,7 @@ export class VerifyTranscript implements AuthorizedUseCase<
 
   constructor(
     private readonly transcripts: TranscriptStore,
-    private readonly signer: SignaturePort,
+    private readonly resolveVerifier: VerifierResolver,
   ) {}
 
   async execute(
@@ -75,13 +85,23 @@ export class VerifyTranscript implements AuthorizedUseCase<
       };
     }
 
-    const signatureValid = this.signer.verify(t.snapshot, parsed.signature);
+    // Verify against the issuing institution's public key (Phase F). No key
+    // for that institution → nothing can verify.
+    const signer = await this.resolveVerifier(t.institutionId ?? undefined);
+    if (!signer) {
+      return {
+        ...base,
+        valid: false,
+        signatureValid: false,
+        keyMatches: false,
+      };
+    }
+
+    const signatureValid = signer.verify(t.snapshot, parsed.signature);
     // If the current key id is known, the signing key must match (detects a
     // rotated/replaced key). Unknown current key id → don't penalize.
     const keyMatches =
-      this.signer.keyId && parsed.keyId
-        ? parsed.keyId === this.signer.keyId
-        : true;
+      signer.keyId && parsed.keyId ? parsed.keyId === signer.keyId : true;
     // A signature can be valid yet the transcript not be a trustworthy issue:
     // only APPROVED/LOCKED, non-revoked, current-key transcripts are "valid".
     const issued = t.status === "APPROVED" || t.status === "LOCKED";
