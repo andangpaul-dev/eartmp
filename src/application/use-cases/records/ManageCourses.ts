@@ -54,9 +54,9 @@ export class CreateCourse implements AuthorizedUseCase<
     if (!COURSE_TYPES.includes(input.courseType)) {
       throw new RecordsError(`Invalid course type "${input.courseType}".`);
     }
-    if (await this.courses.findByCode(input.code)) {
-      throw new RecordsError(`Course code "${input.code}" is already in use.`);
-    }
+    // Uniqueness is enforced per institution at the DB level (the repo maps a
+    // duplicate to UniqueConstraintError → CONFLICT). No global pre-check, so a
+    // code may repeat across institutions.
     const created = await this.courses.create(input);
     await this.audit.record({
       userId: session.actorId,

@@ -64,8 +64,16 @@ export class FakeFacultyRepo implements FacultyRepository {
   async findById(id: string) {
     return this.s.get(id);
   }
-  async findByCode(code: string) {
-    return this.s.live().find((f) => f.code === code) ?? null;
+  async findByCode(code: string, institutionId?: string) {
+    return (
+      this.s
+        .live()
+        .find(
+          (f) =>
+            f.code === code &&
+            (institutionId === undefined || f.institutionId === institutionId),
+        ) ?? null
+    );
   }
   async list() {
     return this.s.live();
@@ -92,8 +100,16 @@ export class FakeDepartmentRepo implements DepartmentRepository {
   async findById(id: string) {
     return this.s.get(id);
   }
-  async findByCode(code: string) {
-    return this.s.live().find((d) => d.code === code) ?? null;
+  async findByCode(code: string, institutionId?: string) {
+    return (
+      this.s
+        .live()
+        .find(
+          (d) =>
+            d.code === code &&
+            (institutionId === undefined || d.institutionId === institutionId),
+        ) ?? null
+    );
   }
   async listByFaculty(facultyId: string) {
     return this.s.live().filter((d) => d.facultyId === facultyId);
@@ -126,8 +142,16 @@ export class FakeSubDepartmentRepo implements SubDepartmentRepository {
   async findById(id: string) {
     return this.s.get(id);
   }
-  async findByCode(code: string) {
-    return this.s.live().find((sd) => sd.code === code) ?? null;
+  async findByCode(code: string, institutionId?: string) {
+    return (
+      this.s
+        .live()
+        .find(
+          (sd) =>
+            sd.code === code &&
+            (institutionId === undefined || sd.institutionId === institutionId),
+        ) ?? null
+    );
   }
   async listByDepartment(departmentId: string) {
     return this.s.live().filter((sd) => sd.departmentId === departmentId);
@@ -154,8 +178,16 @@ export class FakeProgrammeRepo implements ProgrammeRepository {
   async findById(id: string) {
     return this.s.get(id);
   }
-  async findByCode(code: string) {
-    return this.s.live().find((p) => p.code === code) ?? null;
+  async findByCode(code: string, institutionId?: string) {
+    return (
+      this.s
+        .live()
+        .find(
+          (p) =>
+            p.code === code &&
+            (institutionId === undefined || p.institutionId === institutionId),
+        ) ?? null
+    );
   }
   async listByDepartment(departmentId: string) {
     return this.s.live().filter((p) => p.departmentId === departmentId);

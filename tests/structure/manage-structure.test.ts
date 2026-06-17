@@ -164,6 +164,26 @@ describe("ListFaculties", () => {
   });
 });
 
+describe("per-institution code uniqueness (Phase C)", () => {
+  it("allows the same faculty code in different institutions, rejects within one", async () => {
+    const uc = new CreateFaculty(faculties, audit);
+    await uc.execute(
+      { name: "Sci A", code: "SCI", institutionId: "inst-1" },
+      admin,
+    );
+    // Same code, different institution — allowed.
+    const b = await uc.execute(
+      { name: "Sci B", code: "SCI", institutionId: "inst-2" },
+      admin,
+    );
+    expect(b.institutionId).toBe("inst-2");
+    // Same code, same institution — rejected.
+    await expect(
+      uc.execute({ name: "Dup", code: "SCI", institutionId: "inst-1" }, admin),
+    ).rejects.toThrow(/already in use/);
+  });
+});
+
 describe("institution scope inheritance (Phase A)", () => {
   it("departments, sub-departments and programmes inherit the faculty's institution", async () => {
     const f = await new CreateFaculty(faculties, audit).execute(

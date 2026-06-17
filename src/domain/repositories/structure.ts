@@ -18,7 +18,7 @@ export interface FacultyRepository {
   update(id: string, patch: Partial<Omit<Faculty, "id">>): Promise<Faculty>;
   softDelete(id: string): Promise<void>;
   findById(id: string): Promise<Faculty | null>;
-  findByCode(code: string): Promise<Faculty | null>;
+  findByCode(code: string, institutionId?: string): Promise<Faculty | null>;
   list(): Promise<Faculty[]>;
   hasLiveDepartments(facultyId: string): Promise<boolean>;
 }
@@ -31,7 +31,7 @@ export interface DepartmentRepository {
   ): Promise<Department>;
   softDelete(id: string): Promise<void>;
   findById(id: string): Promise<Department | null>;
-  findByCode(code: string): Promise<Department | null>;
+  findByCode(code: string, institutionId?: string): Promise<Department | null>;
   listByFaculty(facultyId: string): Promise<Department[]>;
   hasLiveProgrammes(departmentId: string): Promise<boolean>;
   hasLiveSubDepartments(departmentId: string): Promise<boolean>;
@@ -45,7 +45,10 @@ export interface SubDepartmentRepository {
   ): Promise<SubDepartment>;
   softDelete(id: string): Promise<void>;
   findById(id: string): Promise<SubDepartment | null>;
-  findByCode(code: string): Promise<SubDepartment | null>;
+  findByCode(
+    code: string,
+    institutionId?: string,
+  ): Promise<SubDepartment | null>;
   listByDepartment(departmentId: string): Promise<SubDepartment[]>;
   /** True if any live programme/course/student still references this sub-dept. */
   hasLiveChildren(subDepartmentId: string): Promise<boolean>;
@@ -56,7 +59,7 @@ export interface ProgrammeRepository {
   update(id: string, patch: Partial<Omit<Programme, "id">>): Promise<Programme>;
   softDelete(id: string): Promise<void>;
   findById(id: string): Promise<Programme | null>;
-  findByCode(code: string): Promise<Programme | null>;
+  findByCode(code: string, institutionId?: string): Promise<Programme | null>;
   listByDepartment(departmentId: string): Promise<Programme[]>;
   hasLiveLevels(programmeId: string): Promise<boolean>;
 }

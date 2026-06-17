@@ -14,7 +14,10 @@ import type {
   ResultRecord,
 } from "../../domain/entities";
 import type { StudentEnrollment } from "../../domain/entities/enrollment";
-import { ConcurrencyError } from "../../domain/errors/persistence";
+import {
+  ConcurrencyError,
+  UniqueConstraintError,
+} from "../../domain/errors/persistence";
 import type {
   StudentRepository,
   CourseRepository,
@@ -312,21 +315,29 @@ export class PrismaCourseRepository implements CourseRepository {
   async create(data: Omit<Course, "id">): Promise<Course> {
     const institutionId =
       data.institutionId ?? (await resolveInstitutionId(this.db, data));
-    const r = await this.db.course.create({
-      data: {
-        code: data.code,
-        title: data.title,
-        creditValue: data.creditValue,
-        courseType: data.courseType,
-        departmentId: data.departmentId,
-        subDepartmentId: data.subDepartmentId,
-        programmeId: data.programmeId,
-        levelId: data.levelId,
-        institutionId,
-        semesterRank: data.semesterRank,
-      },
-    });
-    return toCourse(r);
+    try {
+      const r = await this.db.course.create({
+        data: {
+          code: data.code,
+          title: data.title,
+          creditValue: data.creditValue,
+          courseType: data.courseType,
+          departmentId: data.departmentId,
+          subDepartmentId: data.subDepartmentId,
+          programmeId: data.programmeId,
+          levelId: data.levelId,
+          institutionId,
+          semesterRank: data.semesterRank,
+        },
+      });
+      return toCourse(r);
+    } catch (e) {
+      // P2002 on the per-institution (institutionId, code) unique index.
+      if ((e as { code?: string }).code === "P2002") {
+        throw new UniqueConstraintError("code");
+      }
+      throw e;
+    }
   }
 
   async update(id: string, patch: Partial<Omit<Course, "id">>) {

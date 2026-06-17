@@ -75,8 +75,13 @@ export class PrismaFacultyRepository implements FacultyRepository {
     const r = await this.db.faculty.findFirst({ where: { id, ...live } });
     return r ? toFaculty(r) : null;
   }
-  async findByCode(code: string): Promise<Faculty | null> {
-    const r = await this.db.faculty.findFirst({ where: { code, ...live } });
+  async findByCode(
+    code: string,
+    institutionId?: string,
+  ): Promise<Faculty | null> {
+    const r = await this.db.faculty.findFirst({
+      where: { code, ...(institutionId ? { institutionId } : {}), ...live },
+    });
     return r ? toFaculty(r) : null;
   }
   async list(): Promise<Faculty[]> {
@@ -128,8 +133,10 @@ export class PrismaDepartmentRepository implements DepartmentRepository {
     const r = await this.db.department.findFirst({ where: { id, ...live } });
     return r ? this.map(r) : null;
   }
-  async findByCode(code: string) {
-    const r = await this.db.department.findFirst({ where: { code, ...live } });
+  async findByCode(code: string, institutionId?: string) {
+    const r = await this.db.department.findFirst({
+      where: { code, ...(institutionId ? { institutionId } : {}), ...live },
+    });
     return r ? this.map(r) : null;
   }
   async listByFaculty(facultyId: string) {
@@ -188,9 +195,9 @@ export class PrismaSubDepartmentRepository implements SubDepartmentRepository {
     const r = await this.db.subDepartment.findFirst({ where: { id, ...live } });
     return r ? this.map(r) : null;
   }
-  async findByCode(code: string) {
+  async findByCode(code: string, institutionId?: string) {
     const r = await this.db.subDepartment.findFirst({
-      where: { code, ...live },
+      where: { code, ...(institutionId ? { institutionId } : {}), ...live },
     });
     return r ? this.map(r) : null;
   }
@@ -252,8 +259,10 @@ export class PrismaProgrammeRepository implements ProgrammeRepository {
     const r = await this.db.programme.findFirst({ where: { id, ...live } });
     return r ? this.map(r) : null;
   }
-  async findByCode(code: string) {
-    const r = await this.db.programme.findFirst({ where: { code, ...live } });
+  async findByCode(code: string, institutionId?: string) {
+    const r = await this.db.programme.findFirst({
+      where: { code, ...(institutionId ? { institutionId } : {}), ...live },
+    });
     return r ? this.map(r) : null;
   }
   async listByDepartment(departmentId: string) {

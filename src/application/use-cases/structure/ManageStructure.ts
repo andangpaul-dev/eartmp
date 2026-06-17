@@ -63,7 +63,8 @@ export class CreateFaculty implements AuthorizedUseCase<
   async execute(input: CreateFacultyInput, session: SessionContext) {
     StructureRules.requireNonEmpty(input.name, "Faculty name");
     StructureRules.requireNonEmpty(input.code, "Faculty code");
-    if (await this.faculties.findByCode(input.code)) {
+    // Codes are unique per institution (Phase C).
+    if (await this.faculties.findByCode(input.code, input.institutionId)) {
       throw new StructureError(`Faculty code "${input.code}" already in use.`);
     }
     const created = await this.faculties.create({
@@ -144,7 +145,7 @@ export class CreateDepartment implements AuthorizedUseCase<
     if (!faculty) {
       throw new StructureError("Parent faculty does not exist or is deleted.");
     }
-    if (await this.departments.findByCode(input.code)) {
+    if (await this.departments.findByCode(input.code, faculty.institutionId)) {
       throw new StructureError(
         `Department code "${input.code}" already in use.`,
       );
@@ -242,7 +243,9 @@ export class CreateProgramme implements AuthorizedUseCase<
         "Parent department does not exist or is deleted.",
       );
     }
-    if (await this.programmes.findByCode(input.code)) {
+    if (
+      await this.programmes.findByCode(input.code, department.institutionId)
+    ) {
       throw new StructureError(
         `Programme code "${input.code}" already in use.`,
       );
@@ -363,11 +366,17 @@ export class ListLevels implements AuthorizedUseCase<ListLevelsInput, Level[]> {
 // --- Rename / edit (management completeness) --------------------------------
 
 async function findByCodeClash(
-  repo: { findByCode(code: string): Promise<{ id: string } | null> },
+  repo: {
+    findByCode(
+      code: string,
+      institutionId?: string,
+    ): Promise<{ id: string } | null>;
+  },
   code: string,
   selfId: string,
+  institutionId?: string,
 ): Promise<boolean> {
-  const clash = await repo.findByCode(code);
+  const clash = await repo.findByCode(code, institutionId);
   return clash !== null && clash.id !== selfId;
 }
 
@@ -392,7 +401,14 @@ export class UpdateFaculty implements AuthorizedUseCase<
       StructureRules.requireNonEmpty(input.patch.name, "Faculty name");
     if (input.patch.code !== undefined) {
       StructureRules.requireNonEmpty(input.patch.code, "Faculty code");
-      if (await findByCodeClash(this.faculties, input.patch.code, input.id))
+      if (
+        await findByCodeClash(
+          this.faculties,
+          input.patch.code,
+          input.id,
+          before.institutionId,
+        )
+      )
         throw new StructureError(
           `Faculty code "${input.patch.code}" already in use.`,
         );
@@ -424,7 +440,14 @@ export class UpdateDepartment implements AuthorizedUseCase<
       StructureRules.requireNonEmpty(input.patch.name, "Department name");
     if (input.patch.code !== undefined) {
       StructureRules.requireNonEmpty(input.patch.code, "Department code");
-      if (await findByCodeClash(this.departments, input.patch.code, input.id))
+      if (
+        await findByCodeClash(
+          this.departments,
+          input.patch.code,
+          input.id,
+          before.institutionId,
+        )
+      )
         throw new StructureError(
           `Department code "${input.patch.code}" already in use.`,
         );
@@ -469,7 +492,14 @@ export class UpdateProgramme implements AuthorizedUseCase<
       StructureRules.requireNonEmpty(input.patch.name, "Programme name");
     if (input.patch.code !== undefined) {
       StructureRules.requireNonEmpty(input.patch.code, "Programme code");
-      if (await findByCodeClash(this.programmes, input.patch.code, input.id))
+      if (
+        await findByCodeClash(
+          this.programmes,
+          input.patch.code,
+          input.id,
+          before.institutionId,
+        )
+      )
         throw new StructureError(
           `Programme code "${input.patch.code}" already in use.`,
         );

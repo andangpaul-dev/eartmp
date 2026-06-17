@@ -50,7 +50,7 @@ describe("CreateCourse", () => {
         { code: "CS101", title: "Dup", creditValue: 3, courseType: "CORE" },
         admin,
       ),
-    ).rejects.toThrow(/already in use/);
+    ).rejects.toThrow(/already exists/);
   });
 
   it("is denied without courses.create", async () => {

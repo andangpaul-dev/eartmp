@@ -43,7 +43,9 @@ export class CreateSubDepartment implements AuthorizedUseCase<
         "Parent department does not exist or is deleted.",
       );
     }
-    if (await this.subDepartments.findByCode(input.code)) {
+    if (
+      await this.subDepartments.findByCode(input.code, department.institutionId)
+    ) {
       throw new StructureError(
         `Sub-department code "${input.code}" already in use.`,
       );
@@ -89,7 +91,10 @@ export class UpdateSubDepartment implements AuthorizedUseCase<
     }
     if (input.patch.code !== undefined) {
       StructureRules.requireNonEmpty(input.patch.code, "Sub-department code");
-      const clash = await this.subDepartments.findByCode(input.patch.code);
+      const clash = await this.subDepartments.findByCode(
+        input.patch.code,
+        before.institutionId,
+      );
       if (clash && clash.id !== input.id) {
         throw new StructureError(
           `Sub-department code "${input.patch.code}" already in use.`,

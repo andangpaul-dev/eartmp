@@ -4,6 +4,7 @@
  */
 import type { Student, Course } from "../../src/domain/entities";
 import type { StudentEnrollment } from "../../src/domain/entities/enrollment";
+import { UniqueConstraintError } from "../../src/domain/errors/persistence";
 import type {
   StudentRepository,
   CourseRepository,
@@ -71,6 +72,13 @@ export class FakeCourseRepo implements CourseRepository {
     return [...this.byId.values()].filter((c) => !this.deleted.has(c.id));
   }
   async create(data: Omit<Course, "id">): Promise<Course> {
+    // Mimic the per-institution (institutionId, code) unique index.
+    const dup = this.live().find(
+      (c) =>
+        c.code === data.code &&
+        (c.institutionId ?? null) === (data.institutionId ?? null),
+    );
+    if (dup) throw new UniqueConstraintError("code");
     const c: Course = { id: `co${++this.seq}`, ...data };
     this.byId.set(c.id, c);
     return { ...c };
