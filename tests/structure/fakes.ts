@@ -75,8 +75,12 @@ export class FakeFacultyRepo implements FacultyRepository {
         ) ?? null
     );
   }
-  async list() {
-    return this.s.live();
+  async list(institutionId?: string) {
+    return this.s
+      .live()
+      .filter(
+        (f) => institutionId === undefined || f.institutionId === institutionId,
+      );
   }
   async hasLiveDepartments(facultyId: string) {
     return (this.departments?.s.live() ?? []).some(

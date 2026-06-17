@@ -117,6 +117,9 @@ export class PrismaTranscriptRepository implements TranscriptStore {
       where: {
         deletedAt: null,
         ...(filter?.status ? { status: filter.status } : {}),
+        ...(filter?.institutionId
+          ? { institutionId: filter.institutionId }
+          : {}),
       },
       orderBy: { generatedAt: "desc" },
       include: {

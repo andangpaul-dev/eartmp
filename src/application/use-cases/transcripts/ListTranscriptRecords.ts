@@ -27,11 +27,13 @@ export class ListTranscriptRecords implements AuthorizedUseCase<
 
   async execute(
     input: ListTranscriptRecordsInput,
-    _session: SessionContext,
+    session: SessionContext,
   ): Promise<TranscriptRecord[]> {
-    const records = await this.transcripts.listRecords(
-      input.status ? { status: input.status } : undefined,
-    );
+    // Tenant isolation: a scoped operator only sees their institution's records.
+    const records = await this.transcripts.listRecords({
+      ...(input.status ? { status: input.status } : {}),
+      ...(session.isGlobal ? {} : { institutionId: session.institutionId }),
+    });
     const q = input.search?.trim().toLowerCase();
     if (!q) return records;
     return records.filter(

@@ -19,7 +19,8 @@ export interface FacultyRepository {
   softDelete(id: string): Promise<void>;
   findById(id: string): Promise<Faculty | null>;
   findByCode(code: string, institutionId?: string): Promise<Faculty | null>;
-  list(): Promise<Faculty[]>;
+  /** All live faculties, optionally scoped to one institution (tenant isolation). */
+  list(institutionId?: string): Promise<Faculty[]>;
   hasLiveDepartments(facultyId: string): Promise<boolean>;
 }
 

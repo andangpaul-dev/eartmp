@@ -25,8 +25,12 @@ export class ListInstitutions implements AuthorizedUseCase<
   readonly name = "ListInstitutions";
   readonly requiredPermissions = READ;
   constructor(private readonly institutions: InstitutionRepository) {}
-  async execute(_input: Record<string, never>, _session: SessionContext) {
-    return this.institutions.list();
+  async execute(_input: Record<string, never>, session: SessionContext) {
+    const all = await this.institutions.list();
+    // Tenant isolation: a scoped operator only sees their own institution.
+    return session.isGlobal
+      ? all
+      : all.filter((i) => i.id === session.institutionId);
   }
 }
 

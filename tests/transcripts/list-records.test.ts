@@ -39,9 +39,9 @@ const RECORDS: TranscriptRecord[] = [
   },
 ];
 
-let lastFilter: { status?: string } | undefined;
+let lastFilter: { status?: string; institutionId?: string } | undefined;
 const store = {
-  async listRecords(filter?: { status?: string }) {
+  async listRecords(filter?: { status?: string; institutionId?: string }) {
     lastFilter = filter;
     return RECORDS.filter((r) => !filter?.status || r.status === filter.status);
   },
@@ -56,7 +56,19 @@ describe("ListTranscriptRecords", () => {
     const uc = new ListTranscriptRecords(store);
     const out = await uc.execute({}, admin);
     expect(out).toHaveLength(2);
-    expect(lastFilter).toBeUndefined();
+    // Global operator → no institution scoping.
+    expect(lastFilter?.institutionId).toBeUndefined();
+  });
+
+  it("scopes records to the operator's institution (Phase D)", async () => {
+    const scoped = SessionContext.create(
+      "u",
+      "REGISTRAR",
+      ["transcripts.read"],
+      "inst-9",
+    );
+    await new ListTranscriptRecords(store).execute({}, scoped);
+    expect(lastFilter?.institutionId).toBe("inst-9");
   });
 
   it("passes the status filter through to the store", async () => {

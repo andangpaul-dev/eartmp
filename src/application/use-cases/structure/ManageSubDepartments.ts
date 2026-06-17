@@ -14,6 +14,7 @@ import type {
 } from "../../../domain/repositories/structure";
 import type { AuditLogPort } from "../../../domain/repositories";
 import type { AuthorizedUseCase } from "../../authorization/AuthorizedUseCase";
+import { requireInScope } from "../../authorization/institutionScope";
 
 const MANAGE = ["structure.manage"];
 const READ = ["structure.read"];
@@ -43,6 +44,7 @@ export class CreateSubDepartment implements AuthorizedUseCase<
         "Parent department does not exist or is deleted.",
       );
     }
+    requireInScope(department.institutionId, session);
     if (
       await this.subDepartments.findByCode(input.code, department.institutionId)
     ) {
@@ -86,6 +88,7 @@ export class UpdateSubDepartment implements AuthorizedUseCase<
   async execute(input: UpdateSubDepartmentInput, session: SessionContext) {
     const before = await this.subDepartments.findById(input.id);
     if (!before) throw new StructureError("Sub-department not found.");
+    requireInScope(before.institutionId, session);
     if (input.patch.name !== undefined) {
       StructureRules.requireNonEmpty(input.patch.name, "Sub-department name");
     }
@@ -130,6 +133,7 @@ export class DeleteSubDepartment implements AuthorizedUseCase<
   async execute(input: DeleteSubDepartmentInput, session: SessionContext) {
     const sd = await this.subDepartments.findById(input.id);
     if (!sd) throw new StructureError("Sub-department not found.");
+    requireInScope(sd.institutionId, session);
     if (await this.subDepartments.hasLiveChildren(input.id)) {
       throw new StructureError(
         "Cannot delete a sub-department that still has programmes, courses or students.",

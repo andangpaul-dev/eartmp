@@ -17,6 +17,7 @@ export interface Page<T> {
 }
 
 export interface StudentFilter {
+  institutionId?: string;
   facultyId?: string;
   departmentId?: string;
   subDepartmentId?: string;
@@ -42,6 +43,7 @@ export interface StudentRepository {
 }
 
 export interface CourseFilter {
+  institutionId?: string;
   departmentId?: string;
   subDepartmentId?: string;
   programmeId?: string;

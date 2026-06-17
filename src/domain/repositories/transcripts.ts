@@ -47,6 +47,7 @@ export interface TranscriptRecord {
 
 export interface TranscriptRecordFilter {
   status?: string;
+  institutionId?: string;
 }
 
 export interface TranscriptStore {

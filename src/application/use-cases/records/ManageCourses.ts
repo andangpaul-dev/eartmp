@@ -13,6 +13,7 @@ import type {
 } from "../../../domain/repositories/records";
 import type { AuditLogPort } from "../../../domain/repositories";
 import type { AuthorizedUseCase } from "../../authorization/AuthorizedUseCase";
+import { scopeWhere } from "../../authorization/institutionScope";
 import { DEFAULT_TAKE, MAX_TAKE } from "./ManageStudents";
 
 const COURSE_TYPES: readonly CourseType[] = [
@@ -113,12 +114,17 @@ export class ListCourses implements AuthorizedUseCase<
   readonly name = "ListCourses";
   readonly requiredPermissions = ["courses.read"];
   constructor(private readonly courses: CourseRepository) {}
-  async execute(input: CourseQuery, _session: SessionContext) {
+  async execute(input: CourseQuery, session: SessionContext) {
     const take =
       input.take === undefined || input.take <= 0
         ? DEFAULT_TAKE
         : Math.min(input.take, MAX_TAKE);
-    return this.courses.find({ ...input, skip: input.skip ?? 0, take });
+    return this.courses.find({
+      ...input,
+      where: scopeWhere(input.where, session),
+      skip: input.skip ?? 0,
+      take,
+    });
   }
 }
 

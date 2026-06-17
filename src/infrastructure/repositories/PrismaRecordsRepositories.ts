@@ -195,6 +195,7 @@ export class PrismaStudentRepository
     const f = query.where ?? {};
     const where: Prisma.StudentWhereInput = {
       deletedAt: null,
+      ...(f.institutionId ? { institutionId: f.institutionId } : {}),
       ...(f.facultyId ? { facultyId: f.facultyId } : {}),
       ...(f.departmentId ? { departmentId: f.departmentId } : {}),
       ...(f.subDepartmentId ? { subDepartmentId: f.subDepartmentId } : {}),
@@ -390,6 +391,7 @@ export class PrismaCourseRepository implements CourseRepository {
     const f = query.where ?? {};
     const where: Prisma.CourseWhereInput = {
       deletedAt: null,
+      ...(f.institutionId ? { institutionId: f.institutionId } : {}),
       ...(f.departmentId ? { departmentId: f.departmentId } : {}),
       ...(f.subDepartmentId ? { subDepartmentId: f.subDepartmentId } : {}),
       ...(f.programmeId ? { programmeId: f.programmeId } : {}),

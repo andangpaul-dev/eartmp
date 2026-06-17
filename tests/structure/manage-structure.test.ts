@@ -184,6 +184,53 @@ describe("per-institution code uniqueness (Phase C)", () => {
   });
 });
 
+describe("tenant isolation (Phase D)", () => {
+  const scoped = SessionContext.create(
+    "u",
+    "REGISTRAR",
+    ["structure.read", "structure.manage"],
+    "inst-1",
+  );
+
+  it("a scoped operator only lists their institution's faculties", async () => {
+    const g = SessionContext.create("admin", "SUPER_ADMIN", [
+      "structure.read",
+      "structure.manage",
+    ]);
+    const create = new CreateFaculty(faculties, audit);
+    await create.execute({ name: "A", code: "A", institutionId: "inst-1" }, g);
+    await create.execute({ name: "B", code: "B", institutionId: "inst-2" }, g);
+    const list = await new ListFaculties(faculties).execute({}, scoped);
+    expect(list.map((f) => f.code)).toEqual(["A"]);
+  });
+
+  it("forces a scoped operator's create into their own institution", async () => {
+    const created = await new CreateFaculty(faculties, audit).execute(
+      // Tries to plant it in inst-2; scope forces inst-1.
+      { name: "X", code: "X", institutionId: "inst-2" },
+      scoped,
+    );
+    expect(created.institutionId).toBe("inst-1");
+  });
+
+  it("refuses to mutate another institution's row (FORBIDDEN)", async () => {
+    const g = SessionContext.create("admin", "SUPER_ADMIN", [
+      "structure.read",
+      "structure.manage",
+    ]);
+    const other = await new CreateFaculty(faculties, audit).execute(
+      { name: "Other", code: "OTH", institutionId: "inst-2" },
+      g,
+    );
+    await expect(
+      new UpdateFaculty(faculties, audit).execute(
+        { id: other.id, patch: { name: "Hijack" } },
+        scoped,
+      ),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+});
+
 describe("institution scope inheritance (Phase A)", () => {
   it("departments, sub-departments and programmes inherit the faculty's institution", async () => {
     const f = await new CreateFaculty(faculties, audit).execute(

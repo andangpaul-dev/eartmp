@@ -84,9 +84,9 @@ export class PrismaFacultyRepository implements FacultyRepository {
     });
     return r ? toFaculty(r) : null;
   }
-  async list(): Promise<Faculty[]> {
+  async list(institutionId?: string): Promise<Faculty[]> {
     const rows = await this.db.faculty.findMany({
-      where: live,
+      where: { ...(institutionId ? { institutionId } : {}), ...live },
       orderBy: { code: "asc" },
     });
     return rows.map(toFaculty);

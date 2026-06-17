@@ -22,6 +22,10 @@ import type {
 } from "../../../domain/repositories/structure";
 import type { AuditLogPort } from "../../../domain/repositories";
 import type { AuthorizedUseCase } from "../../authorization/AuthorizedUseCase";
+import {
+  scopedInstitutionId,
+  requireInScope,
+} from "../../authorization/institutionScope";
 
 const MANAGE = ["structure.manage"];
 const READ = ["structure.read"];
@@ -63,14 +67,17 @@ export class CreateFaculty implements AuthorizedUseCase<
   async execute(input: CreateFacultyInput, session: SessionContext) {
     StructureRules.requireNonEmpty(input.name, "Faculty name");
     StructureRules.requireNonEmpty(input.code, "Faculty code");
+    // A scoped operator can only create within their own institution (the
+    // requested institution is forced to the session's). Phase D.
+    const institutionId = scopedInstitutionId(input.institutionId, session);
     // Codes are unique per institution (Phase C).
-    if (await this.faculties.findByCode(input.code, input.institutionId)) {
+    if (await this.faculties.findByCode(input.code, institutionId)) {
       throw new StructureError(`Faculty code "${input.code}" already in use.`);
     }
     const created = await this.faculties.create({
       name: input.name,
       code: input.code,
-      ...(input.institutionId ? { institutionId: input.institutionId } : {}),
+      ...(institutionId ? { institutionId } : {}),
     });
     await audit(this.auditLog, session, "CREATE", "Faculty", created.id, {
       code: created.code,
@@ -95,6 +102,7 @@ export class DeleteFaculty implements AuthorizedUseCase<
   async execute(input: DeleteFacultyInput, session: SessionContext) {
     const faculty = await this.faculties.findById(input.id);
     if (!faculty) throw new StructureError("Faculty not found.");
+    requireInScope(faculty.institutionId, session);
     if (await this.faculties.hasLiveDepartments(input.id)) {
       throw new StructureError(
         "Cannot delete a faculty that still has departments.",
@@ -114,9 +122,12 @@ export class ListFaculties implements AuthorizedUseCase<
   constructor(private readonly faculties: FacultyRepository) {}
   async execute(
     _input: Record<string, never>,
-    _session: SessionContext,
+    session: SessionContext,
   ): Promise<Faculty[]> {
-    return this.faculties.list();
+    // Tenant isolation: a scoped operator only sees their institution's faculties.
+    return this.faculties.list(
+      session.isGlobal ? undefined : session.institutionId,
+    );
   }
 }
 
@@ -145,6 +156,7 @@ export class CreateDepartment implements AuthorizedUseCase<
     if (!faculty) {
       throw new StructureError("Parent faculty does not exist or is deleted.");
     }
+    requireInScope(faculty.institutionId, session);
     if (await this.departments.findByCode(input.code, faculty.institutionId)) {
       throw new StructureError(
         `Department code "${input.code}" already in use.`,
@@ -183,6 +195,7 @@ export class DeleteDepartment implements AuthorizedUseCase<
   async execute(input: DeleteDepartmentInput, session: SessionContext) {
     const dept = await this.departments.findById(input.id);
     if (!dept) throw new StructureError("Department not found.");
+    requireInScope(dept.institutionId, session);
     if (await this.departments.hasLiveProgrammes(input.id)) {
       throw new StructureError(
         "Cannot delete a department that still has programmes.",
@@ -243,6 +256,7 @@ export class CreateProgramme implements AuthorizedUseCase<
         "Parent department does not exist or is deleted.",
       );
     }
+    requireInScope(department.institutionId, session);
     if (
       await this.programmes.findByCode(input.code, department.institutionId)
     ) {
@@ -286,6 +300,7 @@ export class DeleteProgramme implements AuthorizedUseCase<
   async execute(input: DeleteProgrammeInput, session: SessionContext) {
     const prog = await this.programmes.findById(input.id);
     if (!prog) throw new StructureError("Programme not found.");
+    requireInScope(prog.institutionId, session);
     if (await this.programmes.hasLiveLevels(input.id)) {
       throw new StructureError(
         "Cannot delete a programme that still has levels.",
@@ -397,6 +412,7 @@ export class UpdateFaculty implements AuthorizedUseCase<
   async execute(input: UpdateFacultyInput, session: SessionContext) {
     const before = await this.faculties.findById(input.id);
     if (!before) throw new StructureError("Faculty not found.");
+    requireInScope(before.institutionId, session);
     if (input.patch.name !== undefined)
       StructureRules.requireNonEmpty(input.patch.name, "Faculty name");
     if (input.patch.code !== undefined) {
@@ -436,6 +452,7 @@ export class UpdateDepartment implements AuthorizedUseCase<
   async execute(input: UpdateDepartmentInput, session: SessionContext) {
     const before = await this.departments.findById(input.id);
     if (!before) throw new StructureError("Department not found.");
+    requireInScope(before.institutionId, session);
     if (input.patch.name !== undefined)
       StructureRules.requireNonEmpty(input.patch.name, "Department name");
     if (input.patch.code !== undefined) {
@@ -488,6 +505,7 @@ export class UpdateProgramme implements AuthorizedUseCase<
   async execute(input: UpdateProgrammeInput, session: SessionContext) {
     const before = await this.programmes.findById(input.id);
     if (!before) throw new StructureError("Programme not found.");
+    requireInScope(before.institutionId, session);
     if (input.patch.name !== undefined)
       StructureRules.requireNonEmpty(input.patch.name, "Programme name");
     if (input.patch.code !== undefined) {

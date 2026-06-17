@@ -17,6 +17,10 @@ import type {
 } from "../../../domain/repositories/records";
 import type { AuditLogPort } from "../../../domain/repositories";
 import type { AuthorizedUseCase } from "../../authorization/AuthorizedUseCase";
+import {
+  scopeWhere,
+  requireInScope,
+} from "../../authorization/institutionScope";
 
 /**
  * Apply a patch with optimistic locking when a versioned writer is available
@@ -119,6 +123,7 @@ export class UpdateStudent implements AuthorizedUseCase<
   async execute(input: UpdateStudentInput, session: SessionContext) {
     const before = await this.students.findById(input.id);
     if (!before) throw new RecordsError("Student not found.");
+    requireInScope(before.institutionId, session);
     const version = this.versioned
       ? await this.versioned.readVersion(input.id)
       : undefined;
@@ -148,9 +153,10 @@ export class GetStudent implements AuthorizedUseCase<GetStudentInput, Student> {
   readonly name = "GetStudent";
   readonly requiredPermissions = ["students.read"];
   constructor(private readonly students: StudentRepository) {}
-  async execute(input: GetStudentInput, _session: SessionContext) {
+  async execute(input: GetStudentInput, session: SessionContext) {
     const student = await this.students.findById(input.id);
     if (!student) throw new RecordsError("Student not found.");
+    requireInScope(student.institutionId, session);
     return student;
   }
 }
@@ -162,9 +168,12 @@ export class ListStudents implements AuthorizedUseCase<
   readonly name = "ListStudents";
   readonly requiredPermissions = ["students.read"];
   constructor(private readonly students: StudentRepository) {}
-  async execute(input: StudentQuery, _session: SessionContext) {
+  async execute(input: StudentQuery, session: SessionContext) {
     return this.students.find({
       ...input,
+      // Tenant isolation: a scoped operator only ever sees their institution
+      // (the host-supplied where cannot widen past it).
+      where: scopeWhere(input.where, session),
       skip: input.skip ?? 0,
       take: clampTake(input.take),
     });
@@ -189,6 +198,7 @@ export class ChangeStudentStatus implements AuthorizedUseCase<
   async execute(input: ChangeStudentStatusInput, session: SessionContext) {
     const student = await this.students.findById(input.studentId);
     if (!student) throw new RecordsError("Student not found.");
+    requireInScope(student.institutionId, session);
     // Capture the version at load time so a concurrent status change since this
     // read makes the write fail (ConcurrencyError) — two racing transitions on a
     // stale status can't both win.
@@ -247,6 +257,7 @@ export class DeleteStudent implements AuthorizedUseCase<
   async execute(input: DeleteStudentInput, session: SessionContext) {
     const student = await this.students.findById(input.id);
     if (!student) throw new RecordsError("Student not found.");
+    requireInScope(student.institutionId, session);
     await this.students.softDelete(input.id);
     await this.audit.record({
       userId: session.actorId,
