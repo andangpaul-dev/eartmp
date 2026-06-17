@@ -667,6 +667,7 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
         requireSigner(),
         clock,
         audit,
+        students,
       ),
       i as never,
       s,

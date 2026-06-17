@@ -15,6 +15,7 @@ import type {
   StoredTranscript,
 } from "../../../domain/repositories/transcripts";
 import type { InstitutionRepository } from "../../../domain/repositories/config";
+import type { StudentRepository } from "../../../domain/repositories/records";
 import type { AuditLogPort } from "../../../domain/repositories";
 import type { ClockPort } from "../../ports/ClockPort";
 import type { SignaturePort } from "../../ports/SignaturePort";
@@ -49,13 +50,22 @@ export class GenerateTranscript implements AuthorizedUseCase<
     private readonly signer: SignaturePort,
     private readonly clock: ClockPort,
     private readonly audit: AuditLogPort,
+    private readonly students: StudentRepository,
   ) {}
 
   async execute(
     input: GenerateTranscriptInput,
     session: SessionContext,
   ): Promise<StoredTranscript> {
-    const institution = await this.institutions.get();
+    const student = await this.students.findById(input.studentId);
+    if (!student) throw new TranscriptError("Student not found.");
+
+    // Resolve the issuing institution from the student (Phase B); fall back to
+    // the default institution for unscoped/legacy students.
+    const institution =
+      (student.institutionId
+        ? await this.institutions.findById(student.institutionId)
+        : null) ?? (await this.institutions.get());
     if (!institution)
       throw new TranscriptError("Institution is not provisioned.");
 
@@ -82,7 +92,10 @@ export class GenerateTranscript implements AuthorizedUseCase<
     let created: StoredTranscript | undefined;
     let transcriptNumber = "";
     for (let attempt = 1; ; attempt++) {
-      transcriptNumber = await this.transcripts.nextTranscriptNumber(rule);
+      transcriptNumber = await this.transcripts.nextTranscriptNumber(
+        rule,
+        institution.id,
+      );
       const issuedAt = this.clock.now().toISOString();
 
       const reportData = await this.builder.assemble(
@@ -115,6 +128,7 @@ export class GenerateTranscript implements AuthorizedUseCase<
           snapshot,
           verificationHash,
           status: "DRAFT",
+          institutionId: institution.id,
         });
         break;
       } catch (e) {

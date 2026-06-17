@@ -26,6 +26,7 @@ type Row = {
   snapshot: string;
   verificationHash: string;
   status: string;
+  institutionId: string | null;
   remarks: string | null;
 };
 
@@ -39,6 +40,7 @@ function toTranscript(r: Row): StoredTranscript {
     snapshot: r.snapshot,
     verificationHash: r.verificationHash,
     status: r.status,
+    ...(r.institutionId ? { institutionId: r.institutionId } : {}),
     remarks: r.remarks ?? undefined,
   };
 }
@@ -95,8 +97,16 @@ export class PrismaTranscriptRepository implements TranscriptStore {
     });
     return toTranscript(r);
   }
-  async nextTranscriptNumber(rule: string): Promise<string> {
-    const seq = (await this.db.transcript.count()) + 1;
+  async nextTranscriptNumber(
+    rule: string,
+    institutionId?: string,
+  ): Promise<string> {
+    // Per-institution sequence when scoped; otherwise a global count (legacy
+    // single-institution behaviour).
+    const seq =
+      (await this.db.transcript.count(
+        institutionId ? { where: { institutionId } } : undefined,
+      )) + 1;
     return expandNumberRule(rule, new Date().getFullYear(), seq);
   }
 

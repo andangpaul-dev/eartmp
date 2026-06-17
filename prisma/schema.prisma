@@ -425,6 +425,8 @@ model Transcript {
   verificationHash String
   status           String             @default("DRAFT") // DRAFT|APPROVED|LOCKED
   remarks          String?
+  // Issuing institution (resolved from the student) — scopes numbering + branding.
+  institutionId    String?
   version          Int                @default(0) // optimistic concurrency (F-27)
   generatedAt      DateTime           @default(now())
   createdAt        DateTime           @default(now())
@@ -432,6 +434,7 @@ model Transcript {
   deletedAt        DateTime?
 
   @@index([studentId])
+  @@index([institutionId])
 }
 
 // ---------------------------------------------------------------------------

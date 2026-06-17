@@ -13,6 +13,8 @@ export interface StoredTranscript {
   snapshot: string; // frozen JSON (data + resolved layout)
   verificationHash: string; // JSON { signature, keyId }
   status: string; // DRAFT | APPROVED | LOCKED
+  /** Issuing institution (resolved from the student); scopes numbering. */
+  institutionId?: string;
   remarks?: string;
 }
 
@@ -24,6 +26,7 @@ export interface NewTranscript {
   snapshot: string;
   verificationHash: string;
   status: string;
+  institutionId?: string;
 }
 
 /**
@@ -52,8 +55,9 @@ export interface TranscriptStore {
   findByNumber(transcriptNumber: string): Promise<StoredTranscript | null>;
   findByStudent(studentId: string): Promise<StoredTranscript[]>;
   updateStatus(id: string, status: string): Promise<StoredTranscript>;
-  /** Expand the institution numbering rule to the next unique number. */
-  nextTranscriptNumber(rule: string): Promise<string>;
+  /** Expand the institution numbering rule to the next unique number. When an
+   *  institutionId is given, the sequence is scoped to that institution. */
+  nextTranscriptNumber(rule: string, institutionId?: string): Promise<string>;
   /** All transcripts (newest first), enriched with student identity, for the
    *  Records registry. Optionally narrowed by status. */
   listRecords(filter?: TranscriptRecordFilter): Promise<TranscriptRecord[]>;

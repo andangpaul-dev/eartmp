@@ -107,10 +107,27 @@ const institutions = {
   async get() {
     return institution;
   },
+  async findById(id: string) {
+    return id === institution.id ? institution : null;
+  },
   async update() {
     return institution;
   },
 } as unknown as InstitutionRepository;
+
+// The student's institution drives Phase-B resolution; default unscoped (→ get()).
+let studentInstitutionId: string | undefined;
+const students = {
+  async findById(id: string) {
+    return {
+      id,
+      matricNumber: "M/1",
+      fullName: "Ada Lovelace",
+      status: "ACTIVE",
+      ...(studentInstitutionId ? { institutionId: studentInstitutionId } : {}),
+    };
+  },
+} as unknown as import("../../src/domain/repositories/records").StudentRepository;
 
 const assembler: ReportDataAssembler = {
   async assemble(_studentId, transcriptNumber): Promise<ReportData> {
@@ -135,6 +152,7 @@ let verify: VerifyTranscript;
 let audit: CapturingAudit;
 
 beforeEach(() => {
+  studentInstitutionId = undefined;
   store = new FakeStore();
   const kp = CryptoSignatureService.generateKeypair();
   signer = new CryptoSignatureService(kp.privateKeyPem, kp.publicKeyPem);
@@ -147,6 +165,7 @@ beforeEach(() => {
     signer,
     clock,
     audit,
+    students,
   );
   verify = new VerifyTranscript(store, signer);
 });
@@ -157,6 +176,12 @@ describe("GenerateTranscript", () => {
     expect(t.transcriptNumber).toBe("TR-2026-000001");
     expect(t.status).toBe("DRAFT");
     expect(audit.entries.at(-1)).toMatchObject({ action: "GENERATE" });
+  });
+
+  it("stamps the student's institution on the transcript (Phase B)", async () => {
+    studentInstitutionId = "i1";
+    const t = await generate.execute({ studentId: "s1" }, admin);
+    expect(t.institutionId).toBe("i1");
   });
 
   it("a DRAFT has a valid signature but is not an issued (valid) transcript", async () => {

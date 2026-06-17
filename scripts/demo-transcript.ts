@@ -77,6 +77,7 @@ async function main(): Promise<void> {
     signer,
     clock,
     new PrismaAuditLogAdapter(db),
+    new PrismaStudentRepository(db),
   );
   const verify = new VerifyTranscript(transcripts, signer);
   const approve = new ApproveTranscript(

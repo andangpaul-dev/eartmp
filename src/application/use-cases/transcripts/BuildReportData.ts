@@ -61,7 +61,11 @@ export class BuildReportData implements ReportDataAssembler {
   ): Promise<ReportData> {
     const student = await this.students.findById(studentId);
     if (!student) throw new TranscriptError("Student not found.");
-    const institution = await this.institutions.get();
+    // Resolve the student's institution (Phase B); fall back to the default.
+    const institution =
+      (student.institutionId
+        ? await this.institutions.findById(student.institutionId)
+        : null) ?? (await this.institutions.get());
     if (!institution)
       throw new TranscriptError("Institution is not provisioned.");
 

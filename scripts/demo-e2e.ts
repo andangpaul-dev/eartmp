@@ -205,6 +205,7 @@ async function main(): Promise<void> {
     signer,
     clock,
     audit,
+    new PrismaStudentRepository(db),
   ).execute({ studentId }, admin);
   const verified = await new VerifyTranscript(transcripts, signer).execute(
     { transcriptId: t.id },
