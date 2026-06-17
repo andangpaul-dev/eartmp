@@ -18,6 +18,7 @@ import {
   ConcurrencyError,
   UniqueConstraintError,
 } from "../../domain/errors/persistence";
+import { ValidationError } from "../../domain/errors/validation";
 import type {
   StudentRepository,
   CourseRepository,
@@ -121,19 +122,19 @@ export class PrismaStudentRepository
   private async resolveInstitution(
     data: Pick<
       Student,
-      "institutionId" | "facultyId" | "departmentId" | "programmeId"
+      | "institutionId"
+      | "facultyId"
+      | "departmentId"
+      | "subDepartmentId"
+      | "programmeId"
     >,
   ): Promise<string | null> {
     if (data.institutionId) return data.institutionId;
-    if (data.facultyId) {
-      const f = await this.db.faculty.findFirst({
-        where: { id: data.facultyId },
-        select: { institutionId: true },
-      });
-      if (f?.institutionId) return f.institutionId;
-    }
+    // Resolves + validates that all placement parents share one institution.
     return resolveInstitutionId(this.db, {
+      facultyId: data.facultyId,
       departmentId: data.departmentId,
+      subDepartmentId: data.subDepartmentId,
       programmeId: data.programmeId,
     });
   }
@@ -277,37 +278,58 @@ function toCourse(r: CourseRow): Course {
   };
 }
 
-/** Resolve a denormalized institution from a placement's parent ids. */
+/**
+ * Resolve the institution a placement belongs to, and VALIDATE that every
+ * provided parent (faculty/department/sub-department/programme) resolves to the
+ * SAME institution (Phase E). A placement spanning institutions is rejected —
+ * you can't, e.g., put a student in faculty A's institution but department B's.
+ */
 async function resolveInstitutionId(
   db: Db,
   ids: {
+    facultyId?: string;
     departmentId?: string;
     subDepartmentId?: string;
     programmeId?: string;
   },
 ): Promise<string | null> {
+  const found = new Map<string, string>(); // placement field → institutionId
+  if (ids.facultyId) {
+    const f = await db.faculty.findFirst({
+      where: { id: ids.facultyId },
+      select: { institutionId: true },
+    });
+    if (f?.institutionId) found.set("faculty", f.institutionId);
+  }
   if (ids.departmentId) {
     const d = await db.department.findFirst({
       where: { id: ids.departmentId },
       select: { institutionId: true },
     });
-    if (d?.institutionId) return d.institutionId;
+    if (d?.institutionId) found.set("department", d.institutionId);
   }
   if (ids.subDepartmentId) {
     const sd = await db.subDepartment.findFirst({
       where: { id: ids.subDepartmentId },
       select: { institutionId: true },
     });
-    if (sd?.institutionId) return sd.institutionId;
+    if (sd?.institutionId) found.set("sub-department", sd.institutionId);
   }
   if (ids.programmeId) {
     const p = await db.programme.findFirst({
       where: { id: ids.programmeId },
       select: { institutionId: true },
     });
-    if (p?.institutionId) return p.institutionId;
+    if (p?.institutionId) found.set("programme", p.institutionId);
   }
-  return null;
+  const distinct = new Set(found.values());
+  if (distinct.size > 1) {
+    throw new ValidationError(
+      "Placement spans multiple institutions — the faculty, department, " +
+        "sub-department and programme must all belong to the same institution.",
+    );
+  }
+  return distinct.size === 1 ? [...distinct][0]! : null;
 }
 
 export class PrismaCourseRepository implements CourseRepository {

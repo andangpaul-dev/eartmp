@@ -128,3 +128,42 @@ describe("AdmitStudent (atomic across two tables)", () => {
     expect(enrollment?.programmeId).toBe(progId);
   });
 });
+
+describe("cross-institution placement validation (Phase E)", () => {
+  it("rejects a student whose placement spans two institutions, resolves a clean one", async () => {
+    const instA = await db.institution.create({ data: { name: "Inst A" } });
+    const instB = await db.institution.create({ data: { name: "Inst B" } });
+    const facA = await db.faculty.create({
+      data: { name: "FA", code: "FA", institutionId: instA.id },
+    });
+    const depB = await db.department.create({
+      data: {
+        name: "DB",
+        code: "DB",
+        facultyId: facA.id,
+        institutionId: instB.id,
+      },
+    });
+    const repo = new PrismaStudentRepository(db);
+
+    // facultyId → inst A, departmentId → inst B: spans institutions → rejected.
+    await expect(
+      repo.create({
+        matricNumber: "XI/1",
+        fullName: "Spanner",
+        facultyId: facA.id,
+        departmentId: depB.id,
+        status: "ACTIVE",
+      }),
+    ).rejects.toThrow(/multiple institutions/);
+
+    // A consistent placement resolves + stamps the institution.
+    const ok = await repo.create({
+      matricNumber: "XI/2",
+      fullName: "Consistent",
+      facultyId: facA.id,
+      status: "ACTIVE",
+    });
+    expect(ok.institutionId).toBe(instA.id);
+  });
+});
