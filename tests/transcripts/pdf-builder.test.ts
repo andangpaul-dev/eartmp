@@ -36,6 +36,26 @@ describe("buildPdfDocDefinition", () => {
     expect(def.defaultStyle).toMatchObject({ font: "Roboto" });
   });
 
+  it("renders the institution logo (header) and seal when supplied", () => {
+    const def = buildPdfDocDefinition(doc, {
+      logoDataUrl: "data:image/png;base64,LOGO",
+      sealDataUrl: "data:image/png;base64,SEAL",
+    });
+    const content = def.content as Record<string, unknown>[];
+    // Logo is the first node (centered header).
+    expect(content[0]).toMatchObject({
+      image: "data:image/png;base64,LOGO",
+      alignment: "center",
+    });
+    // Seal is the last node.
+    expect(content[content.length - 1]).toMatchObject({
+      image: "data:image/png;base64,SEAL",
+    });
+    // No branding → no extra image nodes beyond the QR.
+    const plain = buildPdfDocDefinition(doc);
+    expect(JSON.stringify(plain.content)).not.toContain("LOGO");
+  });
+
   it("embeds the QR image when a data URL is supplied; else falls back to text", () => {
     const withQr = buildPdfDocDefinition(doc, {
       qrDataUrl: "data:image/png;base64,AAA",

@@ -12,6 +12,9 @@ import type {
 export interface PdfBuildOptions {
   watermark?: string;
   qrDataUrl?: string;
+  /** Institution branding images (data URLs) — logo at the top, seal near the end. */
+  logoDataUrl?: string;
+  sealDataUrl?: string;
 }
 
 type Node = Record<string, unknown>;
@@ -108,7 +111,25 @@ export function buildPdfDocDefinition(
   opts: PdfBuildOptions = {},
 ): Node {
   const content: Node[] = [];
+  // Institution logo as a centered header.
+  if (opts.logoDataUrl) {
+    content.push({
+      image: opts.logoDataUrl,
+      width: 70,
+      alignment: "center",
+      margin: [0, 0, 0, 8],
+    });
+  }
   for (const block of doc.blocks) content.push(...blockToContent(block, opts));
+  // Institution seal near the foot of the document.
+  if (opts.sealDataUrl) {
+    content.push({
+      image: opts.sealDataUrl,
+      width: 90,
+      alignment: "right",
+      margin: [0, 16, 0, 0],
+    });
+  }
 
   const def: Node = {
     pageSize: doc.pageSize || "A4",

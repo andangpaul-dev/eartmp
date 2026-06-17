@@ -138,6 +138,8 @@ import {
   DeleteInstitution,
   SetDefaultInstitution,
 } from "../application/use-cases/config/ManageInstitutions";
+import { UploadInstitutionAsset } from "../application/use-cases/config/UploadInstitutionAsset";
+import { FileAssetStore } from "../infrastructure/storage/FileAssetStore";
 import {
   GetSetting,
   SetSetting,
@@ -300,6 +302,17 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
   const listInstitutions = new ListInstitutions(institutions);
   const createInstitution = new CreateInstitution(institutions, audit);
   const updateInstitutionById = new UpdateInstitutionById(institutions, audit);
+  // Branding images live next to the DB in the per-user app-data dir.
+  const dbFile = (process.env.DATABASE_URL ?? "file:./prisma/dev.db").replace(
+    /^file:/,
+    "",
+  );
+  const brandingDir = `${dbFile.replace(/[\\/][^\\/]*$/, "")}/branding`;
+  const uploadInstitutionAsset = new UploadInstitutionAsset(
+    institutions,
+    new FileAssetStore(brandingDir),
+    audit,
+  );
   const deleteInstitution = new DeleteInstitution(institutions, audit);
   const setDefaultInstitution = new SetDefaultInstitution(institutions, audit);
   const getSetting = new GetSetting(settings, settingsRegistry);
@@ -524,6 +537,10 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     [
       "updateInstitutionById",
       (i, s) => authorize(updateInstitutionById, i as never, s),
+    ],
+    [
+      "uploadInstitutionAsset",
+      (i, s) => authorize(uploadInstitutionAsset, i as never, s),
     ],
     [
       "deleteInstitution",

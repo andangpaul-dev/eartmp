@@ -150,6 +150,7 @@ export const ipcClient: CoreApi = {
   listInstitutions: (input) => rpc("listInstitutions", input),
   createInstitution: (input) => rpc("createInstitution", input),
   updateInstitutionById: (input) => rpc("updateInstitutionById", input),
+  uploadInstitutionAsset: (input) => rpc("uploadInstitutionAsset", input),
   deleteInstitution: (input) => rpc("deleteInstitution", input),
   setDefaultInstitution: (input) => rpc("setDefaultInstitution", input),
   updateFaculty: (input) => rpc("updateFaculty", input),

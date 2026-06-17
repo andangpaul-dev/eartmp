@@ -6,6 +6,8 @@
  * uses the same port.
  */
 import { createRequire } from "node:module";
+import { readFileSync, existsSync } from "node:fs";
+import { extname } from "node:path";
 import QRCode from "qrcode";
 import type {
   DocumentRendererPort,
@@ -46,6 +48,19 @@ function getPrinter(): { createPdfKitDocument(def: unknown): PdfKitDoc } {
   return printerSingleton;
 }
 
+/** Read a branding image file into a data URL; null if absent/unreadable so a
+ *  missing asset never breaks the render. */
+function imageDataUrl(path?: string): string | undefined {
+  if (!path || !existsSync(path)) return undefined;
+  try {
+    const ext = extname(path).slice(1).toLowerCase();
+    const mime = ext === "jpg" || ext === "jpeg" ? "jpeg" : ext || "png";
+    return `data:image/${mime};base64,${readFileSync(path).toString("base64")}`;
+  } catch {
+    return undefined;
+  }
+}
+
 export class PdfMakeRenderer implements DocumentRendererPort {
   async render(
     doc: ResolvedDoc,
@@ -57,9 +72,14 @@ export class PdfMakeRenderer implements DocumentRendererPort {
         ? await QRCode.toDataURL(qrBlock.payload)
         : undefined;
 
+    const logoDataUrl = imageDataUrl(doc.logoPath);
+    const sealDataUrl = imageDataUrl(doc.sealPath);
+
     const def = buildPdfDocDefinition(doc, {
       ...(opts.watermark ? { watermark: opts.watermark } : {}),
       ...(qrDataUrl ? { qrDataUrl } : {}),
+      ...(logoDataUrl ? { logoDataUrl } : {}),
+      ...(sealDataUrl ? { sealDataUrl } : {}),
     });
 
     const pdfDoc = getPrinter().createPdfKitDocument(def);

@@ -192,5 +192,15 @@ export function bindTemplate(layout: unknown, data: ReportData): ResolvedDoc {
       ...resolveBlock(asObject(blocks[i], `layout.blocks[${i}]`), data),
     );
   }
-  return { pageSize, blocks: resolved };
+  return {
+    pageSize,
+    blocks: resolved,
+    // Carry institution branding to the renderer (it loads the files → images).
+    ...(data.institution.logoPath
+      ? { logoPath: data.institution.logoPath }
+      : {}),
+    ...(data.institution.sealPath
+      ? { sealPath: data.institution.sealPath }
+      : {}),
+  };
 }

@@ -109,6 +109,7 @@ export function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
     listInstitutions: async () => [],
     createInstitution: async () => ({}) as never,
     updateInstitutionById: async () => ({}) as never,
+    uploadInstitutionAsset: async () => ({}) as never,
     deleteInstitution: async () => {},
     setDefaultInstitution: async () => {},
     getSetting: async () => ({}),

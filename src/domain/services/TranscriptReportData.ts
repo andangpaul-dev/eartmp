@@ -81,4 +81,7 @@ export type ResolvedBlock =
 export interface ResolvedDoc {
   pageSize: string;
   blocks: ResolvedBlock[];
+  /** Institution branding image paths (resolved to data URLs by the renderer). */
+  logoPath?: string;
+  sealPath?: string;
 }

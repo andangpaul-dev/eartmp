@@ -21,6 +21,15 @@ import type { Institution, Faculty } from "../runtime/contract";
 
 const CALENDARS = ["SEMESTER", "TRIMESTER", "QUARTER"] as const;
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1] ?? "");
+    reader.onerror = () => reject(new Error("Could not read file."));
+    reader.readAsDataURL(file);
+  });
+}
+
 export function InstitutionsScreen() {
   const core = useCore();
   const { can } = useSession();
@@ -149,6 +158,18 @@ export function InstitutionsScreen() {
               institutions.reload();
             }, "Institution updated")
           }
+          onUpload={(kind, base64, ext) =>
+            guard(async () => {
+              const updated = await core.uploadInstitutionAsset({
+                institutionId: editFor.id,
+                kind,
+                base64,
+                ext,
+              });
+              setEditFor(updated); // refresh the ✓ markers
+              institutions.reload();
+            }, `${kind} uploaded`)
+          }
         />
       )}
 
@@ -161,10 +182,16 @@ function EditInstitutionModal({
   inst,
   onClose,
   onSave,
+  onUpload,
 }: {
   inst: Institution;
   onClose: () => void;
   onSave: (patch: Partial<Institution>) => void;
+  onUpload: (
+    kind: "logo" | "seal" | "registrarSign",
+    base64: string,
+    ext: string,
+  ) => void;
 }) {
   const [name, setName] = useState(inst.name);
   const [code, setCode] = useState(inst.code ?? "");
@@ -266,6 +293,33 @@ function EditInstitutionModal({
           onChange={(e) => setAddress(e.target.value)}
         />
       </Field>
+
+      <div className="form-grid" style={{ marginTop: 6 }}>
+        {(
+          [
+            ["logo", "Logo", inst.logoPath],
+            ["seal", "Seal", inst.sealPath],
+            ["registrarSign", "Registrar signature", inst.registrarSignPath],
+          ] as const
+        ).map(([kind, label, current]) => (
+          <Field key={kind} label={`${label}${current ? " ✓" : ""} (PNG/JPG)`}>
+            <input
+              className="input"
+              type="file"
+              accept="image/png,image/jpeg"
+              aria-label={`${label} image`}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const base64 = await fileToBase64(file);
+                const ext = file.name.split(".").pop() ?? "png";
+                onUpload(kind, base64, ext);
+              }}
+            />
+          </Field>
+        ))}
+      </div>
+
       <div className="actions">
         <Button onClick={onClose}>Cancel</Button>
         <Button

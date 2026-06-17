@@ -364,6 +364,12 @@ export interface CoreApi {
   updateInstitution(input: {
     patch: Partial<Institution>;
   }): Promise<Institution>;
+  uploadInstitutionAsset(input: {
+    institutionId: string;
+    kind: "logo" | "seal" | "registrarSign";
+    base64: string;
+    ext?: string;
+  }): Promise<Institution>;
   // multi-institution management (institution.manage / settings.read)
   listInstitutions(input: Record<string, never>): Promise<Institution[]>;
   createInstitution(input: {
