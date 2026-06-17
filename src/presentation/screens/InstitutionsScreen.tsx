@@ -26,6 +26,7 @@ export function InstitutionsScreen() {
   const { can } = useSession();
   const manage = can("institution.manage");
   const [creating, setCreating] = useState(false);
+  const [editFor, setEditFor] = useState<Institution | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const notify = (m: string) => {
     setToast(m);
@@ -90,17 +91,7 @@ export function InstitutionsScreen() {
                 institutions.reload();
               }, `${inst.name} is now the default`)
             }
-            onRename={() => {
-              const name = window.prompt("Institution name", inst.name);
-              if (name && name.trim())
-                guard(async () => {
-                  await core.updateInstitutionById({
-                    id: inst.id,
-                    patch: { name: name.trim() },
-                  });
-                  institutions.reload();
-                }, "Renamed");
-            }}
+            onEdit={() => setEditFor(inst)}
             onDelete={() => {
               if (window.confirm(`Delete "${inst.name}"?`))
                 guard(async () => {
@@ -147,8 +138,158 @@ export function InstitutionsScreen() {
         />
       )}
 
+      {editFor && (
+        <EditInstitutionModal
+          inst={editFor}
+          onClose={() => setEditFor(null)}
+          onSave={(patch) =>
+            guard(async () => {
+              await core.updateInstitutionById({ id: editFor.id, patch });
+              setEditFor(null);
+              institutions.reload();
+            }, "Institution updated")
+          }
+        />
+      )}
+
       {toast && <Toast message={toast} />}
     </div>
+  );
+}
+
+function EditInstitutionModal({
+  inst,
+  onClose,
+  onSave,
+}: {
+  inst: Institution;
+  onClose: () => void;
+  onSave: (patch: Partial<Institution>) => void;
+}) {
+  const [name, setName] = useState(inst.name);
+  const [code, setCode] = useState(inst.code ?? "");
+  const [calendarType, setCalendarType] = useState<string>(inst.calendarType);
+  const [motto, setMotto] = useState(inst.motto ?? "");
+  const [accreditationNo, setAccreditationNo] = useState(
+    inst.accreditationNo ?? "",
+  );
+  const [address, setAddress] = useState(inst.address ?? "");
+  const [telephone, setTelephone] = useState(inst.telephone ?? "");
+  const [email, setEmail] = useState(inst.email ?? "");
+  const [website, setWebsite] = useState(inst.website ?? "");
+  const [rule, setRule] = useState(inst.transcriptNumberRule ?? "");
+
+  return (
+    <Modal
+      title={`Edit · ${inst.name}`}
+      subtitle="Identity & branding used on this institution's transcripts."
+      onClose={onClose}
+    >
+      <div className="form-grid">
+        <Field label="Name">
+          <input
+            className="input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </Field>
+        <Field label="Code">
+          <input
+            className="input mono"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+          />
+        </Field>
+        <Field label="Academic calendar">
+          <select
+            className="select"
+            aria-label="Academic calendar"
+            value={calendarType}
+            onChange={(e) => setCalendarType(e.target.value)}
+          >
+            {CALENDARS.map((c) => (
+              <option key={c} value={c}>
+                {c.toLowerCase()}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Accreditation no.">
+          <input
+            className="input"
+            value={accreditationNo}
+            onChange={(e) => setAccreditationNo(e.target.value)}
+          />
+        </Field>
+        <Field label="Telephone">
+          <input
+            className="input"
+            value={telephone}
+            onChange={(e) => setTelephone(e.target.value)}
+          />
+        </Field>
+        <Field label="Email">
+          <input
+            className="input"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </Field>
+        <Field label="Website">
+          <input
+            className="input"
+            value={website}
+            onChange={(e) => setWebsite(e.target.value)}
+          />
+        </Field>
+        <Field label="Transcript number rule">
+          <input
+            className="input mono"
+            placeholder="TR-{year}-{seq:000000}"
+            value={rule}
+            onChange={(e) => setRule(e.target.value)}
+          />
+        </Field>
+      </div>
+      <Field label="Motto">
+        <input
+          className="input"
+          value={motto}
+          onChange={(e) => setMotto(e.target.value)}
+        />
+      </Field>
+      <Field label="Address">
+        <input
+          className="input"
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+        />
+      </Field>
+      <div className="actions">
+        <Button onClick={onClose}>Cancel</Button>
+        <Button
+          variant="primary"
+          disabled={name.trim().length === 0}
+          onClick={() =>
+            onSave({
+              name: name.trim(),
+              code: code.trim() || undefined,
+              calendarType: calendarType as Institution["calendarType"],
+              motto: motto.trim() || undefined,
+              accreditationNo: accreditationNo.trim() || undefined,
+              address: address.trim() || undefined,
+              telephone: telephone.trim() || undefined,
+              email: email.trim() || undefined,
+              website: website.trim() || undefined,
+              transcriptNumberRule: rule.trim() || undefined,
+            })
+          }
+        >
+          Save
+        </Button>
+      </div>
+    </Modal>
   );
 }
 
@@ -157,14 +298,14 @@ function InstitutionCard({
   faculties,
   canManage,
   onSetDefault,
-  onRename,
+  onEdit,
   onDelete,
 }: {
   inst: Institution;
   faculties: Faculty[];
   canManage: boolean;
   onSetDefault: () => void;
-  onRename: () => void;
+  onEdit: () => void;
   onDelete: () => void;
 }) {
   return (
@@ -186,8 +327,8 @@ function InstitutionCard({
                 Make default
               </Button>
             )}
-            <Button variant="ghost" onClick={onRename}>
-              Rename
+            <Button variant="ghost" onClick={onEdit}>
+              Edit
             </Button>
             <Button
               variant="danger"

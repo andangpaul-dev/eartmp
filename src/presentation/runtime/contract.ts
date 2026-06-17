@@ -401,6 +401,8 @@ export interface CoreApi {
     fullName: string;
     roleId: string;
     password: string;
+    /** Optional tenant scope; omitted = global operator (sees all). */
+    institutionId?: string;
   }): Promise<{ id: string }>;
   deactivateUser(input: { userId: string }): Promise<void>;
   activateUser(input: { userId: string }): Promise<void>;

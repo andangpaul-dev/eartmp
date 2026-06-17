@@ -300,9 +300,19 @@ function CreateUserModal({
   const [email, setEmail] = useState("");
   const [roleId, setRoleId] = useState(roles[0]?.id ?? "");
   const [password, setPassword] = useState("");
+  const [institutionId, setInstitutionId] = useState(""); // "" = global
+  const institutions = useAsync(() => core.listInstitutions({}), []);
 
   const save = useAction(
-    () => core.createUser({ username, fullName, email, roleId, password }),
+    () =>
+      core.createUser({
+        username,
+        fullName,
+        email,
+        roleId,
+        password,
+        ...(institutionId ? { institutionId } : {}),
+      }),
     { onSuccess: onDone },
   );
   const complete = username && fullName && email && roleId && password;
@@ -346,6 +356,21 @@ function CreateUserModal({
           {roles.map((r) => (
             <option key={r.id} value={r.id}>
               {r.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Institution scope">
+        <select
+          className="select"
+          aria-label="Institution scope"
+          value={institutionId}
+          onChange={(e) => setInstitutionId(e.target.value)}
+        >
+          <option value="">Global — all institutions</option>
+          {institutions.data?.map((i) => (
+            <option key={i.id} value={i.id}>
+              {i.name}
             </option>
           ))}
         </select>
