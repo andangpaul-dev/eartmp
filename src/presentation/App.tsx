@@ -25,6 +25,7 @@ import { InstitutionsScreen } from "./screens/InstitutionsScreen";
 import { SecurityScreen } from "./screens/SecurityScreen";
 import { UsersScreen } from "./screens/UsersScreen";
 import { RolesScreen } from "./screens/RolesScreen";
+import { LegalScreen } from "./screens/LegalScreen";
 import { Placeholder } from "./screens/Placeholder";
 
 const SCREEN_NAMES: Record<Route, string> = {
@@ -44,6 +45,7 @@ const SCREEN_NAMES: Record<Route, string> = {
   users: "Users",
   roles: "Roles & permissions",
   audit: "Audit log",
+  legal: "Legal",
 };
 
 export function App() {
@@ -109,6 +111,8 @@ export function App() {
       <UsersScreen />
     ) : route === "roles" ? (
       <RolesScreen />
+    ) : route === "legal" ? (
+      <LegalScreen />
     ) : (
       <Placeholder name={SCREEN_NAMES[route]} />
     );

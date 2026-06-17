@@ -299,6 +299,15 @@ button {
   gap: 14px;
 }
 
+/* Legal screen: readable prose + bullet lists */
+.legal-list {
+  margin: 4px 0 4px 0;
+  padding-left: 20px;
+}
+.legal-list li {
+  margin: 3px 0;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;

@@ -25,7 +25,8 @@ export type Route =
   | "security"
   | "users"
   | "roles"
-  | "audit";
+  | "audit"
+  | "legal";
 
 interface NavDef {
   key: Route;
@@ -142,6 +143,8 @@ const NAV: NavDef[] = [
     perm: "audit.read",
     group: "Administration",
   },
+  // No permission — legal notices are available to every signed-in user.
+  { key: "legal", label: "Legal", icon: "transcript", group: "Help" },
 ];
 
 const TITLES: Record<Route, { t: string; s: string }> = {
@@ -161,6 +164,7 @@ const TITLES: Record<Route, { t: string; s: string }> = {
   users: { t: "Users", s: "Accounts & access" },
   roles: { t: "Roles & permissions", s: "Role-based access control" },
   audit: { t: "Audit log", s: "Append-only, tamper-evident" },
+  legal: { t: "Legal", s: "Terms, disclaimer & user policies" },
 };
 
 export function AppShell({
