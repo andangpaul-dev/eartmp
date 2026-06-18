@@ -128,6 +128,26 @@ button {
   color: #fff;
   font-weight: 700;
 }
+/* Scrollable nav list: takes the space between the brand and the footer and
+   scrolls when the items don't fit (min-height:0 lets the flex child shrink). */
+.nav-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+.nav-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.nav-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+}
+.nav-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
 .nav-group {
   padding: 10px 0 2px;
 }

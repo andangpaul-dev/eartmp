@@ -191,31 +191,34 @@ export function AppShell({
           <div className="logo">E</div>
           <div>EARTMP</div>
         </div>
-        {groups.map((g) => (
-          <div className="nav-group" key={g || "main"}>
-            {g && <div className="hdr">{g}</div>}
-            {NAV.filter((n) => n.group === g).map((n) => {
-              const allowed = !n.perm || can(n.perm);
-              return (
-                <button
-                  key={n.key}
-                  className={`nav-item ${route === n.key ? "active" : ""}`}
-                  disabled={!allowed}
-                  title={allowed ? n.label : `Requires "${n.perm}"`}
-                  onClick={() => allowed && setRoute(n.key)}
-                >
-                  <Icon name={n.icon} size={17} />
-                  <span className="grow">{n.label}</span>
-                  {!allowed && (
-                    <span className="lock">
-                      <Icon name="lock" size={13} />
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        ))}
+        {/* Scrollable nav region — brand stays pinned above, footer below. */}
+        <div className="nav-scroll">
+          {groups.map((g) => (
+            <div className="nav-group" key={g || "main"}>
+              {g && <div className="hdr">{g}</div>}
+              {NAV.filter((n) => n.group === g).map((n) => {
+                const allowed = !n.perm || can(n.perm);
+                return (
+                  <button
+                    key={n.key}
+                    className={`nav-item ${route === n.key ? "active" : ""}`}
+                    disabled={!allowed}
+                    title={allowed ? n.label : `Requires "${n.perm}"`}
+                    onClick={() => allowed && setRoute(n.key)}
+                  >
+                    <Icon name={n.icon} size={17} />
+                    <span className="grow">{n.label}</span>
+                    {!allowed && (
+                      <span className="lock">
+                        <Icon name="lock" size={13} />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
         <div className="footer">
           <span className="dot" style={{ background: "var(--success-dot)" }} />
           Offline · local SQLite · v{__APP_VERSION__}
