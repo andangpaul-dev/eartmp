@@ -8,7 +8,9 @@
  *
  * Phase F: a scope selector chooses the DEFAULT (global) key or an institution's
  * DEDICATED key. An institution with no dedicated key signs with the default
- * key; provisioning one here makes it sign with its own. Single-institution
+ * key; provisioning one here makes it sign with its own. The same selector also
+ * UNSEALS/SEALS the chosen scope's key for this session, so a global admin can
+ * ready any institution's dedicated key for issuing transcripts. Single-institution
  * deployments simply leave the scope on “Default”.
  */
 import { useState } from "react";
@@ -90,6 +92,38 @@ export function SecurityScreen() {
   const rotateReady =
     oldPass.length > 0 && newPass.length >= 8 && newPass === newConfirm;
 
+  // Unseal / seal the selected scope's key for this session (Phase F). The host
+  // holds the unsealed signer in memory per institution; this lets a global admin
+  // ready a specific institution's dedicated key without a scoped login.
+  const [unsealPass, setUnsealPass] = useState("");
+  const unsealAct = useAction(
+    () =>
+      core.unsealKey({
+        passphrase: unsealPass,
+        ...(institutionId ? { institutionId } : {}),
+      }),
+    {
+      onSuccess: () => {
+        notify(
+          institutionId
+            ? "Institution key unsealed for this session."
+            : "Default key unsealed for this session.",
+        );
+        setUnsealPass("");
+        status.reload();
+      },
+    },
+  );
+  const sealAct = useAction(
+    () => core.sealKey(institutionId ? { institutionId } : {}),
+    {
+      onSuccess: () => {
+        notify("Key sealed.");
+        status.reload();
+      },
+    },
+  );
+
   return (
     <div className="stack">
       <Card title="Transcript signing key">
@@ -136,6 +170,58 @@ export function SecurityScreen() {
             : "The private key is sealed at rest and unsealed in memory for the session from the Transcripts screen. A lost passphrase is unrecoverable."}
         </div>
       </Card>
+
+      {provisioned && (
+        <Card title="Unseal for this session">
+          <div className="muted" style={{ marginBottom: 10, fontSize: 12.5 }}>
+            {sealed
+              ? institutionId
+                ? "Unseal this institution's key to issue its transcripts this session. It stays in memory only until you seal it or close the app."
+                : "Unseal the default key to issue transcripts this session."
+              : "Unsealed for this session. Seal it to require the passphrase again."}
+          </div>
+          {sealed ? (
+            <>
+              <div className="form-grid">
+                <Field label="Passphrase">
+                  <input
+                    className="input"
+                    type="password"
+                    aria-label="Signing key passphrase"
+                    value={unsealPass}
+                    onChange={(e) => setUnsealPass(e.target.value)}
+                  />
+                </Field>
+              </div>
+              {unsealAct.error && (
+                <div className="alert danger" style={{ marginTop: 12 }}>
+                  {unsealAct.error.message}
+                </div>
+              )}
+              <div className="actions">
+                <Button
+                  variant="primary"
+                  disabled={unsealPass.length === 0}
+                  loading={unsealAct.loading}
+                  onClick={unsealAct.run}
+                >
+                  {institutionId ? "Unseal institution key" : "Unseal"}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="actions">
+              <Button
+                variant="default"
+                loading={sealAct.loading}
+                onClick={sealAct.run}
+              >
+                Seal
+              </Button>
+            </div>
+          )}
+        </Card>
+      )}
 
       <Card title={provisioned ? "Replace signing key" : "Create signing key"}>
         {provisioned && (

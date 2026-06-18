@@ -69,11 +69,22 @@ passphrases (AD18.4 preserved).
 ## UI
 
 The Security screen gained a **scope selector** (Default / each institution).
-Choosing an institution drives `keyStatus`, provision/replace, and passphrase
-rotation for that institution's dedicated key; "Uses default key" is shown when
-it has none. Single-institution deployments leave the scope on **Default** and
-see the previous behaviour. The topbar key chip + Transcripts unseal use the
-caller's institution slot automatically.
+Choosing an institution drives `keyStatus`, provision/replace, passphrase
+rotation, **and unseal/seal** for that institution's dedicated key; "Uses default
+key" is shown when it has none. The per-scope **Unseal for this session** card
+lets a single global admin ready _any_ institution's dedicated key (calling
+`unsealKey({passphrase, institutionId})`) without a scoped login — so they can
+then issue that institution's transcripts from the Transcripts screen.
+Single-institution deployments leave the scope on **Default** and see the
+previous behaviour.
+
+Two operating models are supported, and compose:
+
+- **Scoped operators** — a user assigned to an institution (Users → Institution
+  scope) unseals + signs only their own institution's key; the topbar key chip +
+  Transcripts unseal use the caller's institution slot automatically.
+- **Global admin** — provisions every institution's key and, via the Security
+  scope selector's unseal/seal control, readies any one of them for issuing.
 
 ## Tests
 

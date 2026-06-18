@@ -58,4 +58,63 @@ describe("SecurityScreen", () => {
       }),
     );
   });
+
+  it("unseals the default key for this session (Phase F)", async () => {
+    const unsealKey = vi.fn(async () => ({ sealed: false }));
+    const { user } = renderScreen(<SecurityScreen />, {
+      permissions: perms,
+      core: {
+        keyStatus: async () => ({ provisioned: true, sealed: true }),
+        unsealKey,
+      },
+    });
+    expect(
+      await screen.findByText(/Unseal for this session/i),
+    ).toBeInTheDocument();
+    await user.type(
+      screen.getByLabelText("Signing key passphrase"),
+      "open-sesame",
+    );
+    await user.click(screen.getByRole("button", { name: /^Unseal$/ }));
+    await waitFor(() =>
+      expect(unsealKey).toHaveBeenCalledWith({ passphrase: "open-sesame" }),
+    );
+  });
+
+  it("unseals a selected institution's dedicated key, passing institutionId", async () => {
+    const unsealKey = vi.fn(async () => ({ sealed: false }));
+    const { user } = renderScreen(<SecurityScreen />, {
+      permissions: perms,
+      core: {
+        listInstitutions: async () => [
+          { id: "inst-b", name: "Univ B", calendarType: "SEMESTER" },
+        ],
+        keyStatus: async (input) => ({
+          provisioned: true,
+          sealed: true,
+          ...(input?.institutionId
+            ? { institutionId: input.institutionId }
+            : {}),
+        }),
+        unsealKey,
+      },
+    });
+    await user.selectOptions(
+      await screen.findByLabelText(/Signing key scope/i),
+      "inst-b",
+    );
+    await user.type(
+      await screen.findByLabelText("Signing key passphrase"),
+      "b-pass",
+    );
+    await user.click(
+      screen.getByRole("button", { name: /Unseal institution key/i }),
+    );
+    await waitFor(() =>
+      expect(unsealKey).toHaveBeenCalledWith({
+        passphrase: "b-pass",
+        institutionId: "inst-b",
+      }),
+    );
+  });
 });
