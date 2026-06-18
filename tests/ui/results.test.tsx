@@ -39,6 +39,59 @@ describe("ResultsScreen", () => {
     expect(await screen.findByText(/no results entered/i)).toBeInTheDocument();
   });
 
+  it("shows each course's allocated credit value and the credit total", async () => {
+    const { user } = renderScreen(<ResultsScreen />, {
+      permissions: ["results.process"],
+      core: {
+        ...baseCore,
+        getStudentSemesterResults: async () =>
+          [
+            {
+              id: "r1",
+              courseId: "c1",
+              finalScore: 72,
+              grade: "B",
+              isLocked: false,
+            },
+            {
+              id: "r2",
+              courseId: "c2",
+              finalScore: 65,
+              grade: "C",
+              isLocked: false,
+            },
+          ] as never,
+        listCourses: async () =>
+          ({
+            items: [
+              {
+                id: "c1",
+                code: "CS101",
+                title: "Intro",
+                creditValue: 3,
+                courseType: "CORE",
+              },
+              {
+                id: "c2",
+                code: "MTH101",
+                title: "Calculus",
+                creditValue: 4,
+                courseType: "CORE",
+              },
+            ],
+            total: 2,
+          }) as never,
+      },
+    });
+    await selectTarget(user);
+
+    expect(await screen.findByText("CS101")).toBeInTheDocument();
+    expect(screen.getByText("MTH101")).toBeInTheDocument();
+    // 3 + 4 credits allocated → total 7.
+    expect(screen.getByText("Total credits")).toBeInTheDocument();
+    expect(screen.getByText("7")).toBeInTheDocument();
+  });
+
   it("processes then locks the semester in one finalize action", async () => {
     const processSemester = vi.fn(async () => ({ gpa: 4.0 }) as never);
     const lockSemesterResults = vi.fn(async () => 1);

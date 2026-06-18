@@ -44,6 +44,31 @@ export function ResultsScreen() {
         : Promise.resolve([]),
     [student?.id, semesterId],
   );
+  // The programme's courses give each result its code/title and ALLOCATED
+  // CREDIT VALUE — the same credit the core uses for the credit-weighted GPA/CGPA
+  // and credits earned. Shown here so the credit is visible at point of entry.
+  const courses = useAsync(
+    () =>
+      student?.programmeId
+        ? core.listCourses({
+            where: { programmeId: student.programmeId },
+            take: 200,
+          })
+        : Promise.resolve({ items: [], total: 0 }),
+    [student?.programmeId],
+  );
+  const courseById = useMemo(() => {
+    const m = new Map<
+      string,
+      { code: string; title: string; creditValue: number }
+    >();
+    for (const c of courses.data?.items ?? []) m.set(c.id, c);
+    return m;
+  }, [courses.data]);
+  const totalCredits = (list.data ?? []).reduce(
+    (n, r) => n + (courseById.get(r.courseId)?.creditValue ?? 0),
+    0,
+  );
 
   const notify = (m: string) => {
     setToast(m);
@@ -159,6 +184,7 @@ export function ResultsScreen() {
               <thead>
                 <tr>
                   <th>Course</th>
+                  <th>Credit</th>
                   <th>Final</th>
                   <th>Grade</th>
                   <th>Status</th>
@@ -166,31 +192,50 @@ export function ResultsScreen() {
                 </tr>
               </thead>
               <tbody>
-                {list.data!.map((r) => (
-                  <tr key={r.id}>
-                    <td className="mono">{r.courseId.slice(0, 8)}</td>
-                    <td className="mono">{r.finalScore ?? "—"}</td>
-                    <td className="mono">{r.grade ?? "—"}</td>
-                    <td>
-                      {r.isLocked ? (
-                        <Badge tone="info">Locked</Badge>
-                      ) : (
-                        <Badge tone="neutral">Open</Badge>
-                      )}
-                    </td>
-                    <td style={{ textAlign: "right" }}>
-                      {r.isLocked && can("results.unlock") && (
-                        <Button
-                          variant="ghost"
-                          onClick={() => setUnlockId(r.id)}
-                        >
-                          <Icon name="lock" size={14} /> Unlock
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {list.data!.map((r) => {
+                  const c = courseById.get(r.courseId);
+                  return (
+                    <tr key={r.id}>
+                      <td>
+                        {c ? (
+                          <>
+                            <span className="mono">{c.code}</span> {c.title}
+                          </>
+                        ) : (
+                          <span className="mono">{r.courseId.slice(0, 8)}</span>
+                        )}
+                      </td>
+                      <td className="mono">{c?.creditValue ?? "—"}</td>
+                      <td className="mono">{r.finalScore ?? "—"}</td>
+                      <td className="mono">{r.grade ?? "—"}</td>
+                      <td>
+                        {r.isLocked ? (
+                          <Badge tone="info">Locked</Badge>
+                        ) : (
+                          <Badge tone="neutral">Open</Badge>
+                        )}
+                      </td>
+                      <td style={{ textAlign: "right" }}>
+                        {r.isLocked && can("results.unlock") && (
+                          <Button
+                            variant="ghost"
+                            onClick={() => setUnlockId(r.id)}
+                          >
+                            <Icon name="lock" size={14} /> Unlock
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
+              <tfoot>
+                <tr>
+                  <td className="strong">Total credits</td>
+                  <td className="mono strong">{totalCredits}</td>
+                  <td colSpan={4} />
+                </tr>
+              </tfoot>
             </table>
           )}
         </Card>
@@ -339,7 +384,7 @@ function EntryModal({
           </option>
           {courses.data?.items.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.code} — {c.title}
+              {c.code} — {c.title} · {c.creditValue} cr
             </option>
           ))}
         </select>
