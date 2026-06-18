@@ -101,6 +101,10 @@ button {
 .shell {
   display: grid;
   grid-template-columns: 248px 1fr;
+  /* Bound the single row to the viewport (minmax 0 stops it growing to the
+     tallest column) so the sidebar/content scroll internally instead of the
+     whole page stretching. Without this the nav never overflows → no scrollbar. */
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
 }
 .sidebar {
@@ -109,6 +113,9 @@ button {
   display: flex;
   flex-direction: column;
   padding: 16px 0;
+  /* Grid items default to min-height:auto (content size); 0 lets the sidebar be
+     clamped to the row height so .nav-scroll can take over the overflow. */
+  min-height: 0;
 }
 .sidebar .brand {
   display: flex;
@@ -230,6 +237,7 @@ button {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   height: 100%;
 }
 .topbar {
