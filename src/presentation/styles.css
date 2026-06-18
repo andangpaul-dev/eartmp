@@ -556,7 +556,22 @@ table.data tr:hover td {
   box-shadow: var(--shadow-modal);
   width: 440px;
   max-width: calc(100vw - 32px);
-  padding: 22px;
+  /* Cap the height so tall dialogs scroll instead of overflowing the viewport;
+     the header stays fixed and the body gets a vertical scrollbar. */
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* clip the scrolling body to the rounded corners */
+}
+.modal-head {
+  flex: 0 0 auto;
+  padding: 20px 22px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-body {
+  flex: 1 1 auto;
+  overflow-y: auto; /* the up/down slider */
+  padding: 16px 22px 0;
 }
 .modal h3 {
   font-size: 16px;
@@ -565,13 +580,20 @@ table.data tr:hover td {
 .modal .sub {
   color: var(--text-muted);
   font-size: 12.5px;
-  margin-bottom: 16px;
+  margin-bottom: 0;
 }
 .modal .actions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 18px;
+  /* Pin Cancel/Save to the foot of the dialog so they stay reachable while the
+     body scrolls; bleed into the body padding for a full-width footer. */
+  position: sticky;
+  bottom: 0;
+  margin: 18px -22px 0;
+  padding: 14px 22px 18px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
 }
 
 .toast {

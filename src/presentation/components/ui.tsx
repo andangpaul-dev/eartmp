@@ -203,9 +203,13 @@ export function Modal({
         tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3>{title}</h3>
-        {subtitle && <div className="sub">{subtitle}</div>}
-        {children}
+        <div className="modal-head">
+          <h3>{title}</h3>
+          {subtitle && <div className="sub">{subtitle}</div>}
+        </div>
+        {/* Scrollable body so tall dialogs get an up/down scrollbar; any
+            trailing `.actions` row sticks to the bottom (see styles.css). */}
+        <div className="modal-body">{children}</div>
       </div>
     </div>
   );
