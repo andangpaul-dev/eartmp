@@ -268,14 +268,27 @@ export function StructureScreen() {
           canManage={manage && !!departmentId}
           onAdd={(name, code) =>
             guard(async () => {
-              await core.createProgramme({
+              const created = await core.createProgramme({
                 name,
                 code,
                 departmentId: departmentId!,
                 ...(subDepartmentId ? { subDepartmentId } : {}),
               });
+              // Lay out Level 1..N up front so the curriculum is ready per year
+              // the moment the new programme is opened.
+              for (
+                let rank = 1;
+                rank <= (created.durationLevels || 4);
+                rank++
+              ) {
+                await core.createLevel({
+                  name: `Level ${rank}`,
+                  rank,
+                  programmeId: created.id,
+                });
+              }
               programmes.reload();
-            }, "Programme created")
+            }, "Programme created with levels")
           }
           onRename={(it, name) =>
             guard(async () => {

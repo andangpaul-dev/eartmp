@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { StructureScreen } from "../../src/presentation/screens/StructureScreen";
 import type {
   Faculty,
@@ -141,6 +141,53 @@ describe("StructureScreen — curriculum", () => {
       name: "Level 4",
       rank: 4,
       programmeId: "p1",
+    });
+  });
+
+  it("auto-generates Level 1..N when a new programme is created", async () => {
+    const createProgramme = vi.fn(async () => ({
+      id: "p9",
+      name: "BSc Maths",
+      code: "MTH",
+      departmentId: "d1",
+      durationLevels: 4,
+      creditsRequired: 0,
+    }));
+    const createLevel = vi.fn(async (i: { rank: number }) => ({
+      id: `l${i.rank}`,
+      name: `Level ${i.rank}`,
+      rank: i.rank,
+      programmeId: "p9",
+    }));
+    const { user } = renderScreen(<StructureScreen />, {
+      permissions: perms,
+      core: baseCore({
+        listProgrammes: async () => [],
+        createProgramme,
+        createLevel,
+      }),
+    });
+    await user.click(await screen.findByText("Science"));
+    await user.click(await screen.findByText(/Computer Science/));
+
+    const panel = (await screen.findByText("Programmes")).closest(
+      ".card",
+    ) as HTMLElement;
+    await user.type(within(panel).getByPlaceholderText("Code"), "MTH");
+    await user.type(within(panel).getByPlaceholderText("Name"), "BSc Maths");
+    await user.click(within(panel).getByRole("button"));
+
+    await waitFor(() => expect(createProgramme).toHaveBeenCalled());
+    await waitFor(() => expect(createLevel).toHaveBeenCalledTimes(4));
+    expect(createLevel).toHaveBeenCalledWith({
+      name: "Level 1",
+      rank: 1,
+      programmeId: "p9",
+    });
+    expect(createLevel).toHaveBeenCalledWith({
+      name: "Level 4",
+      rank: 4,
+      programmeId: "p9",
     });
   });
 });
