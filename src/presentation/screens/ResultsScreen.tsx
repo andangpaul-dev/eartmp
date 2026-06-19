@@ -188,7 +188,9 @@ export function ResultsScreen() {
                   <th>Final</th>
                   <th>Grade</th>
                   <th>Status</th>
-                  <th />
+                  <th>
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>

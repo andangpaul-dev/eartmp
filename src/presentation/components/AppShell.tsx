@@ -215,8 +215,10 @@ export function AppShell({
                 return (
                   <button
                     key={n.key}
+                    type="button"
                     className={`nav-item ${route === n.key ? "active" : ""}`}
                     disabled={!allowed}
+                    aria-current={route === n.key ? "page" : undefined}
                     title={allowed ? n.label : `Requires "${n.perm}"`}
                     onClick={() => allowed && setRoute(n.key)}
                   >

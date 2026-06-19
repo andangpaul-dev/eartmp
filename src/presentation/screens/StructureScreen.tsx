@@ -935,7 +935,11 @@ function CourseTable({
           <th>Title</th>
           <th>Credit</th>
           <th>Type</th>
-          {canUpdate && <th />}
+          {canUpdate && (
+            <th>
+              <span className="sr-only">Actions</span>
+            </th>
+          )}
         </tr>
       </thead>
       <tbody>
@@ -1213,7 +1217,11 @@ function CoursesPanel({
             <th>Title</th>
             <th>Credit</th>
             <th>Type</th>
-            {canUpdate && <th />}
+            {canUpdate && (
+              <th>
+                <span className="sr-only">Actions</span>
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
