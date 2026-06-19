@@ -1,0 +1,48 @@
+name: release
+
+# Cut a release + self-update artifacts when a version tag is pushed (e.g. v0.1.1).
+# tauri-action builds the app, signs the updater artifacts with the updater
+# private key, creates the GitHub Release, and uploads the installers + the
+# `latest.json` manifest the in-app updater reads.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build, sign and publish the release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The updater signing key (NOT a code-signing cert). Add these repo
+          # secrets: TAURI_SIGNING_PRIVATE_KEY = contents of the generated
+          # eartmp-updater.key; password is empty unless you set one.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "EARTMP ${{ github.ref_name }}"
+          releaseBody: "Download an installer below. Existing installs update themselves via Help → Diagnostics → Check for updates."
+          releaseDraft: false
+          prerelease: false
+          # Production build (drops the UAT sample-data feature).
+          args: "-- --no-default-features"

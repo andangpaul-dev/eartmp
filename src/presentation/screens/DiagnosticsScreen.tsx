@@ -5,10 +5,96 @@
  * support request. Permission-gated reads (key/audit) gracefully show "—" when
  * the operator can't see them, so the screen is safe for every signed-in user.
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useCore, useSession } from "../runtime/CoreProvider";
 import { useAsync } from "../runtime/hooks";
 import { Card, Button, Badge, Icon, type Tone } from "../components/ui";
+
+/** Minimal shape of the updater's Update object we use (avoids importing the
+ *  plugin's types into a screen that also renders in the browser/tests). */
+interface PendingUpdate {
+  version: string;
+  body?: string;
+  downloadAndInstall: () => Promise<void>;
+}
+
+function UpdatesCard() {
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState("");
+  const [pending, setPending] = useState<PendingUpdate | null>(null);
+  const held = useRef<PendingUpdate | null>(null);
+  // The updater is a Tauri shell feature — only meaningful inside the desktop app.
+  const inApp =
+    typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+  const check = async (): Promise<void> => {
+    setBusy(true);
+    setStatus("");
+    setPending(null);
+    try {
+      const { check } = await import("@tauri-apps/plugin-updater");
+      const update = (await check()) as PendingUpdate | null;
+      held.current = update;
+      if (update) {
+        setPending(update);
+        setStatus(`Update ${update.version} is available.`);
+      } else {
+        setStatus("You are on the latest version.");
+      }
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : "Update check failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const install = async (): Promise<void> => {
+    if (!held.current) return;
+    setBusy(true);
+    setStatus(`Downloading ${held.current.version}…`);
+    try {
+      await held.current.downloadAndInstall();
+      const { relaunch } = await import("@tauri-apps/plugin-process");
+      await relaunch();
+    } catch (e) {
+      setStatus(e instanceof Error ? e.message : "Update install failed.");
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card title="Software updates">
+      {!inApp ? (
+        <div className="muted" style={{ fontSize: 12.5 }}>
+          Updates are managed by the installed desktop app.
+        </div>
+      ) : (
+        <>
+          <div className="row" style={{ gap: 8 }}>
+            <Button onClick={check} loading={busy && !pending}>
+              <Icon name="download" size={14} /> Check for updates
+            </Button>
+            {pending && (
+              <Button variant="primary" loading={busy} onClick={install}>
+                Download &amp; install {pending.version}
+              </Button>
+            )}
+          </div>
+          {status && (
+            <div className="muted" style={{ marginTop: 8, fontSize: 12.5 }}>
+              {status}
+            </div>
+          )}
+          {pending?.body && (
+            <pre className="errdetail" style={{ maxHeight: 120, marginTop: 8 }}>
+              {pending.body}
+            </pre>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
 
 type Row = { label: string; value: string; tone: Tone };
 
@@ -125,6 +211,8 @@ export function DiagnosticsScreen() {
           </Button>
         </div>
       </Card>
+
+      <UpdatesCard />
     </div>
   );
 }
