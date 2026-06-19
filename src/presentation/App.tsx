@@ -25,6 +25,7 @@ import { InstitutionsScreen } from "./screens/InstitutionsScreen";
 import { SecurityScreen } from "./screens/SecurityScreen";
 import { UsersScreen } from "./screens/UsersScreen";
 import { RolesScreen } from "./screens/RolesScreen";
+import { BackupScreen } from "./screens/BackupScreen";
 import { LegalScreen } from "./screens/LegalScreen";
 import { DiagnosticsScreen } from "./screens/DiagnosticsScreen";
 import { Placeholder } from "./screens/Placeholder";
@@ -46,6 +47,7 @@ const SCREEN_NAMES: Record<Route, string> = {
   users: "Users",
   roles: "Roles & permissions",
   audit: "Audit log",
+  backup: "Backup & restore",
   legal: "Legal",
   diagnostics: "Diagnostics",
 };
@@ -113,6 +115,8 @@ export function App() {
       <UsersScreen />
     ) : route === "roles" ? (
       <RolesScreen />
+    ) : route === "backup" ? (
+      <BackupScreen />
     ) : route === "legal" ? (
       <LegalScreen />
     ) : route === "diagnostics" ? (

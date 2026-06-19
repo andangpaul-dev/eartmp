@@ -56,6 +56,11 @@ import type {
 import type { GraduationRequirements } from "../../domain/services/GraduationEligibility";
 import type { UserSummary } from "../../application/use-cases/auth/ManageUsers";
 import type { Role, Permission } from "../../domain/entities/auth";
+import type { BackupEnvelope } from "../../domain/services/Backup";
+import type {
+  RestoreResult,
+  VerifyBackupResult,
+} from "../../application/use-cases/backup/Backup";
 
 // Re-exported so presentation code imports these shapes from the contract
 // (the single seam) rather than reaching into application/domain paths.
@@ -85,6 +90,9 @@ export type {
   UserSummary,
   Role,
   Permission,
+  BackupEnvelope,
+  RestoreResult,
+  VerifyBackupResult,
 };
 
 /** Transcript bytes are transported base64-encoded (JSON can't carry Uint8Array). */
@@ -372,6 +380,17 @@ export interface CoreApi {
   // audit: append-only trail + tamper-evident chain verification
   getAuditLog(input: AuditQuery): Promise<Page<AuditEntry>>;
   verifyAuditChain(input: Record<string, never>): Promise<ChainVerification>;
+
+  // backup: encrypted logical export → verify (non-destructive) → restore
+  createBackup(input: { passphrase: string }): Promise<BackupEnvelope>;
+  verifyBackup(input: {
+    envelope: BackupEnvelope;
+    passphrase: string;
+  }): Promise<VerifyBackupResult>;
+  restoreBackup(input: {
+    envelope: BackupEnvelope;
+    passphrase: string;
+  }): Promise<RestoreResult>;
 
   // configuration: institution profile, grading config, settings
   getInstitution(input: Record<string, never>): Promise<Institution>;

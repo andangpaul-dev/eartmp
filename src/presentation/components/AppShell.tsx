@@ -26,6 +26,7 @@ export type Route =
   | "users"
   | "roles"
   | "audit"
+  | "backup"
   | "legal"
   | "diagnostics";
 
@@ -144,6 +145,13 @@ const NAV: NavDef[] = [
     perm: "audit.read",
     group: "Administration",
   },
+  {
+    key: "backup",
+    label: "Backup & restore",
+    icon: "shield",
+    perm: "backup.create",
+    group: "Administration",
+  },
   // No permission — legal notices are available to every signed-in user.
   { key: "legal", label: "Legal", icon: "transcript", group: "Help" },
   // Support snapshot; gated reads inside show "—" when not permitted.
@@ -167,6 +175,7 @@ const TITLES: Record<Route, { t: string; s: string }> = {
   users: { t: "Users", s: "Accounts & access" },
   roles: { t: "Roles & permissions", s: "Role-based access control" },
   audit: { t: "Audit log", s: "Append-only, tamper-evident" },
+  backup: { t: "Backup & restore", s: "Encrypted export, verify & restore" },
   legal: { t: "Legal", s: "Terms, disclaimer & user policies" },
   diagnostics: { t: "Diagnostics", s: "Support snapshot & integrity" },
 };

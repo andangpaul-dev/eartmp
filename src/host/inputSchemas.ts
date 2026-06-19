@@ -63,6 +63,13 @@ const SCHEMAS: Record<string, z.ZodType> = {
   }),
   generateCertificate: z.looseObject({ studentId: str, templateId: optStr }),
   verifyTranscript: z.looseObject({ transcriptId: str }),
+  // backup (envelope shape is validated in depth by the use-case)
+  createBackup: z.looseObject({ passphrase: str }),
+  verifyBackup: z.looseObject({ envelope: z.looseObject({}), passphrase: str }),
+  restoreBackup: z.looseObject({
+    envelope: z.looseObject({}),
+    passphrase: str,
+  }),
 };
 
 /** Every method at least requires its input to be an object (reject primitives). */

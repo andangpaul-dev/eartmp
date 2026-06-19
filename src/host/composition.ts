@@ -128,6 +128,13 @@ import {
   VerifyAuditChain,
 } from "../application/use-cases/audit/AuditQueries";
 import {
+  CreateBackup,
+  VerifyBackup,
+  RestoreBackup,
+} from "../application/use-cases/backup/Backup";
+import { PrismaDataExport } from "../infrastructure/backup/PrismaDataExport";
+import { BackupCipher } from "../infrastructure/crypto/BackupCipher";
+import {
   GetInstitution,
   UpdateInstitution,
 } from "../application/use-cases/config/ManageInstitution";
@@ -298,6 +305,13 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     new PrismaAuditLogQueryRepository(db),
     new Sha256Hasher(),
   );
+
+  // --- backup: encrypted logical export → verify (non-destructive) → restore ---
+  const dataExport = new PrismaDataExport(db);
+  const backupCipher = new BackupCipher(new Argon2KeyDerivationService());
+  const createBackup = new CreateBackup(dataExport, backupCipher, clock, audit);
+  const verifyBackup = new VerifyBackup(backupCipher);
+  const restoreBackup = new RestoreBackup(dataExport, backupCipher, audit);
 
   // --- M6: configuration + security ---
   const getInstitution = new GetInstitution(institutions);
@@ -547,6 +561,9 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     ["graduateStudent", (i, s) => authorize(graduateStudent, i as never, s)],
     ["getAuditLog", (i, s) => authorize(getAuditLog, i as never, s)],
     ["verifyAuditChain", (i, s) => authorize(verifyAuditChain, i as never, s)],
+    ["createBackup", (i, s) => authorize(createBackup, i as never, s)],
+    ["verifyBackup", (i, s) => authorize(verifyBackup, i as never, s)],
+    ["restoreBackup", (i, s) => authorize(restoreBackup, i as never, s)],
     ["getInstitution", (i, s) => authorize(getInstitution, i as never, s)],
     ["listInstitutions", (i, s) => authorize(listInstitutions, i as never, s)],
     [

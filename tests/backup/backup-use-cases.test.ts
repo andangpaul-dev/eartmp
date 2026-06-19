@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   CreateBackup,
   RestoreBackup,
+  VerifyBackup,
 } from "../../src/application/use-cases/backup/Backup";
 import { authorize } from "../../src/application/authorization/AuthorizedUseCase";
 import { BackupCipher } from "../../src/infrastructure/crypto/BackupCipher";
@@ -40,12 +41,14 @@ let cipher: BackupCipher;
 let audit: CapturingAudit;
 let create: CreateBackup;
 let restore: RestoreBackup;
+let verify: VerifyBackup;
 beforeEach(() => {
   exporter = new FakeExport();
   cipher = new BackupCipher(new Argon2KeyDerivationService());
   audit = new CapturingAudit();
   create = new CreateBackup(exporter, cipher, clock, audit);
   restore = new RestoreBackup(exporter, cipher, audit);
+  verify = new VerifyBackup(cipher);
 });
 
 describe("CreateBackup → RestoreBackup", () => {
@@ -102,6 +105,23 @@ describe("CreateBackup → RestoreBackup", () => {
     await expect(
       restore.execute({ envelope: bad, passphrase: PASS }, admin),
     ).rejects.toThrow(/format/);
+  }, 30000);
+});
+
+describe("VerifyBackup (non-destructive)", () => {
+  it("confirms a valid backup is restorable WITHOUT importing", async () => {
+    const env = await create.execute({ passphrase: PASS }, admin);
+    const r = await verify.execute({ envelope: env, passphrase: PASS }, admin);
+    expect(r).toMatchObject({ valid: true, tables: 2, rows: 2 });
+    expect(exporter.imported).toBeNull(); // nothing was written
+  }, 30000);
+
+  it("rejects a wrong passphrase / tampered backup without importing", async () => {
+    const env = await create.execute({ passphrase: PASS }, admin);
+    await expect(
+      verify.execute({ envelope: env, passphrase: "nope" }, admin),
+    ).rejects.toBeInstanceOf(BackupError);
+    expect(exporter.imported).toBeNull();
   }, 30000);
 });
 

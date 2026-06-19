@@ -78,6 +78,65 @@ export interface RestoreBackupInput {
   envelope: BackupEnvelope;
   passphrase: string;
 }
+
+/**
+ * VerifyBackup — a NON-DESTRUCTIVE "test restore": decrypt + checksum-verify a
+ * backup envelope and report what it contains, WITHOUT importing. Lets an
+ * operator confirm a backup is genuinely restorable (right passphrase, intact)
+ * before relying on it. Gated `backup.create` (the backup author can verify).
+ */
+export interface VerifyBackupResult {
+  valid: true;
+  tables: number;
+  rows: number;
+  createdAt: string;
+}
+export class VerifyBackup implements AuthorizedUseCase<
+  RestoreBackupInput,
+  VerifyBackupResult
+> {
+  readonly name = "VerifyBackup";
+  readonly requiredPermissions = ["backup.create"];
+
+  constructor(private readonly cipher: BackupCipherPort) {}
+
+  async execute(
+    input: RestoreBackupInput,
+    _session: SessionContext,
+  ): Promise<VerifyBackupResult> {
+    const m = input.envelope.manifest;
+    if (m.formatVersion !== BACKUP_FORMAT_VERSION) {
+      throw new BackupError(
+        `Unsupported backup format v${m.formatVersion} (expected v${BACKUP_FORMAT_VERSION}).`,
+      );
+    }
+    let plaintext: string;
+    try {
+      plaintext = await this.cipher.decrypt(
+        input.envelope.ciphertext,
+        input.passphrase,
+        { salt: m.salt, iv: m.iv, authTag: m.authTag },
+      );
+    } catch {
+      throw new BackupError(
+        "Backup failed to decrypt — it is tampered or the passphrase is wrong.",
+      );
+    }
+    if (this.cipher.checksum(plaintext) !== m.checksum) {
+      throw new BackupError(
+        "Backup integrity check failed (checksum mismatch).",
+      );
+    }
+    const snapshot = JSON.parse(plaintext) as DatabaseSnapshot;
+    const rows = Object.values(snapshot).reduce((s, r) => s + r.length, 0);
+    return {
+      valid: true,
+      tables: Object.keys(snapshot).length,
+      rows,
+      createdAt: m.createdAt,
+    };
+  }
+}
 export interface RestoreResult {
   tables: number;
   rows: number;
