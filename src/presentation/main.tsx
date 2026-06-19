@@ -5,6 +5,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { CoreProvider } from "./runtime/CoreProvider";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ipcClient } from "./runtime/ipcClient";
 import { App } from "./App";
 import "./styles.css";
@@ -14,8 +15,10 @@ if (!root) throw new Error("Missing #root element.");
 
 createRoot(root).render(
   <StrictMode>
-    <CoreProvider client={ipcClient}>
-      <App />
-    </CoreProvider>
+    <ErrorBoundary>
+      <CoreProvider client={ipcClient}>
+        <App />
+      </CoreProvider>
+    </ErrorBoundary>
   </StrictMode>,
 );

@@ -18,6 +18,7 @@ import type {
   SessionView,
   LoginInput,
 } from "../presentation/runtime/contract";
+import { validateMethodInput } from "./inputSchemas";
 import { toCoreError } from "./errors";
 import type { Host } from "./composition";
 
@@ -101,6 +102,7 @@ export function createCore(
 
   return {
     async login(input) {
+      validateMethodInput("login", input);
       const key = (input?.username ?? "").trim().toLowerCase();
       if (lockedOut(key)) {
         throw new AuthenticationError(
@@ -144,7 +146,8 @@ export function createCore(
       }
       const session = resolve(token);
       try {
-        const data = await handler(input, session);
+        const validated = validateMethodInput(method, input);
+        const data = await handler(validated, session);
         return { ok: true, data };
       } catch (e) {
         return { ok: false, error: toCoreError(e) };

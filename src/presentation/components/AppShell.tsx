@@ -26,7 +26,8 @@ export type Route =
   | "users"
   | "roles"
   | "audit"
-  | "legal";
+  | "legal"
+  | "diagnostics";
 
 interface NavDef {
   key: Route;
@@ -145,6 +146,8 @@ const NAV: NavDef[] = [
   },
   // No permission — legal notices are available to every signed-in user.
   { key: "legal", label: "Legal", icon: "transcript", group: "Help" },
+  // Support snapshot; gated reads inside show "—" when not permitted.
+  { key: "diagnostics", label: "Diagnostics", icon: "config", group: "Help" },
 ];
 
 const TITLES: Record<Route, { t: string; s: string }> = {
@@ -165,6 +168,7 @@ const TITLES: Record<Route, { t: string; s: string }> = {
   roles: { t: "Roles & permissions", s: "Role-based access control" },
   audit: { t: "Audit log", s: "Append-only, tamper-evident" },
   legal: { t: "Legal", s: "Terms, disclaimer & user policies" },
+  diagnostics: { t: "Diagnostics", s: "Support snapshot & integrity" },
 };
 
 export function AppShell({
