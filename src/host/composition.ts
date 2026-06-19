@@ -135,6 +135,13 @@ import {
 import { PrismaDataExport } from "../infrastructure/backup/PrismaDataExport";
 import { BackupCipher } from "../infrastructure/crypto/BackupCipher";
 import {
+  ListNotifications,
+  MarkNotificationRead,
+  MarkAllNotificationsRead,
+} from "../application/use-cases/notifications/ManageNotifications";
+import { WorkflowNotifier } from "../application/services/WorkflowNotifier";
+import { PrismaNotificationRepository } from "../infrastructure/repositories/PrismaNotificationRepository";
+import {
   GetInstitution,
   UpdateInstitution,
 } from "../application/use-cases/config/ManageInstitution";
@@ -312,6 +319,15 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
   const createBackup = new CreateBackup(dataExport, backupCipher, clock, audit);
   const verifyBackup = new VerifyBackup(backupCipher);
   const restoreBackup = new RestoreBackup(dataExport, backupCipher, audit);
+
+  // --- notifications: role-addressed workflow handoffs ---
+  const notificationRepo = new PrismaNotificationRepository(db);
+  const notifier = new WorkflowNotifier(notificationRepo);
+  const listNotifications = new ListNotifications(notificationRepo);
+  const markNotificationRead = new MarkNotificationRead(notificationRepo);
+  const markAllNotificationsRead = new MarkAllNotificationsRead(
+    notificationRepo,
+  );
 
   // --- M6: configuration + security ---
   const getInstitution = new GetInstitution(institutions);
@@ -564,6 +580,18 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     ["createBackup", (i, s) => authorize(createBackup, i as never, s)],
     ["verifyBackup", (i, s) => authorize(verifyBackup, i as never, s)],
     ["restoreBackup", (i, s) => authorize(restoreBackup, i as never, s)],
+    [
+      "listNotifications",
+      (i, s) => authorize(listNotifications, i as never, s),
+    ],
+    [
+      "markNotificationRead",
+      (i, s) => authorize(markNotificationRead, i as never, s),
+    ],
+    [
+      "markAllNotificationsRead",
+      (i, s) => authorize(markAllNotificationsRead, i as never, s),
+    ],
     ["getInstitution", (i, s) => authorize(getInstitution, i as never, s)],
     ["listInstitutions", (i, s) => authorize(listInstitutions, i as never, s)],
     [
@@ -774,6 +802,18 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
       contentType: r.contentType,
     };
   });
+
+  // Wrap the task handlers that trigger a workflow handoff: after the task
+  // succeeds, notify the next role (best-effort; never fails the task).
+  for (const method of notifier.methods()) {
+    const inner = registry.get(method);
+    if (!inner) continue;
+    registry.set(method, async (i, s) => {
+      const result = await inner(i, s);
+      if (s) await notifier.afterTask(method, s.actorId);
+      return result;
+    });
+  }
 
   return { registry, authenticate };
 }

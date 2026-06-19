@@ -22,7 +22,8 @@ type IconName =
   | "chevron"
   | "plus"
   | "check"
-  | "download";
+  | "download"
+  | "bell";
 
 const PATHS: Record<IconName, string> = {
   dashboard: "M3 13h8V3H3v10Zm0 8h8v-6H3v6Zm10 0h8V11h-8v10Zm0-18v6h8V3h-8Z",
@@ -44,6 +45,7 @@ const PATHS: Record<IconName, string> = {
   plus: "M12 5v14M5 12h14",
   check: "M5 13l4 4L19 7",
   download: "M12 3v12m0 0l-4-4m4 4l4-4M5 21h14",
+  bell: "M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0",
 };
 
 export function Icon({ name, size = 16 }: { name: IconName; size?: number }) {

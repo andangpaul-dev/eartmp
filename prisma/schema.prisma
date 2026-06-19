@@ -478,6 +478,9 @@ model Backup {
 
 model Notification {
   id        String    @id @default(cuid())
+  // Workflow handoff: addressed to a ROLE (all its users share the worklist).
+  recipientRole String @default("")
+  actorUserId   String? // who completed the upstream task
   title     String
   body      String?
   level     String    @default("INFO") // INFO|WARNING|ERROR
@@ -485,4 +488,6 @@ model Notification {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
+
+  @@index([recipientRole, isRead])
 }

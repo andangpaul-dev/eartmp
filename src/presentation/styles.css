@@ -336,6 +336,96 @@ button {
   gap: 14px;
 }
 
+/* Notification bell + dropdown */
+.bell-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.bell-btn {
+  position: relative;
+  padding: 6px;
+}
+.bell-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--danger, #e5484d);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+.bell-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+.bell-menu {
+  position: absolute;
+  top: 38px;
+  right: 0;
+  width: 340px;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-modal);
+  z-index: 41;
+}
+.bell-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 13px;
+}
+.bell-empty {
+  padding: 18px 14px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+.bell-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.bell-item {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.bell-item.unread {
+  background: var(--surface-2);
+}
+.bell-title {
+  font-size: 12.8px;
+  line-height: 1.4;
+}
+.bell-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.linklike {
+  background: none;
+  border: none;
+  color: var(--accent, #2f6bdc);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  padding: 0;
+}
+
 /* Top-level error boundary fallback */
 .errscreen {
   position: fixed;

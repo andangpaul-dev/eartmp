@@ -70,6 +70,8 @@ const SCHEMAS: Record<string, z.ZodType> = {
     envelope: z.looseObject({}),
     passphrase: str,
   }),
+  // notifications
+  markNotificationRead: z.looseObject({ id: str }),
 };
 
 /** Every method at least requires its input to be an object (reject primitives). */

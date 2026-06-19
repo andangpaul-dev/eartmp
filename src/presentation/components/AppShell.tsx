@@ -8,6 +8,7 @@ import type { ReactNode } from "react";
 import { useSession } from "../runtime/CoreProvider";
 import { useKeyState } from "../runtime/KeyProvider";
 import { Icon } from "./ui";
+import { NotificationBell } from "./NotificationBell";
 
 export type Route =
   | "dashboard"
@@ -256,6 +257,7 @@ export function AppShell({
             <Icon name={sealed ? "key" : "shield"} size={13} />{" "}
             {sealed ? "Key sealed" : "Key unsealed"}
           </span>
+          <NotificationBell />
           <div className="avatar" title={`${session?.role ?? ""}`}>
             {initials}
           </div>

@@ -61,6 +61,8 @@ import type {
   RestoreResult,
   VerifyBackupResult,
 } from "../../application/use-cases/backup/Backup";
+import type { StoredNotification } from "../../domain/repositories/notifications";
+import type { ListNotificationsResult } from "../../application/use-cases/notifications/ManageNotifications";
 
 // Re-exported so presentation code imports these shapes from the contract
 // (the single seam) rather than reaching into application/domain paths.
@@ -93,6 +95,8 @@ export type {
   BackupEnvelope,
   RestoreResult,
   VerifyBackupResult,
+  StoredNotification,
+  ListNotificationsResult,
 };
 
 /** Transcript bytes are transported base64-encoded (JSON can't carry Uint8Array). */
@@ -391,6 +395,15 @@ export interface CoreApi {
     envelope: BackupEnvelope;
     passphrase: string;
   }): Promise<RestoreResult>;
+
+  // notifications: role-addressed workflow handoffs ("next user in line")
+  listNotifications(input: {
+    unreadOnly?: boolean;
+  }): Promise<ListNotificationsResult>;
+  markNotificationRead(input: { id: string }): Promise<{ ok: true }>;
+  markAllNotificationsRead(
+    input: Record<string, never>,
+  ): Promise<{ cleared: number }>;
 
   // configuration: institution profile, grading config, settings
   getInstitution(input: Record<string, never>): Promise<Institution>;
