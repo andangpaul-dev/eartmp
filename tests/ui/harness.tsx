@@ -9,6 +9,7 @@ import { render, type RenderResult } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactElement } from "react";
 import { CoreProvider } from "../../src/presentation/runtime/CoreProvider";
+import { DialogProvider } from "../../src/presentation/runtime/DialogProvider";
 import { KeyProvider } from "../../src/presentation/runtime/KeyProvider";
 import type {
   CoreApi,
@@ -170,7 +171,9 @@ export function renderScreen(
   });
   const result = render(
     <CoreProvider client={core}>
-      <KeyProvider>{ui}</KeyProvider>
+      <KeyProvider>
+        <DialogProvider>{ui}</DialogProvider>
+      </KeyProvider>
     </CoreProvider>,
   );
   return { ...result, core, user: userEvent.setup() };

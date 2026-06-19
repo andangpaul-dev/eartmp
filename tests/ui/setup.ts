@@ -5,6 +5,14 @@
  * Map-backed implementation whenever the runtime's is missing or broken. No-op
  * for node-env tests that never touch it.
  */
+import { configure } from "@testing-library/dom";
+
+// The default 1000ms async timeout spuriously trips when the suite runs under
+// heavy load (slow jsdom transforms). `findBy*`/`waitFor` still resolve as soon
+// as the element appears, so a larger ceiling adds headroom without slowing the
+// happy path — it removes the load-induced flakes (import-students, roles).
+configure({ asyncUtilTimeout: 5000 });
+
 const store = new Map<string, string>();
 const shim: Storage = {
   getItem: (k) => (store.has(k) ? (store.get(k) as string) : null),

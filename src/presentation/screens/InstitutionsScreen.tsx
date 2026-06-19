@@ -7,6 +7,7 @@
  */
 import { useState } from "react";
 import { useCore, useSession } from "../runtime/CoreProvider";
+import { useDialogs } from "../runtime/DialogProvider";
 import { useAsync } from "../runtime/hooks";
 import {
   Card,
@@ -33,6 +34,7 @@ function fileToBase64(file: File): Promise<string> {
 export function InstitutionsScreen() {
   const core = useCore();
   const { can } = useSession();
+  const { confirm } = useDialogs();
   const manage = can("institution.manage");
   const [creating, setCreating] = useState(false);
   const [editFor, setEditFor] = useState<Institution | null>(null);
@@ -101,8 +103,15 @@ export function InstitutionsScreen() {
               }, `${inst.name} is now the default`)
             }
             onEdit={() => setEditFor(inst)}
-            onDelete={() => {
-              if (window.confirm(`Delete "${inst.name}"?`))
+            onDelete={async () => {
+              if (
+                await confirm({
+                  title: `Delete "${inst.name}"?`,
+                  message: "This institution will be removed.",
+                  danger: true,
+                  confirmLabel: "Delete",
+                })
+              )
                 guard(async () => {
                   await core.deleteInstitution({ id: inst.id });
                   reloadAll();

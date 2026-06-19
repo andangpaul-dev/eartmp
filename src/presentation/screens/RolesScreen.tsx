@@ -5,6 +5,7 @@
  */
 import { useState } from "react";
 import { useCore, useSession } from "../runtime/CoreProvider";
+import { useDialogs } from "../runtime/DialogProvider";
 import { useAsync } from "../runtime/hooks";
 import {
   Card,
@@ -20,6 +21,7 @@ import type { Role, Permission } from "../runtime/contract";
 export function RolesScreen() {
   const core = useCore();
   const { can } = useSession();
+  const { confirm, prompt } = useDialogs();
   const manage = can("roles.assign");
   const [toast, setToast] = useState<string | null>(null);
   const [editing, setEditing] = useState<Role | null>(null);
@@ -89,11 +91,13 @@ export function RolesScreen() {
                         </Button>
                         <Button
                           variant="ghost"
-                          onClick={() => {
-                            const n = window.prompt(
-                              `Rename "${r.name}"`,
-                              r.name,
-                            );
+                          onClick={async () => {
+                            const n = await prompt({
+                              title: `Rename "${r.name}"`,
+                              fieldLabel: "Role name",
+                              defaultValue: r.name,
+                              confirmLabel: "Rename",
+                            });
                             if (n && n.trim())
                               guard(async () => {
                                 await core.updateRole({
@@ -108,8 +112,14 @@ export function RolesScreen() {
                         </Button>
                         <Button
                           variant="danger"
-                          onClick={() => {
-                            if (window.confirm(`Delete role "${r.name}"?`))
+                          onClick={async () => {
+                            if (
+                              await confirm({
+                                title: `Delete role "${r.name}"?`,
+                                danger: true,
+                                confirmLabel: "Delete",
+                              })
+                            )
                               guard(async () => {
                                 await core.deleteRole({ id: r.id });
                                 roles.reload();

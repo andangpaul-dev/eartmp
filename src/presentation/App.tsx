@@ -6,6 +6,7 @@
 import { useEffect, useState } from "react";
 import { useCore, useSession } from "./runtime/CoreProvider";
 import { KeyProvider } from "./runtime/KeyProvider";
+import { DialogProvider } from "./runtime/DialogProvider";
 import { AppShell, type Route } from "./components/AppShell";
 import { UnlockScreen } from "./screens/UnlockScreen";
 import { LoginScreen } from "./screens/LoginScreen";
@@ -127,17 +128,19 @@ export function App() {
 
   return (
     <KeyProvider>
-      <AppShell
-        route={route}
-        setRoute={setRoute}
-        onLock={async () => {
-          await core.logout();
-          setSession(null);
-          setRoute("dashboard");
-        }}
-      >
-        {screen}
-      </AppShell>
+      <DialogProvider>
+        <AppShell
+          route={route}
+          setRoute={setRoute}
+          onLock={async () => {
+            await core.logout();
+            setSession(null);
+            setRoute("dashboard");
+          }}
+        >
+          {screen}
+        </AppShell>
+      </DialogProvider>
     </KeyProvider>
   );
 }

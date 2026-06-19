@@ -8,6 +8,7 @@
 import { useState, useEffect } from "react";
 import { useCore, useSession } from "../runtime/CoreProvider";
 import { useKeyState } from "../runtime/KeyProvider";
+import { useDialogs } from "../runtime/DialogProvider";
 import { useAsync, useAction } from "../runtime/hooks";
 import { StudentPicker } from "../components/StudentPicker";
 import {
@@ -49,6 +50,7 @@ export function TranscriptsScreen() {
   const core = useCore();
   const { can } = useSession();
   const { sealed } = useKeyState();
+  const { confirm } = useDialogs();
   const [student, setStudent] = useState<Student | null>(null);
   const [unsealOpen, setUnsealOpen] = useState(false);
   const [verifyOf, setVerifyOf] = useState<Record<string, VerifyResult>>({});
@@ -129,9 +131,13 @@ export function TranscriptsScreen() {
 
   const revoke = async (t: StoredTranscript) => {
     if (
-      !window.confirm(
-        `Revoke ${t.transcriptNumber}? It will no longer verify as a valid issue. This is recorded in the audit log.`,
-      )
+      !(await confirm({
+        title: `Revoke ${t.transcriptNumber}?`,
+        message:
+          "It will no longer verify as a valid issue. This is recorded in the audit log.",
+        danger: true,
+        confirmLabel: "Revoke",
+      }))
     )
       return;
     try {

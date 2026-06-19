@@ -7,6 +7,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useCore, useSession } from "../runtime/CoreProvider";
+import { useDialogs } from "../runtime/DialogProvider";
 import { useAsync } from "../runtime/hooks";
 import { Card, Button, Field, Modal, Toast, Icon } from "../components/ui";
 import type {
@@ -427,6 +428,7 @@ function Panel<T extends NamedCoded>({
 }) {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
+  const { confirm, prompt } = useDialogs();
   return (
     <Card title={title}>
       {hint ? (
@@ -454,8 +456,13 @@ function Panel<T extends NamedCoded>({
                   <button
                     className="iconbtn"
                     title="Rename"
-                    onClick={() => {
-                      const n = window.prompt(`Rename "${it.name}"`, it.name);
+                    onClick={async () => {
+                      const n = await prompt({
+                        title: `Rename "${it.name}"`,
+                        fieldLabel: "Name",
+                        defaultValue: it.name,
+                        confirmLabel: "Rename",
+                      });
                       if (n && n.trim()) onRename(it, n.trim());
                     }}
                   >
@@ -464,8 +471,15 @@ function Panel<T extends NamedCoded>({
                   <button
                     className="iconbtn"
                     title="Delete"
-                    onClick={() => {
-                      if (window.confirm(`Delete "${it.name}"?`)) onDelete(it);
+                    onClick={async () => {
+                      if (
+                        await confirm({
+                          title: `Delete "${it.name}"?`,
+                          danger: true,
+                          confirmLabel: "Delete",
+                        })
+                      )
+                        onDelete(it);
                     }}
                   >
                     <Icon name="lock" size={13} />
@@ -815,6 +829,7 @@ function LevelSection({
   onEditCourse: (c: Course) => void;
   onDeleteCourse: (c: Course) => void;
 }) {
+  const { confirm } = useDialogs();
   const groups = [
     ...SEMESTERS.map((s) => ({
       label: `Semester ${s}`,
@@ -855,8 +870,14 @@ function LevelSection({
         {canManage && (
           <Button
             variant="ghost"
-            onClick={() => {
-              if (window.confirm(`Delete level "${level.name}"?`))
+            onClick={async () => {
+              if (
+                await confirm({
+                  title: `Delete level "${level.name}"?`,
+                  danger: true,
+                  confirmLabel: "Delete level",
+                })
+              )
                 onDeleteLevel(level);
             }}
           >
@@ -905,6 +926,7 @@ function CourseTable({
   onEdit: (c: Course) => void;
   onDelete: (c: Course) => void;
 }) {
+  const { confirm } = useDialogs();
   return (
     <table className="data">
       <thead>
@@ -930,8 +952,14 @@ function CourseTable({
                 </Button>
                 <Button
                   variant="ghost"
-                  onClick={() => {
-                    if (window.confirm(`Delete course "${c.code}"?`))
+                  onClick={async () => {
+                    if (
+                      await confirm({
+                        title: `Delete course "${c.code}"?`,
+                        danger: true,
+                        confirmLabel: "Delete",
+                      })
+                    )
                       onDelete(c);
                   }}
                 >
@@ -1169,6 +1197,7 @@ function CoursesPanel({
   }) => void;
   onDelete: (c: Course) => void;
 }) {
+  const { confirm } = useDialogs();
   const [code, setCode] = useState("");
   const [title, setTitle] = useState("");
   const [credit, setCredit] = useState("3");
@@ -1198,8 +1227,14 @@ function CoursesPanel({
                 <td style={{ textAlign: "right" }}>
                   <Button
                     variant="ghost"
-                    onClick={() => {
-                      if (window.confirm(`Delete course "${c.code}"?`))
+                    onClick={async () => {
+                      if (
+                        await confirm({
+                          title: `Delete course "${c.code}"?`,
+                          danger: true,
+                          confirmLabel: "Delete",
+                        })
+                      )
                         onDelete(c);
                     }}
                   >
