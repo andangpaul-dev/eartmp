@@ -407,6 +407,9 @@ model TranscriptTemplate {
   version     Int          @default(1)
   layout      String // JSON: ordered component definitions
   isDefault   Boolean      @default(false)
+  // Document family this layout renders: TRANSCRIPT | CERTIFICATE. The default
+  // per category is the one used when none is chosen.
+  category    String       @default("TRANSCRIPT")
   transcripts Transcript[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt

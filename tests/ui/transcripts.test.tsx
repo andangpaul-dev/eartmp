@@ -1,7 +1,16 @@
 // @vitest-environment jsdom
 import { screen, waitFor } from "@testing-library/react";
 import { TranscriptsScreen } from "../../src/presentation/screens/TranscriptsScreen";
-import { renderScreen } from "./harness";
+import type { Student } from "../../src/domain/entities";
+import { renderScreen, pickStudent } from "./harness";
+
+const student = {
+  id: "s1",
+  matricNumber: "CS/1",
+  fullName: "Ada Lovelace",
+  status: "ACTIVE",
+  programmeId: "p1",
+} as Student;
 
 describe("TranscriptsScreen signing-key UX", () => {
   it("shows the sealed banner and an Unseal action for a generator", async () => {
@@ -50,5 +59,34 @@ describe("TranscriptsScreen signing-key UX", () => {
     expect(
       await screen.findByText(/signing key is unsealed/i),
     ).toBeInTheDocument();
+  });
+
+  it("issues a certificate from the Generate certificate action", async () => {
+    const generateCertificate = vi.fn(
+      async () =>
+        ({
+          id: "d1",
+          transcriptNumber: "TR-2026-000001",
+          type: "CERTIFICATE",
+          status: "DRAFT",
+        }) as never,
+    );
+    const { user } = renderScreen(<TranscriptsScreen />, {
+      permissions: ["transcripts.read", "transcripts.generate"],
+      core: {
+        keyState: async () => ({ sealed: false }),
+        listStudents: async () => ({ items: [student], total: 1 }),
+        listTranscripts: async () => [],
+        generateCertificate,
+      },
+    });
+
+    await pickStudent(user, "ada", /Ada Lovelace/);
+    await user.click(
+      await screen.findByRole("button", { name: /generate certificate/i }),
+    );
+    await waitFor(() =>
+      expect(generateCertificate).toHaveBeenCalledWith({ studentId: "s1" }),
+    );
   });
 });

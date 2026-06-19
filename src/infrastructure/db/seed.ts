@@ -146,6 +146,38 @@ const TEMPLATE_V1_LAYOUT = {
   ],
 };
 
+// A bundled degree-certificate layout (CERTIFICATE category). Uses lenient
+// `template` interpolation for student fields so it never fails to generate;
+// `bind` for fields the report always carries (number, date, QR).
+const CERTIFICATE_LAYOUT_V1 = {
+  schemaVersion: 1,
+  pageSize: "A4",
+  blocks: [
+    { type: "title", value: "CERTIFICATE OF AWARD" },
+    { type: "text", template: "This is to certify that" },
+    { type: "text", template: "{{student.fullName}}" },
+    {
+      type: "text",
+      template:
+        "having satisfied all the requirements prescribed by {{institution.name}}, has been awarded the degree of",
+    },
+    { type: "text", template: "{{student.programme}}" },
+    {
+      type: "fieldGrid",
+      columns: 2,
+      fields: [
+        { label: "Class / Division", template: "{{summary.standing}}" },
+        { label: "Faculty", template: "{{student.faculty}}" },
+        { label: "Certificate No.", bind: "verification.transcriptNumber" },
+        { label: "Date of issue", bind: "issuedAt" },
+      ],
+    },
+    { type: "remarks", value: "Given under the seal of the institution." },
+    { type: "signatureRow" },
+    { type: "qr", bind: "verification.qrPayload" },
+  ],
+};
+
 async function seedPermissions(
   prisma: PrismaClient,
 ): Promise<Map<string, string>> {
@@ -294,4 +326,30 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
   await seedInstitution(prisma);
   await seedAdminUser(prisma);
   await seedSettings(prisma);
+}
+
+/**
+ * Built-in document templates, refreshed on every launch (idempotent, keyed by
+ * name) so an ALREADY-provisioned database also gains newly-shipped templates —
+ * e.g. the degree certificate. The default per category is set only on first
+ * creation, so an admin's later choice of default is preserved.
+ */
+export async function ensureBuiltinTemplates(
+  prisma: PrismaClient,
+): Promise<void> {
+  await prisma.transcriptTemplate.upsert({
+    where: { name: "Degree Certificate" },
+    update: {
+      layout: JSON.stringify(CERTIFICATE_LAYOUT_V1),
+      version: 1,
+      category: "CERTIFICATE",
+    },
+    create: {
+      name: "Degree Certificate",
+      version: 1,
+      layout: JSON.stringify(CERTIFICATE_LAYOUT_V1),
+      isDefault: true,
+      category: "CERTIFICATE",
+    },
+  });
 }

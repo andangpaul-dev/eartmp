@@ -13,6 +13,7 @@ import type {
   TranscriptStore,
   TranscriptTemplateRepository,
   StoredTranscript,
+  TemplateCategory,
 } from "../../../domain/repositories/transcripts";
 import type { InstitutionRepository } from "../../../domain/repositories/config";
 import type { StudentRepository } from "../../../domain/repositories/records";
@@ -33,6 +34,8 @@ export interface GenerateTranscriptInput {
   studentId: string;
   type?: string;
   templateId?: string;
+  /** Which built-in default template to use when no templateId is given. */
+  category?: TemplateCategory;
 }
 
 /**
@@ -78,9 +81,13 @@ export class GenerateTranscript implements AuthorizedUseCase<
 
     const template = input.templateId
       ? await this.templates.findById(input.templateId)
-      : await this.templates.findDefault();
+      : await this.templates.findDefault(input.category);
     if (!template)
-      throw new TranscriptError("No transcript template configured.");
+      throw new TranscriptError(
+        input.category === "CERTIFICATE"
+          ? "No certificate template configured."
+          : "No transcript template configured.",
+      );
 
     let layout: unknown;
     try {

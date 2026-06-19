@@ -61,6 +61,7 @@ class FakeTemplateStore implements TranscriptTemplateStore {
       version: 1,
       layout: data.layout,
       isDefault: data.isDefault,
+      category: data.category ?? "TRANSCRIPT",
     };
     this.rows.push(t);
     return { ...t };

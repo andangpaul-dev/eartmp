@@ -705,19 +705,30 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
 
   // Generate + verify resolve the issuing institution's key (Phase F). The
   // use-cases still run through `authorize` so the permission gate is uniform.
+  const newGenerate = () =>
+    new GenerateTranscript(
+      transcripts,
+      templates,
+      institutions,
+      reportBuilder,
+      resolveSigner,
+      clock,
+      audit,
+      students,
+    );
   registry.set("generateTranscript", (i, s) =>
+    authorize(newGenerate(), i as never, s),
+  );
+  // A certificate is the same signed-document pipeline with the CERTIFICATE
+  // template + type (gated by the same transcripts.generate permission).
+  registry.set("generateCertificate", (i, s) =>
     authorize(
-      new GenerateTranscript(
-        transcripts,
-        templates,
-        institutions,
-        reportBuilder,
-        resolveSigner,
-        clock,
-        audit,
-        students,
-      ),
-      i as never,
+      newGenerate(),
+      {
+        ...(i as object),
+        category: "CERTIFICATE",
+        type: "CERTIFICATE",
+      } as never,
       s,
     ),
   );

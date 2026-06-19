@@ -7,7 +7,7 @@
  */
 import type { PrismaClient } from "@prisma/client";
 import { runMigrations } from "./migrationRunner";
-import { seedDatabase } from "./seed";
+import { seedDatabase, ensureBuiltinTemplates } from "./seed";
 import { seedDemoData } from "./demoData";
 
 async function isInitialized(prisma: PrismaClient): Promise<boolean> {
@@ -34,6 +34,9 @@ export async function bootstrapDatabase(
   if (fresh) {
     await seedDatabase(prisma);
   }
+  // Built-in document templates are kept current on every launch (idempotent),
+  // so an existing database also gains newly-shipped ones (e.g. certificates).
+  await ensureBuiltinTemplates(prisma);
   // Optional sample data for UAT/test builds (idempotent; off by default).
   if (process.env.EARTMP_SEED_DEMO) await seedDemoData(prisma);
   return fresh;

@@ -147,6 +147,7 @@ export class PrismaTranscriptTemplateRepository implements TranscriptTemplateSto
     version: number;
     layout: string;
     isDefault: boolean;
+    category: string;
   }): StoredTemplate {
     return {
       id: r.id,
@@ -154,11 +155,14 @@ export class PrismaTranscriptTemplateRepository implements TranscriptTemplateSto
       version: r.version,
       layout: r.layout,
       isDefault: r.isDefault,
+      category: r.category === "CERTIFICATE" ? "CERTIFICATE" : "TRANSCRIPT",
     };
   }
-  async findDefault(): Promise<StoredTemplate | null> {
+  async findDefault(
+    category: "TRANSCRIPT" | "CERTIFICATE" = "TRANSCRIPT",
+  ): Promise<StoredTemplate | null> {
     const r = await this.db.transcriptTemplate.findFirst({
-      where: { isDefault: true, deletedAt: null },
+      where: { isDefault: true, category, deletedAt: null },
     });
     return r ? this.map(r) : null;
   }
@@ -183,7 +187,12 @@ export class PrismaTranscriptTemplateRepository implements TranscriptTemplateSto
   }
   async create(data: NewTemplate): Promise<StoredTemplate> {
     const r = await this.db.transcriptTemplate.create({
-      data: { name: data.name, layout: data.layout, isDefault: data.isDefault },
+      data: {
+        name: data.name,
+        layout: data.layout,
+        isDefault: data.isDefault,
+        category: data.category ?? "TRANSCRIPT",
+      },
     });
     return this.map(r);
   }

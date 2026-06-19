@@ -330,6 +330,12 @@ export interface CoreApi {
     type?: string;
     templateId?: string;
   }): Promise<StoredTranscript>;
+  /** Issue a degree certificate (a signed document using the certificate
+   *  template). Flows through the same approve → export → verify lifecycle. */
+  generateCertificate(input: {
+    studentId: string;
+    templateId?: string;
+  }): Promise<StoredTranscript>;
   verifyTranscript(input: { transcriptId: string }): Promise<VerifyResult>;
   approveTranscript(input: { transcriptId: string }): Promise<StoredTranscript>;
   lockTranscript(input: { transcriptId: string }): Promise<StoredTranscript>;

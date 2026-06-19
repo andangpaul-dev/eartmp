@@ -88,6 +88,16 @@ export function TranscriptsScreen() {
     },
   );
 
+  const certificate = useAction(
+    () => core.generateCertificate({ studentId: student!.id }),
+    {
+      onSuccess: (t) => {
+        list.reload();
+        notify(`Generated certificate ${t.transcriptNumber} (DRAFT)`);
+      },
+    },
+  );
+
   const verify = async (t: StoredTranscript) => {
     try {
       const r = await core.verifyTranscript({ transcriptId: t.id });
@@ -171,20 +181,30 @@ export function TranscriptsScreen() {
         <div className="spread" style={{ flexWrap: "wrap", gap: 12 }}>
           <StudentPicker value={student} onChange={setStudent} />
           {student && can("transcripts.generate") && (
-            <Button
-              variant="primary"
-              loading={generate.loading}
-              disabled={sealed}
-              title={sealed ? "Unseal the signing key first" : undefined}
-              onClick={generate.run}
-            >
-              <Icon name="plus" size={15} /> Generate transcript
-            </Button>
+            <div className="row" style={{ gap: 8 }}>
+              <Button
+                variant="primary"
+                loading={generate.loading}
+                disabled={sealed}
+                title={sealed ? "Unseal the signing key first" : undefined}
+                onClick={generate.run}
+              >
+                <Icon name="plus" size={15} /> Generate transcript
+              </Button>
+              <Button
+                loading={certificate.loading}
+                disabled={sealed}
+                title={sealed ? "Unseal the signing key first" : undefined}
+                onClick={certificate.run}
+              >
+                <Icon name="plus" size={15} /> Generate certificate
+              </Button>
+            </div>
           )}
         </div>
-        {generate.error && (
+        {(generate.error || certificate.error) && (
           <div className="alert danger" style={{ marginTop: 12 }}>
-            {generate.error.message}
+            {(generate.error || certificate.error)?.message}
           </div>
         )}
       </Card>

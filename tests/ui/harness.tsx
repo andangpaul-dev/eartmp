@@ -79,6 +79,7 @@ export function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
     listTranscripts: async () => [],
     listTranscriptRecords: async () => [],
     generateTranscript: async () => ({}) as never,
+    generateCertificate: async () => ({}) as never,
     verifyTranscript: async () => ({
       valid: true,
       transcriptNumber: "TR-1",

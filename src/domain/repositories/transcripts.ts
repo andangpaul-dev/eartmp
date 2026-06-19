@@ -64,16 +64,21 @@ export interface TranscriptStore {
   listRecords(filter?: TranscriptRecordFilter): Promise<TranscriptRecord[]>;
 }
 
+/** Document family a template renders. */
+export type TemplateCategory = "TRANSCRIPT" | "CERTIFICATE";
+
 export interface StoredTemplate {
   id: string;
   name: string;
   version: number;
   layout: string; // JSON block tree
   isDefault: boolean;
+  category: TemplateCategory;
 }
 
 export interface TranscriptTemplateRepository {
-  findDefault(): Promise<StoredTemplate | null>;
+  /** The default template for a category (defaults to TRANSCRIPT). */
+  findDefault(category?: TemplateCategory): Promise<StoredTemplate | null>;
   findById(id: string): Promise<StoredTemplate | null>;
 }
 
@@ -81,6 +86,7 @@ export interface NewTemplate {
   name: string;
   layout: string; // JSON block tree
   isDefault: boolean;
+  category?: TemplateCategory;
 }
 
 /** Full management port (Phase 15) — extends the read port. */

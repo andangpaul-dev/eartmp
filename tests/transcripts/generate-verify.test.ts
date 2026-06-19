@@ -77,6 +77,7 @@ const template: StoredTemplate = {
   name: "Official",
   version: 1,
   isDefault: true,
+  category: "TRANSCRIPT",
   layout: JSON.stringify({
     blocks: [
       {
@@ -88,9 +89,23 @@ const template: StoredTemplate = {
     ],
   }),
 };
+const certificateTemplate: StoredTemplate = {
+  id: "cert1",
+  name: "Degree Certificate",
+  version: 1,
+  isDefault: true,
+  category: "CERTIFICATE",
+  layout: JSON.stringify({
+    blocks: [
+      { type: "title", value: "CERTIFICATE OF AWARD" },
+      { type: "text", template: "Awarded to {{student.fullName}}" },
+      { type: "qr", bind: "verification.qrPayload" },
+    ],
+  }),
+};
 const templates: TranscriptTemplateRepository = {
-  async findDefault() {
-    return template;
+  async findDefault(category) {
+    return category === "CERTIFICATE" ? certificateTemplate : template;
   },
   async findById() {
     return template;
@@ -182,6 +197,16 @@ describe("GenerateTranscript", () => {
     studentInstitutionId = "i1";
     const t = await generate.execute({ studentId: "s1" }, admin);
     expect(t.institutionId).toBe("i1");
+  });
+
+  it("issues a certificate using the certificate template + type", async () => {
+    const t = await generate.execute(
+      { studentId: "s1", category: "CERTIFICATE", type: "CERTIFICATE" },
+      admin,
+    );
+    expect(t.type).toBe("CERTIFICATE");
+    expect(t.templateId).toBe("cert1");
+    expect(t.status).toBe("DRAFT");
   });
 
   it("a DRAFT has a valid signature but is not an issued (valid) transcript", async () => {
