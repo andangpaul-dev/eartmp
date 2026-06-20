@@ -18,6 +18,7 @@ import {
   PrismaCourseRepository,
   PrismaResultRepository,
   PrismaSemesterOrdering,
+  PrismaStudentEnrollmentRepository,
 } from "../infrastructure/repositories/PrismaRecordsRepositories";
 import {
   PrismaUserRepository,
@@ -105,6 +106,8 @@ import {
   LockSemesterResults,
   UnlockResult,
 } from "../application/use-cases/results/ManageResults";
+import { SaveCourseResults } from "../application/use-cases/results/SaveCourseResults";
+import { ListCourseRoster } from "../application/use-cases/results/CourseRoster";
 import { ProcessSemester } from "../application/use-cases/results/ProcessSemester";
 import { ImportResults } from "../application/use-cases/results/ImportResults";
 import { ImportStudents } from "../application/use-cases/records/ImportStudents";
@@ -285,6 +288,13 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
   );
   const lockSemesterResults = new LockSemesterResults(results, audit);
   const unlockResult = new UnlockResult(results, audit);
+  const enrollments = new PrismaStudentEnrollmentRepository(db);
+  const saveCourseResultsUC = new SaveCourseResults(grading, uow);
+  const listCourseRosterUC = new ListCourseRoster(
+    students,
+    enrollments,
+    courses,
+  );
   const importResults = new ImportResults(grading, uow);
   const importStudents = new ImportStudents(uow);
 
@@ -568,6 +578,14 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
       (i, s) => authorize(lockSemesterResults, i as never, s),
     ],
     ["unlockResult", (i, s) => authorize(unlockResult, i as never, s)],
+    [
+      "saveCourseResults",
+      (i, s) => authorize(saveCourseResultsUC, i as never, s),
+    ],
+    [
+      "listCourseRoster",
+      (i, s) => authorize(listCourseRosterUC, i as never, s),
+    ],
     ["importResults", (i, s) => authorize(importResults, i as never, s)],
     ["importStudents", (i, s) => authorize(importStudents, i as never, s)],
     ["getAcademicSummary", (i, s) => authorize(academic, i as never, s)],
