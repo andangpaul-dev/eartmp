@@ -77,6 +77,85 @@ describe("runtime migration runner — upgrade path", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Workstream C: MatriculeCounter + Student.previousStudentId upgrade path
+// ---------------------------------------------------------------------------
+
+const RECENT_C = /matricule_identity/;
+
+const DB_C = `${process.cwd().replace(/\\/g, "/")}/.tmp-upgrade-c.db`;
+const URL_C = `file:${DB_C}`;
+
+let dbC: PrismaClient;
+let oldDirC: string;
+
+const cleanupC = () => {
+  for (const f of [DB_C, `${DB_C}-journal`]) if (existsSync(f)) rmSync(f);
+};
+
+describe("runtime migration runner — Workstream C upgrade path (MatriculeCounter)", () => {
+  beforeAll(() => {
+    cleanupC();
+    dbC = new PrismaClient({ datasourceUrl: URL_C });
+    oldDirC = mkdtempSync(join(tmpdir(), "eartmp-old-c-"));
+    for (const e of readdirSync(MIGRATIONS, { withFileTypes: true })) {
+      if (!e.isDirectory() || RECENT_C.test(e.name)) continue;
+      cpSync(join(MIGRATIONS, e.name), join(oldDirC, e.name), {
+        recursive: true,
+      });
+    }
+  });
+
+  afterAll(async () => {
+    await dbC?.$disconnect();
+    cleanupC();
+    if (oldDirC && existsSync(oldDirC))
+      rmSync(oldDirC, { recursive: true, force: true });
+  });
+
+  it("adds MatriculeCounter + Student.previousStudentId", async () => {
+    // 1. Provision the pre-C schema (columns/table absent).
+    await runMigrations(dbC, oldDirC);
+    const colsBefore = (await dbC.$queryRawUnsafe(
+      `PRAGMA table_info("Student")`,
+    )) as { name: string }[];
+    expect(colsBefore.map((c) => c.name)).not.toContain("previousStudentId");
+    const tblsBefore = (await dbC.$queryRawUnsafe(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name='MatriculeCounter'`,
+    )) as { name: string }[];
+    expect(tblsBefore.length).toBe(0);
+
+    // 2. Ship the Workstream C migration.
+    const applied = await runMigrations(dbC, MIGRATIONS);
+    expect(applied.some((n) => /matricule_identity/.test(n))).toBe(true);
+
+    // Student.previousStudentId column now present.
+    const cols = (await dbC.$queryRawUnsafe(
+      `PRAGMA table_info("Student")`,
+    )) as { name: string }[];
+    expect(cols.map((c) => c.name)).toContain("previousStudentId");
+
+    // MatriculeCounter table exists.
+    const tbls = (await dbC.$queryRawUnsafe(
+      `SELECT name FROM sqlite_master WHERE type='table' AND name='MatriculeCounter'`,
+    )) as { name: string }[];
+    expect(tbls.length).toBe(1);
+
+    // Unique index exists.
+    const idx = (await dbC.$queryRawUnsafe(
+      `PRAGMA index_list("MatriculeCounter")`,
+    )) as { name: string }[];
+    expect(
+      idx.some(
+        (i) => i.name === "MatriculeCounter_institutionId_facultyId_year_key",
+      ),
+    ).toBe(true);
+
+    // 3. Idempotent: a second run re-applies nothing.
+    expect(await runMigrations(dbC, MIGRATIONS)).toEqual([]);
+  }, 60_000);
+});
+
+// ---------------------------------------------------------------------------
 // Workstream B: Result sitting/status upgrade path
 // ---------------------------------------------------------------------------
 
