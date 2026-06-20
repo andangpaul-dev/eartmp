@@ -16,7 +16,13 @@ import type {
 import type { AuditLogPort } from "../../../domain/repositories";
 import type { GradingConfigService } from "../../services/GradingConfigService";
 import type { AuthorizedUseCase } from "../../authorization/AuthorizedUseCase";
-import type { ResultSitting } from "../../../domain/value-objects/ResultSitting";
+import {
+  type ResultSitting,
+  type ResultStatus,
+  assertSitting,
+  assertStatus,
+} from "../../../domain/value-objects/ResultSitting";
+import { canOverrideResults } from "../../authorization/resultsOverride";
 import {
   requireInScope,
   requireInFacultyScope,
@@ -45,6 +51,8 @@ export interface EnterResultInput {
   courseId: string;
   semesterId: string;
   componentScores: { key: string; score: number }[];
+  sitting?: ResultSitting;
+  status?: ResultStatus;
 }
 
 export class EnterResult implements AuthorizedUseCase<
@@ -66,19 +74,32 @@ export class EnterResult implements AuthorizedUseCase<
     session: SessionContext,
   ): Promise<ResultRecord> {
     await guardStudentScope(this.students, input.studentId, session);
-    // Compute the final score via the configured assessment structure. The value
-    // object validates component keys/ranges/completeness.
-    const structure = await this.grading.loadAssessmentStructure();
-    const finalScore = structure.computeFinalScore(input.componentScores);
 
+    const sitting = input.sitting ?? "NORMAL";
+    const status = input.status ?? "GRADED";
+    assertSitting(sitting);
+    assertStatus(status);
+
+    // Only compute a final score for GRADED results; DID/DISQUALIFIED/INCOMPLETE
+    // have no meaningful score to compute from components.
+    const graded = status === "GRADED";
+    const finalScore = graded
+      ? (await this.grading.loadAssessmentStructure()).computeFinalScore(
+          input.componentScores,
+        )
+      : undefined;
+
+    // Dedupe on (course, sitting) — NORMAL and RESIT are independent rows.
     const existing = (
       await this.results.findByStudentAndSemester(
         input.studentId,
         input.semesterId,
       )
-    ).find((r) => r.courseId === input.courseId);
+    ).find((r) => r.courseId === input.courseId && r.sitting === sitting);
 
-    if (existing?.isLocked) {
+    const override = canOverrideResults(session);
+
+    if (existing?.isLocked && !override) {
       throw new RecordsError(
         "This result is locked; unlock it before editing scores.",
       );
@@ -87,19 +108,25 @@ export class EnterResult implements AuthorizedUseCase<
     if (existing) {
       await this.results.updateScores(existing.id, {
         componentScores: input.componentScores,
-        finalScore,
+        ...(finalScore !== undefined ? { finalScore } : {}),
+        status,
       });
       await this.audit.record({
         userId: session.actorId,
         action: "UPDATE",
         entity: "Result",
         recordId: existing.id,
-        newValue: { finalScore },
+        newValue: {
+          finalScore,
+          status,
+          ...(existing.isLocked && override ? { override: true } : {}),
+        },
       });
       return {
         ...existing,
         componentScores: input.componentScores,
-        finalScore,
+        ...(finalScore !== undefined ? { finalScore } : {}),
+        status,
       };
     }
 
@@ -108,17 +135,17 @@ export class EnterResult implements AuthorizedUseCase<
       courseId: input.courseId,
       semesterId: input.semesterId,
       componentScores: input.componentScores,
-      finalScore,
+      ...(finalScore !== undefined ? { finalScore } : {}),
       isLocked: false,
-      sitting: "NORMAL",
-      status: "GRADED",
+      sitting,
+      status,
     });
     await this.audit.record({
       userId: session.actorId,
       action: "CREATE",
       entity: "Result",
       recordId: created.id,
-      newValue: { courseId: created.courseId, finalScore },
+      newValue: { courseId: created.courseId, finalScore, status },
     });
     return created;
   }

@@ -25,6 +25,13 @@ const admin = SessionContext.create("admin", "SUPER_ADMIN", [
   "results.unlock",
 ]);
 
+const adminWithOverride = SessionContext.create("admin", "SUPER_ADMIN", [
+  "results.read",
+  "results.process",
+  "results.unlock",
+  "results.override",
+]);
+
 async function makeGrading() {
   const assess = new FakeAssessmentConfigRepo();
   await assess.create({
@@ -147,6 +154,122 @@ describe("EnterResult", () => {
         viewer,
       ),
     ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
+  it("creates a RESIT row distinct from the NORMAL row", async () => {
+    const uc = new EnterResult(results, await makeGrading(), audit);
+    // First create the NORMAL row
+    await uc.execute(
+      {
+        studentId: "s",
+        courseId: "c",
+        semesterId: "sem",
+        componentScores: [
+          { key: "ca", score: 10 },
+          { key: "exam", score: 30 },
+        ],
+      },
+      admin,
+    );
+    // Now create a RESIT row — must be a separate row
+    const createSpy = vi.spyOn(results, "create");
+    await uc.execute(
+      {
+        studentId: "s",
+        courseId: "c",
+        semesterId: "sem",
+        sitting: "RESIT",
+        componentScores: [
+          { key: "ca", score: 20 },
+          { key: "exam", score: 50 },
+        ],
+      },
+      admin,
+    );
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ sitting: "RESIT", status: "GRADED" }),
+    );
+    expect(results.rows).toHaveLength(2);
+  });
+
+  it("records a DID with no scores", async () => {
+    const uc = new EnterResult(results, await makeGrading(), audit);
+    const createSpy = vi.spyOn(results, "create");
+    await uc.execute(
+      {
+        studentId: "s",
+        courseId: "c",
+        semesterId: "sem",
+        status: "DID",
+        componentScores: [],
+      },
+      admin,
+    );
+    expect(createSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "DID" }),
+    );
+    // finalScore should be absent (DID is not GRADED)
+    const created = results.rows[0]!;
+    expect(created.finalScore).toBeUndefined();
+  });
+
+  it("refuses to edit a locked row without override", async () => {
+    const uc = new EnterResult(results, await makeGrading(), audit);
+    // Seed a locked NORMAL row
+    await results.create({
+      studentId: "s",
+      courseId: "c",
+      semesterId: "sem",
+      componentScores: [],
+      finalScore: 50,
+      isLocked: true,
+      sitting: "NORMAL",
+      status: "GRADED",
+    });
+    await expect(
+      uc.execute(
+        {
+          studentId: "s",
+          courseId: "c",
+          semesterId: "sem",
+          componentScores: [
+            { key: "ca", score: 20 },
+            { key: "exam", score: 50 },
+          ],
+        },
+        admin,
+      ),
+    ).rejects.toThrow(/locked/i);
+  });
+
+  it("edits a locked row WITH override, audited as override", async () => {
+    const uc = new EnterResult(results, await makeGrading(), audit);
+    // Seed a locked NORMAL row
+    await results.create({
+      studentId: "s",
+      courseId: "c",
+      semesterId: "sem",
+      componentScores: [],
+      finalScore: 50,
+      isLocked: true,
+      sitting: "NORMAL",
+      status: "GRADED",
+    });
+    await uc.execute(
+      {
+        studentId: "s",
+        courseId: "c",
+        semesterId: "sem",
+        componentScores: [
+          { key: "ca", score: 20 },
+          { key: "exam", score: 50 },
+        ],
+      },
+      adminWithOverride,
+    );
+    const lastEntry = audit.entries.at(-1)!;
+    expect(lastEntry.action).toBe("UPDATE");
+    expect(lastEntry.newValue).toMatchObject({ override: true });
   });
 });
 
