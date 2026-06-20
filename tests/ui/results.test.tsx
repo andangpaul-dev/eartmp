@@ -92,6 +92,113 @@ describe("ResultsScreen", () => {
     expect(screen.getByText("7")).toBeInTheDocument();
   });
 
+  it("enters a resit: sitting select forwarded to enterResult", async () => {
+    const enterResult = vi.fn(async () => ({}) as never);
+    const { user } = renderScreen(<ResultsScreen />, {
+      permissions: ["results.process"],
+      core: {
+        ...baseCore,
+        getStudentSemesterResults: async () => [] as never,
+        getAssessmentStructure: async () =>
+          [{ key: "CA", label: "CA", maxScore: 40 }] as never,
+        listCourses: async () =>
+          ({
+            items: [
+              {
+                id: "c1",
+                code: "CS101",
+                title: "Intro",
+                creditValue: 3,
+                courseType: "CORE",
+              },
+            ],
+            total: 1,
+          }) as never,
+        previewFinalScore: async () => 40 as never,
+        enterResult,
+      },
+    });
+    await selectTarget(user);
+
+    await user.click(
+      await screen.findByRole("button", { name: /enter result/i }),
+    );
+    const modal = await screen.findByRole("dialog");
+
+    // Change Sitting to Resit
+    await user.selectOptions(within(modal).getByLabelText("Sitting"), "RESIT");
+    // Select a course
+    await user.selectOptions(within(modal).getByLabelText("Course"), "c1");
+    // Fill the score
+    await user.clear(within(modal).getByRole("spinbutton", { name: /CA/i }));
+    await user.type(
+      within(modal).getByRole("spinbutton", { name: /CA/i }),
+      "35",
+    );
+
+    await user.click(
+      within(modal).getByRole("button", { name: /save result/i }),
+    );
+
+    await waitFor(() => {
+      expect(enterResult).toHaveBeenCalledWith(
+        expect.objectContaining({ sitting: "RESIT" }),
+      );
+    });
+  });
+
+  it("DID disables score inputs and is sent as status", async () => {
+    const enterResult = vi.fn(async () => ({}) as never);
+    const { user } = renderScreen(<ResultsScreen />, {
+      permissions: ["results.process"],
+      core: {
+        ...baseCore,
+        getStudentSemesterResults: async () => [] as never,
+        getAssessmentStructure: async () =>
+          [{ key: "CA", label: "CA", maxScore: 40 }] as never,
+        listCourses: async () =>
+          ({
+            items: [
+              {
+                id: "c1",
+                code: "CS101",
+                title: "Intro",
+                creditValue: 3,
+                courseType: "CORE",
+              },
+            ],
+            total: 1,
+          }) as never,
+        enterResult,
+      },
+    });
+    await selectTarget(user);
+
+    await user.click(
+      await screen.findByRole("button", { name: /enter result/i }),
+    );
+    const modal = await screen.findByRole("dialog");
+
+    // Set Status to Did Not Sit
+    await user.selectOptions(within(modal).getByLabelText("Status"), "DID");
+
+    // Score inputs should now be disabled
+    const scoreInput = within(modal).getByRole("spinbutton", { name: /CA/i });
+    expect(scoreInput).toBeDisabled();
+
+    // Select course and save
+    await user.selectOptions(within(modal).getByLabelText("Course"), "c1");
+    await user.click(
+      within(modal).getByRole("button", { name: /save result/i }),
+    );
+
+    await waitFor(() => {
+      expect(enterResult).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "DID" }),
+      );
+    });
+  });
+
   it("processes then locks the semester in one finalize action", async () => {
     const processSemester = vi.fn(async () => ({ gpa: 4.0 }) as never);
     const lockSemesterResults = vi.fn(async () => 1);

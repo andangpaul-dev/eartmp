@@ -323,6 +323,11 @@ function EntryModal({
   const [courseId, setCourseId] = useState("");
   const [scores, setScores] = useState<Record<string, number>>({});
   const [preview, setPreview] = useState<number | null>(null);
+  const [sitting, setSitting] = useState<"NORMAL" | "RESIT">("NORMAL");
+  const [status, setStatus] = useState<
+    "GRADED" | "DID" | "DISQUALIFIED" | "INCOMPLETE"
+  >("GRADED");
+  const scoresDisabled = status !== "GRADED";
 
   const components = useAsync(() => core.getAssessmentStructure({}), []);
   const courses = useAsync(
@@ -342,14 +347,15 @@ function EntryModal({
     [components.data, scores],
   );
   const complete =
-    (components.data ?? []).length > 0 &&
-    (components.data ?? []).every(
-      (c) => scores[c.key] !== undefined && scores[c.key] !== null,
-    );
+    scoresDisabled ||
+    ((components.data ?? []).length > 0 &&
+      (components.data ?? []).every(
+        (c) => scores[c.key] !== undefined && scores[c.key] !== null,
+      ));
 
   useEffect(() => {
     let alive = true;
-    if (complete) {
+    if (!scoresDisabled && complete) {
       core
         .previewFinalScore({ componentScores })
         .then((p) => alive && setPreview(p))
@@ -358,11 +364,18 @@ function EntryModal({
     return () => {
       alive = false;
     };
-  }, [core, complete, componentScores]);
+  }, [core, complete, scoresDisabled, componentScores]);
 
   const save = useAction(
     () =>
-      core.enterResult({ studentId, courseId, semesterId, componentScores }),
+      core.enterResult({
+        studentId,
+        courseId,
+        semesterId,
+        componentScores: scoresDisabled ? [] : componentScores,
+        sitting,
+        status,
+      }),
     { onSuccess: onDone },
   );
 
@@ -391,6 +404,38 @@ function EntryModal({
           ))}
         </select>
       </Field>
+      <Field label="Sitting">
+        <select
+          className="select"
+          aria-label="Sitting"
+          value={sitting}
+          onChange={(e) => setSitting(e.target.value as "NORMAL" | "RESIT")}
+        >
+          <option value="NORMAL">Normal</option>
+          <option value="RESIT">Resit</option>
+        </select>
+      </Field>
+      <Field label="Status">
+        <select
+          className="select"
+          aria-label="Status"
+          value={status}
+          onChange={(e) =>
+            setStatus(
+              e.target.value as
+                | "GRADED"
+                | "DID"
+                | "DISQUALIFIED"
+                | "INCOMPLETE",
+            )
+          }
+        >
+          <option value="GRADED">Graded</option>
+          <option value="DID">Did Not Sit</option>
+          <option value="DISQUALIFIED">Disqualified</option>
+          <option value="INCOMPLETE">Incomplete</option>
+        </select>
+      </Field>
       {components.data?.map((c) => (
         <Field key={c.key} label={`${c.label} (max ${c.maxScore})`}>
           <input
@@ -398,30 +443,37 @@ function EntryModal({
             type="number"
             min={0}
             max={c.maxScore}
-            value={scores[c.key] ?? ""}
+            disabled={scoresDisabled}
+            value={scoresDisabled ? "" : (scores[c.key] ?? "")}
             onChange={(e) =>
               setScores((s) => ({ ...s, [c.key]: Number(e.target.value) }))
             }
           />
         </Field>
       ))}
-      <div
-        className="spread"
-        style={{
-          background: "var(--surface-2)",
-          padding: "10px 13px",
-          borderRadius: 8,
-          marginBottom: 14,
-        }}
-      >
-        <span className="muted">Final score (from core)</span>
-        <span
-          className="mono"
-          style={{ fontSize: 18, fontWeight: 600, color: "var(--text-strong)" }}
+      {!scoresDisabled && (
+        <div
+          className="spread"
+          style={{
+            background: "var(--surface-2)",
+            padding: "10px 13px",
+            borderRadius: 8,
+            marginBottom: 14,
+          }}
         >
-          {preview ?? "—"}
-        </span>
-      </div>
+          <span className="muted">Final score (from core)</span>
+          <span
+            className="mono"
+            style={{
+              fontSize: 18,
+              fontWeight: 600,
+              color: "var(--text-strong)",
+            }}
+          >
+            {preview ?? "—"}
+          </span>
+        </div>
+      )}
       {save.error && <div className="alert danger">{save.error.message}</div>}
       <div className="actions">
         <Button onClick={onClose}>Cancel</Button>
