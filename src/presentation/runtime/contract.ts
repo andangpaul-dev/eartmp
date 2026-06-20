@@ -295,6 +295,8 @@ export interface CoreApi {
     courseId: string;
     semesterId: string;
     componentScores: ComponentScore[];
+    sitting?: "NORMAL" | "RESIT";
+    status?: "GRADED" | "DID" | "DISQUALIFIED" | "INCOMPLETE";
   }): Promise<ResultRecord>;
   getStudentSemesterResults(input: {
     studentId: string;
@@ -307,8 +309,27 @@ export interface CoreApi {
   lockSemesterResults(input: {
     studentId: string;
     semesterId: string;
+    sitting?: "NORMAL" | "RESIT";
   }): Promise<number>;
   unlockResult(input: { resultId: string }): Promise<void>;
+  saveCourseResults(input: {
+    semesterId: string;
+    courseId: string;
+    sitting: "NORMAL" | "RESIT";
+    rows: {
+      studentId: string;
+      componentScores: { key: string; score: number }[];
+      status?: "GRADED" | "DID" | "DISQUALIFIED" | "INCOMPLETE";
+    }[];
+  }): Promise<{
+    saved: number;
+    skipped: number;
+    errors: { studentId: string; message: string }[];
+  }>;
+  listCourseRoster(input: {
+    courseId: string;
+    sessionName: string;
+  }): Promise<Student[]>;
 
   // import
   parseWorkbook(input: { base64: string }): Promise<RawRow[]>;
