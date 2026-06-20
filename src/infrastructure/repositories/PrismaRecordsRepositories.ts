@@ -29,6 +29,10 @@ import type {
   CourseQuery,
   Page,
 } from "../../domain/repositories/records";
+import type {
+  ResultSitting,
+  ResultStatus,
+} from "../../domain/value-objects/ResultSitting";
 
 type Db = Prisma.TransactionClient;
 
@@ -516,6 +520,8 @@ type ResultRow = {
   gradePoint: number | null;
   creditsEarned: number | null;
   isLocked: boolean;
+  sitting: string;
+  status: string;
 };
 
 function toResult(r: ResultRow): ResultRecord {
@@ -533,6 +539,8 @@ function toResult(r: ResultRow): ResultRecord {
     gradePoint: r.gradePoint ?? undefined,
     creditsEarned: r.creditsEarned ?? undefined,
     isLocked: r.isLocked,
+    sitting: r.sitting as ResultSitting,
+    status: r.status as ResultStatus,
   };
 }
 
@@ -551,6 +559,8 @@ export class PrismaResultRepository implements ResultRepository {
         gradePoint: data.gradePoint,
         creditsEarned: data.creditsEarned,
         isLocked: data.isLocked,
+        sitting: data.sitting,
+        status: data.status,
       },
     });
     return toResult(row);
@@ -565,10 +575,11 @@ export class PrismaResultRepository implements ResultRepository {
     studentId: string,
     courseId: string,
     semesterId: string,
+    sitting: ResultSitting,
   ): Promise<boolean> {
     return (
       (await this.db.result.count({
-        where: { studentId, courseId, semesterId, ...live },
+        where: { studentId, courseId, semesterId, sitting, ...live },
       })) > 0
     );
   }
@@ -594,14 +605,18 @@ export class PrismaResultRepository implements ResultRepository {
     id: string,
     data: {
       componentScores: { key: string; score: number }[];
-      finalScore: number;
+      finalScore?: number;
+      status?: ResultStatus;
     },
   ): Promise<void> {
     await this.db.result.update({
       where: { id },
       data: {
         componentScores: JSON.stringify(data.componentScores),
-        finalScore: data.finalScore,
+        ...(data.finalScore !== undefined
+          ? { finalScore: data.finalScore }
+          : {}),
+        ...(data.status !== undefined ? { status: data.status } : {}),
       },
     });
   }
@@ -610,9 +625,15 @@ export class PrismaResultRepository implements ResultRepository {
     studentId: string,
     semesterId: string,
     locked: boolean,
+    sitting?: ResultSitting,
   ): Promise<number> {
     const { count } = await this.db.result.updateMany({
-      where: { studentId, semesterId, ...live },
+      where: {
+        studentId,
+        semesterId,
+        ...(sitting ? { sitting } : {}),
+        ...live,
+      },
       data: { isLocked: locked },
     });
     return count;
