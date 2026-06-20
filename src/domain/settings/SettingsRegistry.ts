@@ -176,6 +176,9 @@ export const SETTING_KEYS = {
   transcriptPrivateKey: "transcript.signingPrivateKey",
   graduationRequirements: "graduation.requirements",
   encryptionSalt: "institution.encryptionSalt",
+  matriculeRule: "student.matriculeRule",
+  matriculeFormat: "student.matriculeFormat",
+  matriculeCheckScheme: "student.matriculeCheckScheme",
 } as const;
 
 /** Build the registry with all known settings (the institution's defaults). */
@@ -322,6 +325,55 @@ export function buildDefaultRegistry(): SettingsRegistry {
       "Salt for DB-at-rest key derivation (ADR-008). The KEY is never stored.",
     default: "",
     validate: (v) => asString(v, SETTING_KEYS.encryptionSalt),
+  });
+
+  const MATRICULE_TOKENS =
+    /\{(institutionCode|faculty|dept|year|year2|seq(:0+)?|check)\}/g;
+  r.register<string>({
+    key: SETTING_KEYS.matriculeRule,
+    schemaVersion: 1,
+    description: "Template for building student matricules.",
+    default: "{faculty}{year2}-{seq:0000}",
+    validate: (v) => {
+      const s = asString(v, SETTING_KEYS.matriculeRule);
+      const leftover = s.replace(MATRICULE_TOKENS, "");
+      const unknown = leftover.match(/\{[^}]*\}/);
+      if (unknown)
+        throw new SettingsError(`Unknown matricule token "${unknown[0]}".`);
+      return s;
+    },
+  });
+  r.register<string>({
+    key: SETTING_KEYS.matriculeFormat,
+    schemaVersion: 1,
+    description:
+      "Optional regex a MANUAL matricule must match (empty = no constraint).",
+    default: "",
+    validate: (v) => {
+      const s = asString(v, SETTING_KEYS.matriculeFormat);
+      if (s) {
+        try {
+          new RegExp(s);
+        } catch {
+          throw new SettingsError("matriculeFormat is not a valid regex.");
+        }
+      }
+      return s;
+    },
+  });
+  r.register<string>({
+    key: SETTING_KEYS.matriculeCheckScheme,
+    schemaVersion: 1,
+    description: "Matricule check-digit scheme: none | luhn | mod97.",
+    default: "none",
+    validate: (v) => {
+      const s = asString(v, SETTING_KEYS.matriculeCheckScheme);
+      if (!["none", "luhn", "mod97"].includes(s))
+        throw new SettingsError(
+          "matriculeCheckScheme must be none|luhn|mod97.",
+        );
+      return s;
+    },
   });
 
   return r;
