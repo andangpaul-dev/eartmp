@@ -61,10 +61,27 @@ export class GenerateMatricule {
     }
 
     const dept = await this.lookups.departmentCode(ctx.departmentId);
+    if (rule.includes("{dept}") && ctx.departmentId && !dept) {
+      throw new RecordsError(
+        "The selected department has no code for the matricule.",
+      );
+    }
+
     const institutionCode = await this.lookups.institutionCode(
       ctx.institutionId,
     );
-    const year = admissionYear(ctx.admissionSession);
+    if (rule.includes("{institutionCode}") && !institutionCode) {
+      throw new RecordsError("The institution has no code for the matricule.");
+    }
+
+    let year: number;
+    try {
+      year = admissionYear(ctx.admissionSession);
+    } catch {
+      throw new RecordsError(
+        `Invalid admission session "${ctx.admissionSession}".`,
+      );
+    }
 
     const seq =
       mode === "reserve"

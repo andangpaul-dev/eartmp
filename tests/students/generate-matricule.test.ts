@@ -159,4 +159,75 @@ describe("GenerateMatricule", () => {
       ),
     ).rejects.toThrow(/code/i);
   });
+
+  it("errors when {institutionCode} present but institution has no code (FIX C)", async () => {
+    const spy = new SpyMatriculeCounter();
+    const uow = fakeUow({ matriculeCounter: spy });
+    const svc = new GenerateMatricule(
+      makeSettings("{institutionCode}{faculty}{year2}"),
+      makeLookups({ facultyCode: "FS", institutionCode: undefined }),
+    );
+
+    await expect(
+      uow.run((repos) =>
+        svc.generate(
+          {
+            institutionId: "instA",
+            facultyId: "facA",
+            admissionSession: "2025/2026",
+          },
+          repos,
+          "reserve",
+        ),
+      ),
+    ).rejects.toThrow(/institution/i);
+  });
+
+  it("errors when {dept} present with departmentId but department has no code (FIX C)", async () => {
+    const spy = new SpyMatriculeCounter();
+    const uow = fakeUow({ matriculeCounter: spy });
+    const svc = new GenerateMatricule(
+      makeSettings("{faculty}{dept}{year2}"),
+      makeLookups({ facultyCode: "FS", departmentCode: undefined }),
+    );
+
+    await expect(
+      uow.run((repos) =>
+        svc.generate(
+          {
+            institutionId: null,
+            facultyId: "facA",
+            departmentId: "deptA",
+            admissionSession: "2025/2026",
+          },
+          repos,
+          "reserve",
+        ),
+      ),
+    ).rejects.toThrow(/department/i);
+  });
+
+  it("errors with RecordsError when admissionSession is malformed (FIX D)", async () => {
+    const { RecordsError } = await import("../../src/domain/errors/records");
+    const spy = new SpyMatriculeCounter();
+    const uow = fakeUow({ matriculeCounter: spy });
+    const svc = new GenerateMatricule(
+      makeSettings("{faculty}{year2}"),
+      makeLookups({ facultyCode: "FS" }),
+    );
+
+    await expect(
+      uow.run((repos) =>
+        svc.generate(
+          {
+            institutionId: null,
+            facultyId: "facA",
+            admissionSession: "TBD",
+          },
+          repos,
+          "reserve",
+        ),
+      ),
+    ).rejects.toBeInstanceOf(RecordsError);
+  });
 });

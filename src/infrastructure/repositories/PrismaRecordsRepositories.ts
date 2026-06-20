@@ -710,48 +710,40 @@ export class PrismaSemesterOrdering implements SemesterOrdering {
 /**
  * Per-(institution, faculty, year) matricule sequence counter (WS C).
  *
- * NOTE: `institutionId` is nullable (String?) in the compound unique index.
- * SQLite's NULL semantics mean NULL != NULL, so Prisma's `upsert` with a
- * `null` value in the compound-unique `where` clause will not find an existing
- * row and will always try to insert — causing a unique-constraint error on the
- * second call. We therefore use `findFirst` + explicit create/update instead of
- * `upsert`.
+ * `institutionId` is nullable in the domain but the compound unique index
+ * requires a non-NULL value (SQLite NULL != NULL breaks upsert). We coerce
+ * null → "" as a sentinel so the upsert can always find the unique row.
  */
 export class PrismaMatriculeCounter implements MatriculeCounterRepository {
   constructor(private readonly db: Db) {}
-
-  async peek(
-    institutionId: string | null,
-    facultyId: string,
-    year: number,
-  ): Promise<number> {
-    const row = await this.db.matriculeCounter.findFirst({
-      where: { institutionId, facultyId, year },
-    });
-    return row?.next ?? 1;
-  }
 
   async reserve(
     institutionId: string | null,
     facultyId: string,
     year: number,
   ): Promise<number> {
-    const existing = await this.db.matriculeCounter.findFirst({
-      where: { institutionId, facultyId, year },
+    const inst = institutionId ?? "";
+    const row = await this.db.matriculeCounter.upsert({
+      where: {
+        institutionId_facultyId_year: { institutionId: inst, facultyId, year },
+      },
+      create: { institutionId: inst, facultyId, year, next: 2 },
+      update: { next: { increment: 1 } },
     });
-    if (existing) {
-      const updated = await this.db.matriculeCounter.update({
-        where: { id: existing.id },
-        data: { next: { increment: 1 } },
-      });
-      // updated.next is the post-increment value; the reserved sequence number
-      // is the pre-increment value.
-      return updated.next - 1;
-    }
-    // First reservation: create a row with next=2 (slot 1 is being reserved now).
-    await this.db.matriculeCounter.create({
-      data: { institutionId, facultyId, year, next: 2 },
+    return row.next - 1;
+  }
+
+  async peek(
+    institutionId: string | null,
+    facultyId: string,
+    year: number,
+  ): Promise<number> {
+    const inst = institutionId ?? "";
+    const row = await this.db.matriculeCounter.findUnique({
+      where: {
+        institutionId_facultyId_year: { institutionId: inst, facultyId, year },
+      },
     });
-    return 1;
+    return row?.next ?? 1;
   }
 }

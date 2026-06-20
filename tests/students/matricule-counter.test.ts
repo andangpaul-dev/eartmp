@@ -36,4 +36,12 @@ describe("PrismaMatriculeCounter", () => {
     expect(await repo.peek(null, "facA", 2025)).toBe(3);
     expect(await repo.reserve(null, "facB", 2025)).toBe(1);
   });
+
+  it('null and "" resolve to the SAME bucket (sentinel consistency, FIX B)', async () => {
+    const repo = new PrismaMatriculeCounter(db);
+    // reserve with null — should claim slot 1 for the default-institution bucket
+    expect(await repo.reserve(null, "facC", 2026)).toBe(1);
+    // peek with "" should see next=2 (same bucket via "" sentinel)
+    expect(await repo.peek("", "facC", 2026)).toBe(2);
+  });
 });

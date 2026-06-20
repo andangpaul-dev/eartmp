@@ -132,7 +132,7 @@ export class FakeResultRepo implements ResultRepository {
 class FakeMatriculeCounter implements MatriculeCounterRepository {
   private counters = new Map<string, number>();
   private key(i: string | null, f: string, y: number) {
-    return `${i}:${f}:${y}`;
+    return `${i ?? ""}:${f}:${y}`;
   }
   async peek(institutionId: string | null, facultyId: string, year: number) {
     return this.counters.get(this.key(institutionId, facultyId, year)) ?? 1;

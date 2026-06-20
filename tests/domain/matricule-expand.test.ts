@@ -30,4 +30,14 @@ describe("expandMatricule", () => {
     expect(admissionYear("2025/2026")).toBe(2025);
     expect(() => admissionYear("n/a")).toThrow();
   });
+  it("substitutes {check} in-place at its token position", () => {
+    const out = expandMatricule("{check}-{faculty}{year2}", {
+      ...base,
+      checkScheme: "luhn",
+      faculty: "FS",
+      year: 2025,
+      seq: 1,
+    });
+    expect(out).toMatch(/^\d-FS25$/);
+  });
 });
