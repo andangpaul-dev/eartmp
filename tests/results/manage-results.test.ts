@@ -159,6 +159,8 @@ describe("Lock / Unlock", () => {
       componentScores: [],
       finalScore: 80,
       isLocked: false,
+      sitting: "NORMAL",
+      status: "GRADED",
     });
   });
 
@@ -201,6 +203,8 @@ describe("GetStudentSemesterResults", () => {
       componentScores: [],
       finalScore: 70,
       isLocked: false,
+      sitting: "NORMAL",
+      status: "GRADED",
     });
     const rows = await new GetStudentSemesterResults(results).execute(
       { studentId: "s1", semesterId: "sem1" },

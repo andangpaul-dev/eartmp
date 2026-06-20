@@ -34,6 +34,8 @@ function processed(
     isLocked: true,
     gradePoint: 4,
     creditsEarned: 3,
+    sitting: "NORMAL",
+    status: "GRADED",
     ...over,
   };
 }
@@ -104,6 +106,8 @@ describe("GetAcademicSummary", () => {
         semesterId: "sem3",
         componentScores: [],
         isLocked: false,
+        sitting: "NORMAL" as const,
+        status: "GRADED" as const,
       },
     );
 

@@ -146,6 +146,8 @@ describe("ImportResults", () => {
       componentScores: [],
       finalScore: 50,
       isLocked: true,
+      sitting: "NORMAL",
+      status: "GRADED",
     });
     const report = await ctx.uc.execute(
       {
@@ -178,6 +180,8 @@ describe("ImportResults", () => {
       componentScores: [],
       finalScore: 10,
       isLocked: false,
+      sitting: "NORMAL",
+      status: "GRADED",
     });
     const report = await ctx.uc.execute(
       {

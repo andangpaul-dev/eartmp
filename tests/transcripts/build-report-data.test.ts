@@ -88,6 +88,8 @@ describe("BuildReportData", () => {
       gradePoint: 4,
       creditsEarned: 3,
       isLocked: true,
+      sitting: "NORMAL" as const,
+      status: "GRADED" as const,
     });
 
     const builder = new BuildReportData(

@@ -163,6 +163,8 @@ export class ImportResults implements AuthorizedUseCase<
             componentScores: v.componentScores,
             finalScore: v.finalScore,
             isLocked: false,
+            sitting: "NORMAL",
+            status: "GRADED",
           });
         }
       }

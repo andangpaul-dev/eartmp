@@ -70,6 +70,8 @@ function seededResults() {
       componentScores: [],
       finalScore: 80,
       isLocked: false,
+      sitting: "NORMAL" as const,
+      status: "GRADED" as const,
     },
     {
       id: "r2",
@@ -79,6 +81,8 @@ function seededResults() {
       componentScores: [],
       finalScore: 30,
       isLocked: false,
+      sitting: "NORMAL" as const,
+      status: "GRADED" as const,
     },
   );
   return results;

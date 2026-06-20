@@ -52,6 +52,8 @@ function makeUow() {
       componentScores: [],
       finalScore: 85,
       isLocked: false,
+      sitting: "NORMAL",
+      status: "GRADED",
     },
     {
       id: "r2",
@@ -61,6 +63,8 @@ function makeUow() {
       componentScores: [],
       finalScore: 30,
       isLocked: false,
+      sitting: "NORMAL",
+      status: "GRADED",
     },
   ];
   const updates: Record<

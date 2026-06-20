@@ -14,6 +14,10 @@ import type {
   TransactionalRepos,
 } from "../../src/application/ports/UnitOfWork";
 import type { AuditLogPort } from "../../src/domain/repositories";
+import type {
+  ResultSitting,
+  ResultStatus,
+} from "../../src/domain/value-objects/ResultSitting";
 
 export class FakeResultRepo implements ResultRepository {
   readonly rows: ResultRecord[] = [];
@@ -24,7 +28,7 @@ export class FakeResultRepo implements ResultRepository {
     return this.rows.find((r) => r.id === id);
   }
   async create(data: Omit<ResultRecord, "id">) {
-    const r: ResultRecord = { id: `r${++this.seq}`, ...data };
+    const r: ResultRecord = { ...data, id: `r${++this.seq}` };
     this.rows.push(r);
     return { ...r };
   }
@@ -32,12 +36,18 @@ export class FakeResultRepo implements ResultRepository {
     const r = this.live(id);
     return r ? { ...r } : null;
   }
-  async existsFor(studentId: string, courseId: string, semesterId: string) {
+  async existsFor(
+    studentId: string,
+    courseId: string,
+    semesterId: string,
+    sitting: ResultSitting,
+  ) {
     return this.rows.some(
       (r) =>
         r.studentId === studentId &&
         r.courseId === courseId &&
-        r.semesterId === semesterId,
+        r.semesterId === semesterId &&
+        r.sitting === sitting,
     );
   }
   async findByStudentAndSemester(studentId: string, semesterId: string) {
@@ -54,12 +64,14 @@ export class FakeResultRepo implements ResultRepository {
     id: string,
     data: {
       componentScores: { key: string; score: number }[];
-      finalScore: number;
+      finalScore?: number;
+      status?: ResultStatus;
     },
   ) {
     const r = this.live(id)!;
     r.componentScores = data.componentScores;
-    r.finalScore = data.finalScore;
+    if (data.finalScore !== undefined) r.finalScore = data.finalScore;
+    if (data.status !== undefined) r.status = data.status;
   }
   async updateProcessed(
     id: string,
@@ -81,10 +93,15 @@ export class FakeResultRepo implements ResultRepository {
     studentId: string,
     semesterId: string,
     locked: boolean,
+    sitting?: ResultSitting,
   ) {
     let n = 0;
     for (const r of this.rows) {
-      if (r.studentId === studentId && r.semesterId === semesterId) {
+      if (
+        r.studentId === studentId &&
+        r.semesterId === semesterId &&
+        (sitting === undefined || r.sitting === sitting)
+      ) {
         r.isLocked = locked;
         n++;
       }

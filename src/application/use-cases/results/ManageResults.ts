@@ -109,6 +109,8 @@ export class EnterResult implements AuthorizedUseCase<
       componentScores: input.componentScores,
       finalScore,
       isLocked: false,
+      sitting: "NORMAL",
+      status: "GRADED",
     });
     await this.audit.record({
       userId: session.actorId,
