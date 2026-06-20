@@ -73,6 +73,7 @@ import { AdmitStudent } from "../application/use-cases/records/AdmitStudent";
 import { ReadmitStudent } from "../application/use-cases/records/ReadmitStudent";
 import { PreviewMatricule } from "../application/use-cases/records/PreviewMatricule";
 import { RegenerateMatricule } from "../application/use-cases/records/RegenerateMatricule";
+import { BulkRegenerateMatricules } from "../application/use-cases/records/BulkRegenerateMatricules";
 import {
   MergeStudents,
   FindDuplicateCandidates,
@@ -379,6 +380,10 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
   const readmitStudent = new ReadmitStudent(uow, generateMatricule);
   const previewMatricule = new PreviewMatricule(uow, generateMatricule);
   const regenerateMatricule = new RegenerateMatricule(uow, generateMatricule);
+  const bulkRegenerateMatricules = new BulkRegenerateMatricules(
+    uow,
+    generateMatricule,
+  );
 
   // ImportStudents: same GenerateMatricule + settings as AdmitStudent, plus a
   // faculty-by-code lookup for per-row faculty overrides.
@@ -541,6 +546,10 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     [
       "regenerateMatricule",
       (i, s) => authorize(regenerateMatricule, i as never, s),
+    ],
+    [
+      "bulkRegenerateMatricules",
+      (i, s) => authorize(bulkRegenerateMatricules, i as never, s),
     ],
     ["updateStudent", (i, s) => authorize(updateStudent, i as never, s)],
     [
