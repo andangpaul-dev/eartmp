@@ -1,7 +1,7 @@
 # Student identity — admission session & matricule template (Workstream C)
 
 **Date:** 2026-06-20
-**Status:** Approved (pending final spec review)
+**Status:** Implemented (2026-06-20)
 **Scope:** Items 1 & 4 of the records upgrade set — configure the **admission
 session per student** (all scenarios), and a **template-built matricule** with
 manual override. Builds on the existing `Student`/`StudentEnrollment`/settings
@@ -377,20 +377,20 @@ the host seam, per the Workstream A/B pattern.
 
 ## 8. Definition of done
 
-- [ ] `MatriculeCounter` model + `Student.previousStudentId` + migration (applied, idempotent) + client regen.
-- [ ] `student.matriculeRule` + `student.matriculeFormat` settings in `SETTING_KEYS`/registry with token validation + defaults.
-- [ ] `expandMatricule` (pure, incl. `{check}` via configurable scheme: Luhn + ISO 7064 mod-97 + none) + `GenerateMatricule` (peek/reserve) + counter repo port & Prisma impl.
-- [ ] `AdmitStudent`: required `admissionSession`, optional/auto `matricNumber`, manual format-regex check, sets denormalized `facultyId`/`departmentId`; faculty-scope guard.
-- [ ] `ImportStudents`: per-row auto/manual matricule, per-row admission session, **per-row faculty + scope**, rollback-safe counter.
-- [ ] `ReadmitStudent`: WITHDRAWN reuse-identity **and** GRADUATED new-record (+ `previousStudentId`, new matricule).
-- [ ] Matricule regeneration on admission-session correction (opt-in, refused when transcripts exist).
-- [ ] `student.matriculeCheckScheme` setting + Luhn & ISO 7064 mod-97 check functions (pure).
-- [ ] `MergeStudents` + `findDuplicateCandidates` (+ repo `reassignStudent` methods); operator-confirmed, conflict-refusing, audited.
-- [ ] `BulkRegenerateMatricules` (scoped, skips transcript-bearing students, audited).
-- [ ] Contract/host/ipc/zod: `previewMatricule`, `readmitStudent`, `findDuplicateCandidates`, `mergeStudents`, `bulkRegenerateMatricules`, extended `admitStudent`, `updateStudent.regenerateMatricule`.
-- [ ] UI: admit preview + manual toggle + issued value; config template editor (+ check scheme/format); readmit/graduate modal; regenerate checkbox; merge confirm dialog; bulk-regen preview/confirm.
-- [ ] Tests green; `tsc` strict + lint + boundary fitness clean.
-- [ ] `/docs` updated; summary posted.
+- [x] `MatriculeCounter` model + `Student.previousStudentId` + migration (applied, idempotent) + client regen.
+- [x] `student.matriculeRule` + `student.matriculeFormat` settings in `SETTING_KEYS`/registry with token validation + defaults.
+- [x] `expandMatricule` (pure, incl. `{check}` via configurable scheme: Luhn + ISO 7064 mod-97 + none) + `GenerateMatricule` (peek/reserve) + counter repo port & Prisma impl.
+- [x] `AdmitStudent`: required `admissionSession`, optional/auto `matricNumber`, manual format-regex check, sets denormalized `facultyId`/`departmentId`; faculty-scope guard.
+- [x] `ImportStudents`: per-row auto/manual matricule, per-row admission session, **per-row faculty + scope**, rollback-safe counter.
+- [x] `ReadmitStudent`: WITHDRAWN reuse-identity **and** GRADUATED new-record (+ `previousStudentId`, new matricule).
+- [x] Matricule regeneration on admission-session correction (opt-in, refused when transcripts exist).
+- [x] `student.matriculeCheckScheme` setting + Luhn & ISO 7064 mod-97 check functions (pure).
+- [x] `MergeStudents` + `findDuplicateCandidates` (+ repo `reassignStudent` methods); operator-confirmed, conflict-refusing, audited.
+- [x] `BulkRegenerateMatricules` (scoped, skips transcript-bearing students, audited).
+- [x] Contract/host/ipc/zod: `previewMatricule`, `readmitStudent`, `findDuplicateCandidates`, `mergeStudents`, `bulkRegenerateMatricules`, extended `admitStudent`. _(Regeneration-on-correction shipped as a dedicated `regenerateMatricule` use-case + UI action rather than an `updateStudent` flag — single-purpose use-cases; same operator outcome.)_
+- [x] UI: admit preview + manual toggle + issued value; config template editor (+ check scheme/format); readmit/graduate modal; regenerate checkbox; merge confirm dialog; bulk-regen preview/confirm.
+- [x] Tests green; `tsc` strict + lint + boundary fitness clean.
+- [x] `/docs` updated; summary posted.
 
 ## 9. Out of scope (future work)
 
