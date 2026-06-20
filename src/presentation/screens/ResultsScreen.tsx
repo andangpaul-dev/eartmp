@@ -3,6 +3,10 @@
  * assessment structure, never client math), process a semester (atomic; locks
  * the results), and unlock a single result (audited). Locked results are
  * read-only. CGPA/GPA values come from the core.
+ *
+ * Two entry modes:
+ *  "Per-student" — the original modal-driven single-student flow.
+ *  "Roster"      — CourseRosterGrid: batch entry for an entire course cohort.
  */
 import { useEffect, useMemo, useState } from "react";
 import { useCore, useSession } from "../runtime/CoreProvider";
@@ -19,10 +23,14 @@ import {
 } from "../components/ui";
 import { StudentPicker } from "../components/StudentPicker";
 import type { Student } from "../../domain/entities";
+import { CourseRosterGrid } from "./CourseRosterGrid";
+
+type EntryMode = "per-student" | "roster";
 
 export function ResultsScreen() {
   const core = useCore();
   const { can } = useSession();
+  const [mode, setMode] = useState<EntryMode>("per-student");
   const [student, setStudent] = useState<Student | null>(null);
   const [sessionId, setSessionId] = useState("");
   const [semesterId, setSemesterId] = useState("");
@@ -102,8 +110,33 @@ export function ResultsScreen() {
     },
   });
 
+  // Roster mode: hand off to the dedicated batch-entry grid.
+  if (mode === "roster") {
+    return (
+      <div className="stack">
+        <div className="row">
+          <Button variant="default" onClick={() => setMode("per-student")}>
+            Per-student
+          </Button>
+          <Button variant="primary" onClick={() => setMode("roster")}>
+            Roster
+          </Button>
+        </div>
+        <CourseRosterGrid />
+      </div>
+    );
+  }
+
   return (
     <div className="stack">
+      <div className="row">
+        <Button variant="primary" onClick={() => setMode("per-student")}>
+          Per-student
+        </Button>
+        <Button variant="default" onClick={() => setMode("roster")}>
+          Roster
+        </Button>
+      </div>
       <Card>
         <div className="row" style={{ gap: 14, flexWrap: "wrap" }}>
           <StudentPicker value={student} onChange={setStudent} />
