@@ -4,7 +4,7 @@
  * requirements, and signing-key security. Reads are gated by `*.read`; writes
  * by `*.manage`. All values come from and go to the core.
  */
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useCore, useSession } from "../runtime/CoreProvider";
 import { useKeyState } from "../runtime/KeyProvider";
 import { useAsync, useAction } from "../runtime/hooks";
@@ -25,13 +25,17 @@ import type {
 
 const CALENDAR_TYPES = ["SEMESTER", "TRIMESTER", "QUARTER"] as const;
 const GRAD_KEY = "graduation.requirements";
+const MATRIC_RULE_KEY = "student.matriculeRule";
+const MATRIC_SCHEME_KEY = "student.matriculeCheckScheme";
+const MATRIC_FORMAT_KEY = "student.matriculeFormat";
 
-type Tab = "institution" | "grading" | "graduation" | "security";
+type Tab = "institution" | "grading" | "graduation" | "security" | "matricule";
 const TABS: { key: Tab; label: string }[] = [
   { key: "institution", label: "Institution" },
   { key: "grading", label: "Grading" },
   { key: "graduation", label: "Graduation" },
   { key: "security", label: "Security" },
+  { key: "matricule", label: "Matricule" },
 ];
 
 export function ConfigurationScreen() {
@@ -63,6 +67,7 @@ export function ConfigurationScreen() {
       {tab === "grading" && <GradingTab notify={notify} />}
       {tab === "graduation" && <GraduationTab notify={notify} />}
       {tab === "security" && <SecurityTab notify={notify} />}
+      {tab === "matricule" && <MatriculeTab notify={notify} />}
 
       {toast && <Toast message={toast} />}
     </div>
@@ -510,6 +515,140 @@ function SecurityTab({ notify }: { notify: (m: string) => void }) {
         </Card>
       )}
     </>
+  );
+}
+
+// ---- Matricule template editor ----
+
+const CHECK_SCHEMES = ["none", "luhn", "mod97"] as const;
+type CheckScheme = (typeof CHECK_SCHEMES)[number];
+
+function MatriculeTab({ notify }: { notify: (m: string) => void }) {
+  const core = useCore();
+  const { can } = useSession();
+  const manage = can("settings.manage");
+
+  const [rule, setRule] = useState("");
+  const [scheme, setScheme] = useState<CheckScheme>("none");
+  const [format, setFormat] = useState("");
+  const [loaded, setLoaded] = useState(false);
+
+  // Load all three settings on mount
+  useEffect(() => {
+    let alive = true;
+    Promise.all([
+      core.getSetting({ key: MATRIC_RULE_KEY }),
+      core.getSetting({ key: MATRIC_SCHEME_KEY }),
+      core.getSetting({ key: MATRIC_FORMAT_KEY }),
+    ]).then(([r, s, f]) => {
+      if (!alive) return;
+      setRule(typeof r === "string" ? r : "");
+      setScheme(
+        typeof s === "string" &&
+          (CHECK_SCHEMES as readonly string[]).includes(s)
+          ? (s as CheckScheme)
+          : "none",
+      );
+      setFormat(typeof f === "string" ? f : "");
+      setLoaded(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const save = useAction(
+    () =>
+      Promise.all([
+        core.setSetting({ key: MATRIC_RULE_KEY, value: rule }),
+        core.setSetting({ key: MATRIC_SCHEME_KEY, value: scheme }),
+        core.setSetting({ key: MATRIC_FORMAT_KEY, value: format }),
+      ]),
+    {
+      onSuccess: () => notify("Matricule settings saved"),
+    },
+  );
+
+  // Live sample: substitute the rule tokens with placeholder values
+  const liveSample = rule
+    .replace(/\{fac\}/gi, "SCI")
+    .replace(/\{dept\}/gi, "CS")
+    .replace(/\{year\}/gi, "2024")
+    .replace(/\{seq:0+\}/gi, (m) => {
+      const zeros = m.replace(/[^0]/g, "");
+      return "1".padStart(zeros.length, "0");
+    })
+    .replace(/\{seq\}/gi, "1");
+
+  if (!loaded)
+    return (
+      <Card>
+        <div className="muted" style={{ padding: 16 }}>
+          Loading…
+        </div>
+      </Card>
+    );
+
+  return (
+    <Card title="Matricule template">
+      <div className="form-grid">
+        <Field label="Rule">
+          <input
+            className="input mono"
+            aria-label="Rule"
+            value={rule}
+            disabled={!manage}
+            placeholder="{fac}/{year}/{seq:0000}"
+            onChange={(e) => setRule(e.target.value)}
+          />
+        </Field>
+        <Field label="Check scheme">
+          <select
+            className="select"
+            aria-label="Check scheme"
+            value={scheme}
+            disabled={!manage}
+            onChange={(e) => setScheme(e.target.value as CheckScheme)}
+          >
+            {CHECK_SCHEMES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Format">
+          <input
+            className="input mono"
+            aria-label="Format"
+            value={format}
+            disabled={!manage}
+            placeholder="upper"
+            onChange={(e) => setFormat(e.target.value)}
+          />
+        </Field>
+      </div>
+      <div style={{ marginTop: 10 }}>
+        <span className="muted" style={{ fontSize: 12.5 }}>
+          Live sample:{" "}
+        </span>
+        <output aria-label="Live sample" className="mono">
+          {liveSample || "—"}
+        </output>
+      </div>
+      {save.error && (
+        <div className="alert danger" style={{ marginTop: 12 }}>
+          {save.error.message}
+        </div>
+      )}
+      {manage && (
+        <div className="actions" style={{ marginTop: 14 }}>
+          <Button variant="primary" loading={save.loading} onClick={save.run}>
+            Save matricule settings
+          </Button>
+        </div>
+      )}
+    </Card>
   );
 }
 

@@ -54,4 +54,55 @@ describe("ConfigurationScreen", () => {
       }),
     );
   });
+
+  it("edits the matricule template settings", async () => {
+    const getSetting = vi.fn(async (input: { key: string }) => {
+      if (input.key === "student.matriculeRule")
+        return "{fac}/{year}/{seq:0000}";
+      if (input.key === "student.matriculeCheckScheme") return "none";
+      if (input.key === "student.matriculeFormat") return "upper";
+      return null;
+    });
+    const setSetting = vi.fn(async () => {});
+    const { user } = renderScreen(<ConfigurationScreen />, {
+      permissions: ["settings.read", "settings.manage", "institution.manage"],
+      core: {
+        getInstitution: async () => institution(),
+        getSetting,
+        setSetting,
+      },
+    });
+
+    // Navigate to the Matricule tab
+    await screen.findByDisplayValue("Example University");
+    await user.click(screen.getByRole("tab", { name: /matricule/i }));
+
+    // The rule field should be loaded
+    const ruleInput = await screen.findByDisplayValue(
+      "{fac}/{year}/{seq:0000}",
+    );
+    await user.clear(ruleInput);
+    // userEvent treats { as key-descriptor start; escape with {{
+    await user.type(ruleInput, "{{fac}/{{year}/{{seq:00000}");
+
+    await user.click(
+      screen.getByRole("button", { name: /save matricule settings/i }),
+    );
+
+    await waitFor(() =>
+      expect(setSetting).toHaveBeenCalledWith(
+        expect.objectContaining({
+          key: "student.matriculeRule",
+          value: "{fac}/{year}/{seq:00000}",
+        }),
+      ),
+    );
+
+    // check-scheme select
+    const schemeSelect = screen.getByLabelText(/check scheme/i);
+    expect(schemeSelect).toBeInTheDocument();
+
+    // live sample shows the rule
+    expect(screen.getByLabelText(/live sample/i)).toBeInTheDocument();
+  });
 });
