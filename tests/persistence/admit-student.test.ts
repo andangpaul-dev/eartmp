@@ -12,6 +12,7 @@ import type {
   ResultRepository,
   CourseRepository,
   SemesterOrdering,
+  MatriculeCounterRepository,
 } from "../../src/domain/repositories/records";
 import { CapturingAudit } from "../auth/fakes";
 import { FakeStudentRepo, FakeEnrollmentRepo } from "../records/fakes";
@@ -24,6 +25,15 @@ const viewer = SessionContext.create("v", "VIEWER", []);
 const noopSemesterOrdering: SemesterOrdering = {
   async order(ids) {
     return new Map(ids.map((id) => [id, { sessionOrder: 0, rank: 0 }]));
+  },
+};
+
+const noopMatriculeCounter: MatriculeCounterRepository = {
+  async peek() {
+    return 1;
+  },
+  async reserve() {
+    return 1;
   },
 };
 
@@ -42,6 +52,7 @@ function makeUow() {
         results,
         audit,
         semesterOrdering: noopSemesterOrdering,
+        matriculeCounter: noopMatriculeCounter,
       });
     },
   };

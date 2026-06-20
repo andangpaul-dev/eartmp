@@ -11,6 +11,7 @@ import type {
   StudentRepository,
   StudentEnrollmentRepository,
   SemesterOrdering,
+  MatriculeCounterRepository,
 } from "../src/domain/repositories/records";
 import type { AuditLogPort } from "../src/domain/repositories";
 import type { Course, ResultRecord } from "../src/domain/entities";
@@ -140,6 +141,14 @@ function makeUow() {
       return new Map(ids.map((id) => [id, { sessionOrder: 0, rank: 0 }]));
     },
   };
+  const matriculeCounter: MatriculeCounterRepository = {
+    async peek() {
+      return 1;
+    },
+    async reserve() {
+      return 1;
+    },
+  };
 
   const uow: UnitOfWork = {
     run<T>(work: (repos: TransactionalRepos) => Promise<T>) {
@@ -150,6 +159,7 @@ function makeUow() {
         results,
         audit,
         semesterOrdering,
+        matriculeCounter,
       });
     },
   };
