@@ -8,6 +8,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { ReadmitStudent } from "../../src/application/use-cases/records/ReadmitStudent";
 import { RecordsError } from "../../src/domain/errors/records";
+import { AuthorizationError } from "../../src/domain/errors/auth";
 import { SessionContext } from "../../src/domain/value-objects/SessionContext";
 import type {
   GenerateMatricule,
@@ -194,5 +195,71 @@ describe("ReadmitStudent", () => {
         admin,
       ),
     ).rejects.toBeInstanceOf(RecordsError);
+  });
+
+  it("FIX 1 – GRADUATED: rejects when faculty-scoped officer passes a facultyId outside their scope", async () => {
+    // Officer is scoped to facA only
+    const facAOfficer = SessionContext.create(
+      "officer1",
+      "FACULTY_ADMIN",
+      ["students.update", "students.read"],
+      "inst1",
+      ["facA"],
+    );
+
+    // Student belongs to facA (within scope)
+    const original = await students.create({
+      matricNumber: "GR/2019/001",
+      fullName: "Marie Curie",
+      status: "GRADUATED",
+      admissionSession: "2019/2020",
+      facultyId: "facA",
+      institutionId: "inst1",
+      programmeId: "progA",
+      levelId: "lvl4",
+    });
+
+    const uc = new ReadmitStudent(makeUow(), fakeGenerate);
+
+    // Officer passes input.facultyId="facB" — outside their scope
+    await expect(
+      uc.execute(
+        {
+          studentId: original.id,
+          programmeId: "progB",
+          levelId: "lvl1",
+          fromSession: "2024/2025",
+          facultyId: "facB",
+        },
+        facAOfficer,
+      ),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
+  it("FIX 2 – WITHDRAWN branch still reactivates via ReadmitStudent (does not consult canTransition)", async () => {
+    // Matrix now has WITHDRAWN: [] (terminal), but ReadmitStudent writes directly.
+    const withdrawn = await students.create({
+      matricNumber: "WD/2021/005",
+      fullName: "Linus Torvalds",
+      status: "WITHDRAWN",
+      admissionSession: "2021/2022",
+      facultyId: "facA",
+      programmeId: "progA",
+      levelId: "lvl1",
+    });
+
+    const uc = new ReadmitStudent(makeUow(), fakeGenerate);
+    const result = await uc.execute(
+      {
+        studentId: withdrawn.id,
+        programmeId: "progB",
+        levelId: "lvl2",
+        fromSession: "2024/2025",
+      },
+      admin,
+    );
+
+    expect(result.id).toBe(withdrawn.id);
+    expect(result.status).toBe("ACTIVE");
   });
 });

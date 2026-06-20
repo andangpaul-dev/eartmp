@@ -59,7 +59,7 @@ export class ReadmitStudent implements AuthorizedUseCase<
         // Reactivate the existing record in-place.
         await repos.students.update(student.id, { status: "ACTIVE" });
 
-        await openEnrollment(repos, session, "READMIT", {
+        await openEnrollment(repos, session, "ENROLL", {
           studentId: student.id,
           programmeId: input.programmeId,
           levelId: input.levelId,
@@ -76,6 +76,7 @@ export class ReadmitStudent implements AuthorizedUseCase<
           action: "READMIT",
           entity: "Student",
           recordId: updated.id,
+          oldValue: { status: student.status },
           newValue: {
             matricNumber: updated.matricNumber,
             status: "ACTIVE",
@@ -96,6 +97,9 @@ export class ReadmitStudent implements AuthorizedUseCase<
             { facultyId: "facultyId is required." },
           );
         }
+
+        // FIX 1: scope-check the effective faculty BEFORE creating any new row.
+        requireInFacultyScope(effectiveFacultyId, session);
 
         const matric = await this.generate.generate(
           {
@@ -129,7 +133,7 @@ export class ReadmitStudent implements AuthorizedUseCase<
           status: "ACTIVE",
         });
 
-        await openEnrollment(repos, session, "READMIT", {
+        await openEnrollment(repos, session, "ENROLL", {
           studentId: newStudent.id,
           programmeId: input.programmeId,
           levelId: input.levelId,
@@ -141,6 +145,7 @@ export class ReadmitStudent implements AuthorizedUseCase<
           action: "READMIT",
           entity: "Student",
           recordId: newStudent.id,
+          oldValue: { status: student.status },
           newValue: {
             matricNumber: newStudent.matricNumber,
             previousStudentId: student.id,

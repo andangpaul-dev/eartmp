@@ -12,15 +12,19 @@ describe("canTransition", () => {
     expect(canTransition("ACTIVE", "GRADUATED")).toBe(true);
   });
 
-  it("allows WITHDRAWN→ACTIVE for re-admission", () => {
-    expect(canTransition("WITHDRAWN", "ACTIVE")).toBe(true);
+  it("WITHDRAWN is terminal in the generic editor (matrix has no outgoing transitions)", () => {
+    expect(STUDENT_STATUS_TRANSITIONS["WITHDRAWN"]).toHaveLength(0);
+  });
+
+  it("canTransition WITHDRAWN→ACTIVE is false (re-admission goes through ReadmitStudent, not the matrix)", () => {
+    expect(canTransition("WITHDRAWN", "ACTIVE")).toBe(false);
   });
 
   it("does not allow WITHDRAWN→SUSPENDED", () => {
     expect(canTransition("WITHDRAWN", "SUSPENDED")).toBe(false);
   });
 
-  it("does not allow GRADUATED→ACTIVE (graduated students get new records)", () => {
+  it("does not allow GRADUATED→ACTIVE (graduated students get new records via ReadmitStudent)", () => {
     expect(canTransition("GRADUATED", "ACTIVE")).toBe(false);
   });
 
