@@ -17,6 +17,7 @@ import {
   PrismaStudentRepository,
   PrismaCourseRepository,
   PrismaResultRepository,
+  PrismaSemesterOrdering,
 } from "../infrastructure/repositories/PrismaRecordsRepositories";
 import {
   PrismaUserRepository,
@@ -299,6 +300,7 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     courses,
     new PrismaTranscriptNameResolver(db),
     grading,
+    new PrismaSemesterOrdering(db),
   );
   const approveTranscript = new ApproveTranscript(transcripts, audit);
   const lockTranscript = new LockTranscript(transcripts, audit);

@@ -4,6 +4,13 @@
  * the academic summary (reusing the Phase 11 aggregation). Structure-name
  * lookups are collapsed behind `TranscriptNameResolver` to keep the dependency
  * surface small. A plain service (the gated entry point is GenerateTranscript).
+ *
+ * Phase B (Workstream B): all attempts are included (NORMAL + RESIT / cross-session
+ * retakes). Only the globally-effective attempt contributes to GPA/CGPA via
+ * `selectEffective`. Re-attempts carry `afterReattempt: true` so the renderer can
+ * print "*". Special-status rows carry `marker: "DQ" | "I"`. A `legendNotes`
+ * array is appended to ReportData only when the transcript contains such rows.
+ * Sessions are ordered chronologically (sessionOrder → rank) via SemesterOrdering.
  */
 import { TranscriptError } from "../../../domain/errors/transcript";
 import {
@@ -12,6 +19,7 @@ import {
   type CourseGradePoint,
 } from "../../../domain/services/AcademicSummary";
 import { GpaEngine } from "../../../domain/services/GpaEngine";
+import { selectEffective } from "../../../domain/services/ResultAttempts";
 import type {
   ReportData,
   ReportSession,
@@ -22,6 +30,7 @@ import type {
   StudentRepository,
   ResultRepository,
   CourseRepository,
+  SemesterOrdering,
 } from "../../../domain/repositories/records";
 import type { InstitutionRepository } from "../../../domain/repositories/config";
 import type { GradingConfigService } from "../../services/GradingConfigService";
@@ -52,6 +61,7 @@ export class BuildReportData implements ReportDataAssembler {
     private readonly courses: CourseRepository,
     private readonly names: TranscriptNameResolver,
     private readonly grading: GradingConfigService,
+    private readonly semesterOrdering: SemesterOrdering,
   ) {}
 
   async assemble(
@@ -69,17 +79,37 @@ export class BuildReportData implements ReportDataAssembler {
     if (!institution)
       throw new TranscriptError("Institution is not provisioned.");
 
-    const processed = (await this.results.findByStudent(studentId)).filter(
-      (r) => r.gradePoint !== undefined,
+    // Fetch ALL results (every sitting, every session).
+    const all = await this.results.findByStudent(studentId);
+
+    // Resolve chronological ordering for every unique semester.
+    const ord = await this.semesterOrdering.order([
+      ...new Set(all.map((r) => r.semesterId)),
+    ]);
+
+    // Build the global effective selection from all attempts.
+    const sel = selectEffective(
+      all.map((r) => ({
+        id: r.id,
+        courseId: r.courseId,
+        sessionOrder: ord.get(r.semesterId)?.sessionOrder ?? 0,
+        semesterRank: ord.get(r.semesterId)?.rank ?? 0,
+        sitting: r.sitting,
+        status: r.status,
+      })),
     );
 
-    // Group processed results by semester, building course rows + GPA items.
+    // Track which legend markers are needed.
+    const markersSeen = new Set<string>();
+
+    // Group all rows by semester, building course rows + effective-only GPA items.
     const courseCache = new Map<string, Course>();
     const grouped = new Map<
       string,
       { courses: ReportCourse[]; items: CourseGradePoint[] }
     >();
-    for (const r of processed) {
+
+    for (const r of all) {
       let course = courseCache.get(r.courseId);
       if (!course) {
         const c = await this.courses.findById(r.courseId);
@@ -87,8 +117,19 @@ export class BuildReportData implements ReportDataAssembler {
         course = c;
         courseCache.set(r.courseId, c);
       }
-      const g = grouped.get(r.semesterId) ?? { courses: [], items: [] };
-      g.courses.push({
+
+      const marker: "DQ" | "I" | undefined =
+        r.status === "DISQUALIFIED"
+          ? "DQ"
+          : r.status === "INCOMPLETE"
+            ? "I"
+            : undefined;
+      const afterReattempt = sel.isReattempt(r.id);
+
+      if (afterReattempt) markersSeen.add("*");
+      if (marker) markersSeen.add(marker);
+
+      const reportCourse: ReportCourse = {
         code: course.code,
         title: course.title,
         creditValue: course.creditValue,
@@ -98,16 +139,32 @@ export class BuildReportData implements ReportDataAssembler {
         ...(r.creditsEarned !== undefined
           ? { creditsEarned: r.creditsEarned }
           : {}),
-      });
-      g.items.push({
-        creditValue: course.creditValue,
-        gradePoint: r.gradePoint!,
-        creditsEarned: r.creditsEarned ?? 0,
-      });
+        ...(afterReattempt ? { afterReattempt: true } : {}),
+        ...(marker ? { marker } : {}),
+      };
+
+      const g = grouped.get(r.semesterId) ?? { courses: [], items: [] };
+      g.courses.push(reportCourse);
+
+      // GPA items: only effective rows that have a gradePoint contribute.
+      if (sel.effectiveIds.has(r.id) && r.gradePoint !== undefined) {
+        g.items.push({
+          creditValue: course.creditValue,
+          gradePoint: r.gradePoint,
+          creditsEarned: r.creditsEarned ?? 0,
+        });
+      }
+
       grouped.set(r.semesterId, g);
     }
 
-    const semesterIds = [...grouped.keys()].sort((a, b) => a.localeCompare(b));
+    // Order semester IDs chronologically using the ordering map.
+    const semesterIds = [...grouped.keys()].sort((a, b) => {
+      const aOrd = ord.get(a) ?? { sessionOrder: 0, rank: 0 };
+      const bOrd = ord.get(b) ?? { sessionOrder: 0, rank: 0 };
+      return aOrd.sessionOrder - bOrd.sessionOrder || aOrd.rank - bOrd.rank;
+    });
+
     const sessions: ReportSession[] = [];
     const semesterSummaries = [];
     for (const semesterId of semesterIds) {
@@ -129,6 +186,13 @@ export class BuildReportData implements ReportDataAssembler {
       cumulative.cgpa,
       await this.grading.loadStandingBands(),
     );
+
+    // Build legend only when markers were seen.
+    const legendNotes: string[] = [];
+    if (markersSeen.has("*"))
+      legendNotes.push("Mark obtained after Resit/Retake");
+    if (markersSeen.has("DQ")) legendNotes.push("Disqualified (malpractice)");
+    if (markersSeen.has("I")) legendNotes.push("Incomplete");
 
     const programme = await this.names.programmeName(student.programmeId);
     const department = await this.names.departmentName(student.departmentId);
@@ -161,6 +225,7 @@ export class BuildReportData implements ReportDataAssembler {
         totalCreditsEarned: cumulative.creditsEarned,
         standing,
       },
+      ...(legendNotes.length ? { legendNotes } : {}),
       signatures: [{ role: "Registrar" }],
       verification: { transcriptNumber, qrPayload: transcriptNumber },
       issuedAt,
