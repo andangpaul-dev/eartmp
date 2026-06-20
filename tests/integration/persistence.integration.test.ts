@@ -112,13 +112,33 @@ describe("optimistic locking (F-27)", () => {
 describe("AdmitStudent (atomic across two tables)", () => {
   it("commits the student and the initial enrollment together", async () => {
     const uow = new PrismaUnitOfWork(db);
-    const { student } = await new AdmitStudent(uow).execute(
+    const noopGenerate = {
+      generate: async (): Promise<string> => {
+        throw new Error("not used");
+      },
+    } as never;
+    const noopSettings = {
+      async matriculeRule() {
+        return "";
+      },
+      async matriculeCheckScheme() {
+        return "none" as never;
+      },
+      async matriculeFormat() {
+        return "";
+      },
+    };
+    const { student } = await new AdmitStudent(
+      uow,
+      noopGenerate,
+      noopSettings,
+    ).execute(
       {
         matricNumber: "AD/1",
         fullName: "Admitted",
         programmeId: progId,
         levelId,
-        fromSession: "24/25",
+        admissionSession: "24/25",
       },
       admin,
     );

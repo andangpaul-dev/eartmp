@@ -323,7 +323,7 @@ function AdmitModal({
   const [departmentId, setDepartment] = useState("");
   const [programmeId, setProgramme] = useState("");
   const [levelId, setLevel] = useState("");
-  const [fromSession, setSession] = useState("");
+  const [admissionSession, setSession] = useState("");
 
   const faculties = useAsync(() => core.listFaculties({}), []);
   const departments = useAsync(
@@ -348,12 +348,14 @@ function AdmitModal({
   const submit = useAction(
     () =>
       core.admitStudent({
-        matricNumber,
+        matricNumber: matricNumber || undefined,
         fullName,
         ...(regNumber ? { regNumber } : {}),
+        ...(facultyId ? { facultyId } : {}),
+        ...(departmentId ? { departmentId } : {}),
         programmeId,
         levelId,
-        fromSession,
+        admissionSession,
       }),
     { onSuccess: onDone },
   );
@@ -364,8 +366,7 @@ function AdmitModal({
     submit.error?.fields?.matricNumber ??
     (submit.error?.code === "CONFLICT" ? submit.error.message : undefined);
   const fullNameError = submit.error?.fields?.fullName;
-  const valid =
-    matricNumber && fullName && programmeId && levelId && fromSession;
+  const valid = fullName && programmeId && levelId && admissionSession;
 
   return (
     <Modal
@@ -439,7 +440,7 @@ function AdmitModal({
       <Field label="Admission session">
         <select
           className="select"
-          value={fromSession}
+          value={admissionSession}
           onChange={(e) => setSession(e.target.value)}
           disabled={!sessions.data?.length}
         >

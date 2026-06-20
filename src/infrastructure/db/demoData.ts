@@ -153,7 +153,29 @@ export async function seedDemoData(prisma: PrismaClient): Promise<boolean> {
   });
 
   // Students via the real use-case (atomic student + enrollment).
-  const admit = new AdmitStudent(new PrismaUnitOfWork(prisma));
+  // Manual matricules are supplied, so the GenerateMatricule stub is never
+  // called; the settings stub returns an empty format (no regex validation).
+  const noopGenerate = {
+    generate: async () => {
+      throw new Error("auto-generate not used in demo seed");
+    },
+  } as never;
+  const noopMatriculeSettings = {
+    async matriculeRule() {
+      return "";
+    },
+    async matriculeCheckScheme() {
+      return "none" as never;
+    },
+    async matriculeFormat() {
+      return "";
+    },
+  };
+  const admit = new AdmitStudent(
+    new PrismaUnitOfWork(prisma),
+    noopGenerate,
+    noopMatriculeSettings,
+  );
   const session_ctx = SessionContext.create("system", "SUPER_ADMIN", [
     "students.create",
   ]);
@@ -167,7 +189,7 @@ export async function seedDemoData(prisma: PrismaClient): Promise<boolean> {
         fullName: s.fullName,
         programmeId: programme.id,
         levelId: level100.id,
-        fromSession: session.name,
+        admissionSession: session.name,
       },
       session_ctx,
     );

@@ -157,12 +157,15 @@ export interface ChangePasswordInput {
   newPassword: string;
 }
 export interface AdmitStudentInput {
-  matricNumber: string;
   fullName: string;
+  matricNumber?: string;
   regNumber?: string;
   programmeId: string;
   levelId: string;
-  fromSession: string;
+  facultyId?: string;
+  departmentId?: string;
+  admissionSession: string;
+  previousStudentId?: string;
 }
 export interface ChangeStudentStatusInput {
   studentId: string;

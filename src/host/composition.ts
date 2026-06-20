@@ -56,6 +56,10 @@ import { Sha256Hasher } from "../infrastructure/crypto/Sha256Hasher";
 import { PdfMakeRenderer } from "../infrastructure/reporting/pdf/PdfMakeRenderer";
 import { authorize } from "../application/authorization/AuthorizedUseCase";
 import { GradingConfigService } from "../application/services/GradingConfigService";
+import {
+  GenerateMatricule,
+  type MatriculeSettingsPort,
+} from "../application/services/GenerateMatricule";
 import { AuthenticateUser } from "../application/use-cases/auth/AuthenticateUser";
 import { ChangePassword } from "../application/use-cases/auth/ChangePassword";
 import {
@@ -196,7 +200,10 @@ import {
   ListPermissions,
 } from "../application/use-cases/auth/ManageRoles";
 import { PrismaPermissionRepository } from "../infrastructure/repositories/PrismaAuthRepositories";
-import { buildDefaultRegistry } from "../domain/settings/SettingsRegistry";
+import {
+  buildDefaultRegistry,
+  SETTING_KEYS,
+} from "../domain/settings/SettingsRegistry";
 import { AuthorizationError } from "../domain/errors/auth";
 import { TranscriptError } from "../domain/errors/transcript";
 import { SessionContext } from "../domain/value-objects/SessionContext";
@@ -249,7 +256,6 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
   const changePassword = new ChangePassword(users, hasher, audit);
   const listStudents = new ListStudents(students);
   const getStudent = new GetStudent(students);
-  const admitStudent = new AdmitStudent(uow);
   // `students` (PrismaStudentRepository) also implements VersionedStudentWrites,
   // so these edits use optimistic locking (lost-update protection, F-27).
   const updateStudent = new UpdateStudent(students, audit, students);
@@ -300,6 +306,70 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
 
   // --- M5: summary / transcripts / graduation / audit ---
   const institutions = new PrismaInstitutionRepository(db);
+
+  // AdmitStudent: wire GenerateMatricule + MatriculeSettingsPort.
+  // Both adapters reference repos already defined above; closures ensure
+  // the right runtime values are used when methods are called.
+  const matriculeSettingsAdapter: MatriculeSettingsPort = {
+    async matriculeRule() {
+      const raw = await settings.getRaw(SETTING_KEYS.matriculeRule);
+      if (raw === null)
+        return settingsRegistry.defaultValue(
+          SETTING_KEYS.matriculeRule,
+        ) as string;
+      return settingsRegistry.deserialize(
+        SETTING_KEYS.matriculeRule,
+        raw,
+      ) as string;
+    },
+    async matriculeCheckScheme() {
+      const raw = await settings.getRaw(SETTING_KEYS.matriculeCheckScheme);
+      const val =
+        raw === null
+          ? settingsRegistry.defaultValue(SETTING_KEYS.matriculeCheckScheme)
+          : settingsRegistry.deserialize(
+              SETTING_KEYS.matriculeCheckScheme,
+              raw,
+            );
+      return val as import("../domain/services/MatriculeCheck").CheckScheme;
+    },
+    async matriculeFormat() {
+      const raw = await settings.getRaw(SETTING_KEYS.matriculeFormat);
+      if (raw === null)
+        return settingsRegistry.defaultValue(
+          SETTING_KEYS.matriculeFormat,
+        ) as string;
+      return settingsRegistry.deserialize(
+        SETTING_KEYS.matriculeFormat,
+        raw,
+      ) as string;
+    },
+  };
+  const generateMatricule = new GenerateMatricule(matriculeSettingsAdapter, {
+    async facultyCode(facultyId) {
+      const f = await facultyRepo.findById(facultyId);
+      return f?.code ?? undefined;
+    },
+    async departmentCode(departmentId) {
+      if (!departmentId) return undefined;
+      const d = await departmentRepo.findById(departmentId);
+      return d?.code ?? undefined;
+    },
+    async institutionCode(institutionId) {
+      if (!institutionId) {
+        const inst = await institutions.get();
+        return inst?.code ?? undefined;
+      }
+      const inst = await institutions.findById(institutionId);
+      return inst?.code ?? undefined;
+    },
+  });
+  const admitStudent = new AdmitStudent(
+    uow,
+    generateMatricule,
+    matriculeSettingsAdapter,
+  );
+
   const transcripts = new PrismaTranscriptRepository(db);
   const templates = new PrismaTranscriptTemplateRepository(db);
   const academic = new GetAcademicSummary(results, courses, grading);

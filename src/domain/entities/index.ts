@@ -35,6 +35,7 @@ export interface Student {
   institutionId?: string;
   levelId?: string;
   admissionSession?: string;
+  previousStudentId?: string;
   status: StudentStatus;
 }
 

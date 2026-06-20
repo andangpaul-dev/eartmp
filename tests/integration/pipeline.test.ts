@@ -83,13 +83,33 @@ describe("Pipeline integration (admit → … → graduate)", () => {
     const gradConfig = new GraduationConfigService(settings, registry);
 
     // --- Phase 6/7: admit (atomic student + enrollment) ---
-    const admitted = await new AdmitStudent(uow).execute(
+    const noopGenerate = {
+      generate: async (): Promise<string> => {
+        throw new Error("not used");
+      },
+    } as never;
+    const noopSettings = {
+      async matriculeRule() {
+        return "";
+      },
+      async matriculeCheckScheme() {
+        return "none" as never;
+      },
+      async matriculeFormat() {
+        return "";
+      },
+    };
+    const admitted = await new AdmitStudent(
+      uow,
+      noopGenerate,
+      noopSettings,
+    ).execute(
       {
         matricNumber: "E2E/0001",
         fullName: "Ada Lovelace",
         programmeId: "p1",
         levelId: "l1",
-        fromSession: "2024/2025",
+        admissionSession: "2024/2025",
       },
       admin,
     );

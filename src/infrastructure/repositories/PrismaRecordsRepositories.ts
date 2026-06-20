@@ -58,6 +58,7 @@ type StudentRow = {
   levelId: string | null;
   institutionId: string | null;
   admissionSession: string | null;
+  previousStudentId: string | null;
   status: string;
 };
 
@@ -80,6 +81,7 @@ function toStudent(r: StudentRow): Student {
     programmeId: r.programmeId ?? undefined,
     levelId: r.levelId ?? undefined,
     admissionSession: r.admissionSession ?? undefined,
+    previousStudentId: r.previousStudentId ?? undefined,
     status: r.status as StudentStatus,
   };
 }
@@ -105,6 +107,7 @@ function studentWriteData(
     "programmeId",
     "levelId",
     "admissionSession",
+    "previousStudentId",
     "status",
   ];
   const data: Record<string, unknown> = {};

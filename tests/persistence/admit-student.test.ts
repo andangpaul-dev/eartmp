@@ -16,6 +16,10 @@ import type {
 } from "../../src/domain/repositories/records";
 import { CapturingAudit } from "../auth/fakes";
 import { FakeStudentRepo, FakeEnrollmentRepo } from "../records/fakes";
+import type {
+  GenerateMatricule,
+  MatriculeSettingsPort,
+} from "../../src/application/services/GenerateMatricule";
 
 const admin = SessionContext.create("admin", "SUPER_ADMIN", [
   "students.create",
@@ -34,6 +38,43 @@ const noopMatriculeCounter: MatriculeCounterRepository = {
   },
   async reserve() {
     return 1;
+  },
+};
+
+/** Fake GenerateMatricule that always returns "FS25-0001" on reserve. */
+const fakeGenerate = {
+  async generate(
+    _ctx: unknown,
+    _repos: unknown,
+    _mode: unknown,
+  ): Promise<string> {
+    return "FS25-0001";
+  },
+} as unknown as GenerateMatricule;
+
+/** Fake settings with a format regex that matches "FS25-0001" style. */
+const fakeSettings: MatriculeSettingsPort = {
+  async matriculeRule() {
+    return "{faculty}{year}-{seq:4}";
+  },
+  async matriculeCheckScheme() {
+    return "none" as never;
+  },
+  async matriculeFormat() {
+    return "^[A-Z]{2}\\d{2}-\\d{4}$";
+  },
+};
+
+/** Empty settings (no format validation). */
+const emptySettings: MatriculeSettingsPort = {
+  async matriculeRule() {
+    return "{faculty}{year}-{seq:4}";
+  },
+  async matriculeCheckScheme() {
+    return "none" as never;
+  },
+  async matriculeFormat() {
+    return "";
   },
 };
 
@@ -59,16 +100,31 @@ function makeUow() {
   return { uow, students, enrollments, audit };
 }
 
+/** Helper: build an AdmitStudent with the fake generate + empty settings (no
+ *  format validation) and call execute with the given input + optional session. */
+async function admit(
+  input: Parameters<AdmitStudent["execute"]>[0],
+  session: SessionContext = admin,
+) {
+  const { uow } = makeUow();
+  const uc = new AdmitStudent(uow, fakeGenerate, emptySettings);
+  return uc.execute(input, session);
+}
+
 describe("AdmitStudent", () => {
   it("creates the student and the initial enrollment, and audits", async () => {
     const { uow, students, enrollments, audit } = makeUow();
-    const { student, enrollment } = await new AdmitStudent(uow).execute(
+    const { student, enrollment } = await new AdmitStudent(
+      uow,
+      fakeGenerate,
+      emptySettings,
+    ).execute(
       {
         matricNumber: "M/1",
         fullName: "Ada",
         programmeId: "pA",
         levelId: "lA",
-        fromSession: "24/25",
+        admissionSession: "2024/2025",
       },
       admin,
     );
@@ -84,13 +140,13 @@ describe("AdmitStudent", () => {
 
   it("rejects a duplicate live matric number", async () => {
     const { uow } = makeUow();
-    const uc = new AdmitStudent(uow);
+    const uc = new AdmitStudent(uow, fakeGenerate, emptySettings);
     const input = {
       matricNumber: "M/1",
       fullName: "Ada",
       programmeId: "pA",
       levelId: "lA",
-      fromSession: "24/25",
+      admissionSession: "2024/2025",
     };
     await uc.execute(input, admin);
     await expect(uc.execute(input, admin)).rejects.toBeInstanceOf(RecordsError);
@@ -100,15 +156,84 @@ describe("AdmitStudent", () => {
     const { uow } = makeUow();
     await expect(
       authorize(
-        new AdmitStudent(uow),
+        new AdmitStudent(uow, fakeGenerate, emptySettings),
         {
           matricNumber: "M/2",
           fullName: "Z",
           programmeId: "p",
           levelId: "l",
-          fromSession: "s",
+          admissionSession: "2024/2025",
         },
         viewer,
+      ),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
+  // --- new Phase-3 tests ---
+
+  it("auto-generates the matricule, sets admissionSession + faculty/dept", async () => {
+    const r = await admit({
+      fullName: "A",
+      programmeId: "p",
+      levelId: "l",
+      facultyId: "facA",
+      departmentId: "d",
+      admissionSession: "2025/2026",
+    });
+    expect(r.student.matricNumber).toBe("FS25-0001");
+    expect(r.student.admissionSession).toBe("2025/2026");
+    expect(r.student.facultyId).toBe("facA");
+    expect(r.student.departmentId).toBe("d");
+  });
+
+  it("uses a manual matricule and does NOT consume the counter", async () => {
+    const r = await admit({
+      matricNumber: "MANUAL1",
+      fullName: "A",
+      programmeId: "p",
+      levelId: "l",
+      facultyId: "facA",
+      admissionSession: "2025/2026",
+    });
+    expect(r.student.matricNumber).toBe("MANUAL1");
+  });
+
+  it("rejects a manual matricule failing the format regex", async () => {
+    const { uow } = makeUow();
+    const uc = new AdmitStudent(uow, fakeGenerate, fakeSettings);
+    await expect(
+      uc.execute(
+        {
+          matricNumber: "bad",
+          fullName: "A",
+          programmeId: "p",
+          levelId: "l",
+          facultyId: "facA",
+          admissionSession: "2025/2026",
+        },
+        admin,
+      ),
+    ).rejects.toThrow(/format/i);
+  });
+
+  it("enforces faculty scope on the admitting officer", async () => {
+    const scoped = SessionContext.create(
+      "o",
+      "FACULTY_OFFICER",
+      ["students.create"],
+      "inst1",
+      ["facX"],
+    );
+    await expect(
+      admit(
+        {
+          fullName: "A",
+          programmeId: "p",
+          levelId: "l",
+          facultyId: "facA",
+          admissionSession: "2025/2026",
+        },
+        scoped,
       ),
     ).rejects.toBeInstanceOf(AuthorizationError);
   });
