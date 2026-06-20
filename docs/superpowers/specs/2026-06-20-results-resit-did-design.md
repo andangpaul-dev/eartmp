@@ -1,7 +1,7 @@
 # Results entry, resit sessions & DID — design (Workstream B)
 
 **Date:** 2026-06-20
-**Status:** Approved (pending final spec review)
+**Status:** Implemented (2026-06-20)
 **Scope:** Items 2 & 3 of the records upgrade set — results entry organised
 per academic year/semester → department → programme → course, resit
 examinations (each semester has its own resit session), and DID (Did Not Sit)
@@ -313,20 +313,20 @@ admin bypassed a rule and why. Override is checked in the application use-cases
 
 ## 9. Definition of done
 
-- [ ] Schema + migration (two columns, new unique key) applied & client regen.
-- [ ] Domain/repository: `ResultRecord` `sitting`/`status` fields, sitting/status
+- [x] Schema + migration (two columns, new unique key) applied & client regen.
+- [x] Domain/repository: `ResultRecord` `sitting`/`status` fields, sitting/status
       value-objects, `sitting`-aware repo methods, whole-record attempt reads.
-- [ ] `GpaEngine` **global** (per-course, cross-session) effective-attempt
+- [x] `GpaEngine` **global** (per-course, cross-session) effective-attempt
       selection + discounting; CGPA + per-semester GPA via same.
-- [ ] Enrollment-history roster resolver (as-of session, legacy fallback).
-- [ ] `SaveCourseResults` use-case; `EnterResult`/`ProcessSemester`/
+- [x] Enrollment-history roster resolver (as-of session, legacy fallback).
+- [x] `SaveCourseResults` use-case; `EnterResult`/`ProcessSemester`/
       `LockSemesterResults` sitting-, status- & override-aware.
-- [ ] `results.override` permission seeded (idempotent) on `SUPER_ADMIN`.
-- [ ] Transcript per-attempt rows + asterisk + status markers + conditional legend.
-- [ ] UI: roster grid (cascade, status control, resit/carryover filter, batch
+- [x] `results.override` permission seeded (idempotent) on `SUPER_ADMIN`.
+- [x] Transcript per-attempt rows + asterisk + status markers + conditional legend.
+- [x] UI: roster grid (cascade, status control, resit/carryover filter, batch
       save/process) + per-student sitting selector; host/contract/ipc/zod wiring.
-- [ ] Tests green; `tsc` strict + lint + boundary fitness clean.
-- [ ] `/docs` updated; summary posted.
+- [x] Tests green; `tsc` strict + lint + boundary fitness clean.
+- [x] `/docs` updated; summary posted.
 
 ## 10. Out of scope (future work)
 
