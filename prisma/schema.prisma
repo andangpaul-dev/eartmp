@@ -396,6 +396,8 @@ model Result {
   grade              String?
   gradePoint         Float?
   creditsEarned      Int?
+  sitting            String    @default("NORMAL") // NORMAL | RESIT
+  status             String    @default("GRADED") // GRADED | DID | DISQUALIFIED | INCOMPLETE
   // Provenance (F-19): which config produced this grade, so historical grades
   // remain reproducible even if the default config changes later. Loose ids
   // (no FK) so the record survives config deletion, like the audit log.
@@ -407,7 +409,7 @@ model Result {
   updatedAt          DateTime  @updatedAt
   deletedAt          DateTime?
 
-  @@unique([studentId, courseId, semesterId])
+  @@unique([studentId, courseId, semesterId, sitting])
   @@index([studentId, semesterId])
   @@index([studentId])
   @@index([courseId, semesterId])
