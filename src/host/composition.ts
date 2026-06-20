@@ -70,6 +70,8 @@ import {
   DeleteStudent,
 } from "../application/use-cases/records/ManageStudents";
 import { AdmitStudent } from "../application/use-cases/records/AdmitStudent";
+import { ReadmitStudent } from "../application/use-cases/records/ReadmitStudent";
+import { PreviewMatricule } from "../application/use-cases/records/PreviewMatricule";
 import {
   ListCourses,
   CreateCourse,
@@ -369,6 +371,9 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     matriculeSettingsAdapter,
   );
 
+  const readmitStudent = new ReadmitStudent(uow, generateMatricule);
+  const previewMatricule = new PreviewMatricule(uow, generateMatricule);
+
   // ImportStudents: same GenerateMatricule + settings as AdmitStudent, plus a
   // faculty-by-code lookup for per-row faculty overrides.
   const importStudents = new ImportStudents(
@@ -525,6 +530,8 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     ["listStudents", (i, s) => authorize(listStudents, i as never, s)],
     ["getStudent", (i, s) => authorize(getStudent, i as never, s)],
     ["admitStudent", (i, s) => authorize(admitStudent, i as never, s)],
+    ["readmitStudent", (i, s) => authorize(readmitStudent, i as never, s)],
+    ["previewMatricule", (i, s) => authorize(previewMatricule, i as never, s)],
     ["updateStudent", (i, s) => authorize(updateStudent, i as never, s)],
     [
       "changeStudentStatus",
