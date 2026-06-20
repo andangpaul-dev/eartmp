@@ -109,9 +109,11 @@ Applied on launch by the runtime migration runner (same idempotent path as the
 byte-for-byte unchanged.
 
 **Domain entity** `ResultRecord` gains `sitting: "NORMAL" | "RESIT"` and
-`status: "GRADED" | "DID"`. Repository `ResultRepository` methods that key on
-`(student, course, semester)` gain a `sitting` argument; `findByStudentAndSemester`
-returns all sittings.
+`status: "GRADED" | "DID" | "DISQUALIFIED" | "INCOMPLETE"`. Repository
+`ResultRepository` methods that key on `(student, course, semester)` gain a
+`sitting` argument; `findByStudentAndSemester` returns all sittings, and a new
+read returns a student's **entire** result set (all sessions) for the global
+effective-attempt selection (§3).
 
 ---
 
