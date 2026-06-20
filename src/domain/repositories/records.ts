@@ -9,6 +9,10 @@
  */
 import type { Student, Course, StudentStatus, ResultRecord } from "../entities";
 import type { StudentEnrollment } from "../entities/enrollment";
+import type {
+  ResultSitting,
+  ResultStatus,
+} from "../value-objects/ResultSitting";
 
 /** A page of results plus the total count of matching live rows. */
 export interface Page<T> {
@@ -79,23 +83,27 @@ export interface StudentEnrollmentRepository {
 export interface ResultRepository {
   create(data: Omit<ResultRecord, "id">): Promise<ResultRecord>;
   findById(id: string): Promise<ResultRecord | null>;
-  /** True if a live result already exists for this (student, course, semester). */
+  /** True if a live row exists for this (student, course, semester, sitting). */
   existsFor(
     studentId: string,
     courseId: string,
     semesterId: string,
+    sitting: ResultSitting,
   ): Promise<boolean>;
+  /** All live rows (every sitting) for a student's semester. */
   findByStudentAndSemester(
     studentId: string,
     semesterId: string,
   ): Promise<ResultRecord[]>;
+  /** The student's ENTIRE live result set (all sessions) — global selection. */
   findByStudent(studentId: string): Promise<ResultRecord[]>;
   /** Replace raw component scores + recomputed final score (entry/edit). */
   updateScores(
     id: string,
     data: {
       componentScores: { key: string; score: number }[];
-      finalScore: number;
+      finalScore?: number;
+      status?: ResultStatus;
     },
   ): Promise<void>;
   /** Persist the processed grade/points for a result (records provenance). */
@@ -114,6 +122,7 @@ export interface ResultRepository {
     studentId: string,
     semesterId: string,
     locked: boolean,
+    sitting?: ResultSitting,
   ): Promise<number>;
   /** Unlock a single result (audited unlock workflow). */
   unlock(id: string): Promise<void>;
