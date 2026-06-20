@@ -3,6 +3,10 @@
  * These never import Prisma, React, or any infrastructure. The persistence
  * layer maps to/from these.
  */
+import type {
+  ResultSitting,
+  ResultStatus,
+} from "../value-objects/ResultSitting";
 
 export type StudentStatus =
   | "ACTIVE"
@@ -59,6 +63,8 @@ export interface ResultRecord {
   gradePoint?: number;
   creditsEarned?: number;
   isLocked: boolean;
+  sitting: ResultSitting;
+  status: ResultStatus;
 }
 
 export type TranscriptStatus = "DRAFT" | "APPROVED" | "LOCKED" | "REVOKED";
