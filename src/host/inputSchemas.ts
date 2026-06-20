@@ -104,6 +104,24 @@ const SCHEMAS: Record<string, z.ZodType> = {
     ),
   }),
   listCourseRoster: z.looseObject({ courseId: str, sessionName: str }),
+  // WS C — student lifecycle / matricule management
+  admitStudent: z.looseObject({
+    fullName: str,
+    admissionSession: str,
+    programmeId: str,
+    levelId: str,
+  }),
+  previewMatricule: z.looseObject({ facultyId: str, admissionSession: str }),
+  readmitStudent: z.looseObject({
+    studentId: str,
+    programmeId: str,
+    levelId: str,
+    fromSession: str,
+  }),
+  regenerateMatricule: z.looseObject({ studentId: str }),
+  mergeStudents: z.looseObject({ survivingId: str, duplicateId: str }),
+  findDuplicateCandidates: z.looseObject({}),
+  bulkRegenerateMatricules: z.looseObject({ facultyId: str, year: z.number() }),
 };
 
 /** Every method at least requires its input to be an object (reject primitives). */

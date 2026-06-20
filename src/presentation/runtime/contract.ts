@@ -193,6 +193,32 @@ export interface CoreApi {
   listStudents(input: StudentQuery): Promise<Page<Student>>;
   getStudent(input: { id: string }): Promise<Student>;
   admitStudent(input: AdmitStudentInput): Promise<{ student: Student }>;
+  previewMatricule(input: {
+    facultyId: string;
+    admissionSession: string;
+  }): Promise<{ matricule: string }>;
+  readmitStudent(input: {
+    studentId: string;
+    programmeId: string;
+    levelId: string;
+    fromSession: string;
+    facultyId?: string;
+    departmentId?: string;
+  }): Promise<Student>;
+  regenerateMatricule(input: {
+    studentId: string;
+  }): Promise<{ matricule: string }>;
+  findDuplicateCandidates(
+    input: Record<string, never>,
+  ): Promise<{ survivingId: string; duplicateId: string; reason: string }[]>;
+  mergeStudents(input: {
+    survivingId: string;
+    duplicateId: string;
+  }): Promise<{ ok: true }>;
+  bulkRegenerateMatricules(input: {
+    facultyId: string;
+    year: number;
+  }): Promise<{ regenerated: number; skipped: string[] }>;
   updateStudent(input: {
     id: string;
     patch: Partial<Omit<Student, "id">>;
