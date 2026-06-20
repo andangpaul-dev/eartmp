@@ -28,7 +28,7 @@ export const DEFAULT_ADMIN = {
   password: "ChangeMe123!",
 };
 
-const PERMISSIONS: { key: string; label: string }[] = [
+export const PERMISSIONS: { key: string; label: string }[] = [
   { key: "students.read", label: "View students" },
   { key: "students.create", label: "Create students" },
   { key: "students.update", label: "Edit students" },
@@ -36,6 +36,7 @@ const PERMISSIONS: { key: string; label: string }[] = [
   { key: "results.import", label: "Import results" },
   { key: "results.process", label: "Process results" },
   { key: "results.unlock", label: "Unlock locked results" },
+  { key: "results.override", label: "Override locked/published results" },
   { key: "transcripts.read", label: "View/verify transcripts" },
   { key: "transcripts.generate", label: "Generate transcripts" },
   { key: "transcripts.approve", label: "Approve transcripts" },
@@ -64,7 +65,11 @@ const PERMISSIONS: { key: string; label: string }[] = [
   { key: "courses.update", label: "Edit/delete courses" },
 ];
 
-const ROLES: { name: string; description: string; permissions: string[] }[] = [
+export const ROLES: {
+  name: string;
+  description: string;
+  permissions: string[];
+}[] = [
   {
     name: "SUPER_ADMIN",
     description: "Full access",
