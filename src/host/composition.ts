@@ -302,7 +302,6 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     courses,
   );
   const importResults = new ImportResults(grading, uow);
-  const importStudents = new ImportStudents(uow);
 
   // --- M5: summary / transcripts / graduation / audit ---
   const institutions = new PrismaInstitutionRepository(db);
@@ -368,6 +367,20 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     uow,
     generateMatricule,
     matriculeSettingsAdapter,
+  );
+
+  // ImportStudents: same GenerateMatricule + settings as AdmitStudent, plus a
+  // faculty-by-code lookup for per-row faculty overrides.
+  const importStudents = new ImportStudents(
+    uow,
+    generateMatricule,
+    matriculeSettingsAdapter,
+    {
+      async findByCode(code: string) {
+        const f = await facultyRepo.findByCode(code);
+        return f ? { id: f.id } : null;
+      },
+    },
   );
 
   const transcripts = new PrismaTranscriptRepository(db);
