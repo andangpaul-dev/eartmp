@@ -144,18 +144,21 @@ export function CourseRosterGrid() {
   function setRowStatus(studentId: string, status: RowStatus) {
     setRowStates((prev) => ({
       ...prev,
-      [studentId]: { ...getRow(studentId), status },
+      [studentId]: { ...(prev[studentId] ?? makeDefaultRow()), status },
     }));
   }
 
   function setScore(studentId: string, key: string, value: string) {
-    setRowStates((prev) => ({
-      ...prev,
-      [studentId]: {
-        ...getRow(studentId),
-        scores: { ...getRow(studentId).scores, [key]: value },
-      },
-    }));
+    setRowStates((prev) => {
+      const row = prev[studentId] ?? makeDefaultRow();
+      return {
+        ...prev,
+        [studentId]: {
+          ...row,
+          scores: { ...row.scores, [key]: value },
+        },
+      };
+    });
   }
 
   // ── assemble payload ───────────────────────────────────────────────────────
@@ -199,13 +202,23 @@ export function CourseRosterGrid() {
   // ── process & lock all ────────────────────────────────────────────────────
   const processAll = useAction(
     async () => {
+      const failed: string[] = [];
       for (const student of students) {
-        await core.processSemester({ studentId: student.id, semesterId });
-        await core.lockSemesterResults({
-          studentId: student.id,
-          semesterId,
-          sitting,
-        });
+        try {
+          await core.processSemester({ studentId: student.id, semesterId });
+          await core.lockSemesterResults({
+            studentId: student.id,
+            semesterId,
+            sitting,
+          });
+        } catch {
+          failed.push(student.matricNumber ?? student.id);
+        }
+      }
+      if (failed.length > 0) {
+        throw new Error(
+          `Processed ${students.length - failed.length} of ${students.length}; failed: ${failed.join(", ")}`,
+        );
       }
     },
     {
@@ -217,7 +230,7 @@ export function CourseRosterGrid() {
   );
 
   const comps: AssessmentComponent[] = components.data ?? [];
-  const rosterReady = courseId && sessionName;
+  const rosterReady = courseId && sessionName && semesterId;
 
   return (
     <div className="stack">
@@ -375,7 +388,10 @@ export function CourseRosterGrid() {
               className="select"
               aria-label="Sitting"
               value={sitting}
-              onChange={(e) => setSitting(e.target.value as Sitting)}
+              onChange={(e) => {
+                setSitting(e.target.value as Sitting);
+                setRowStates({});
+              }}
             >
               <option value="NORMAL">Normal</option>
               <option value="RESIT">Resit</option>

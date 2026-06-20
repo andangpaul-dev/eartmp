@@ -153,7 +153,145 @@ describe("CourseRosterGrid", () => {
     expect(screen.getByText("Bob Church")).toBeInTheDocument();
   });
 
-  it("Save all calls saveCourseResults with entered rows", async () => {
+  // BUG 2 — roster grid hidden until semester is selected
+  it("roster grid not shown without semester; appears once semester selected; semesterId is non-empty", async () => {
+    const saveCourseResults = vi.fn(async () => ({
+      saved: 2,
+      skipped: 0,
+      errors: [],
+    }));
+    const { user } = renderScreen(<CourseRosterGrid />, {
+      permissions: PERMISSIONS,
+      core: { ...BASE_CORE, saveCourseResults },
+    });
+
+    // Select session + faculty + dept + prog + course but skip semester
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("Session").querySelector('option[value="sess1"]'),
+      ).toBeInTheDocument(),
+    );
+    await user.selectOptions(screen.getByLabelText("Session"), "sess1");
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Faculty")).not.toBeDisabled(),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("Faculty").querySelector('option[value="fac1"]'),
+      ).toBeInTheDocument(),
+    );
+    await user.selectOptions(screen.getByLabelText("Faculty"), "fac1");
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Department")).not.toBeDisabled(),
+    );
+    await waitFor(() =>
+      expect(
+        screen
+          .getByLabelText("Department")
+          .querySelector('option[value="dept1"]'),
+      ).toBeInTheDocument(),
+    );
+    await user.selectOptions(screen.getByLabelText("Department"), "dept1");
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Programme")).not.toBeDisabled(),
+    );
+    await waitFor(() =>
+      expect(
+        screen
+          .getByLabelText("Programme")
+          .querySelector('option[value="prog1"]'),
+      ).toBeInTheDocument(),
+    );
+    await user.selectOptions(screen.getByLabelText("Programme"), "prog1");
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Course")).not.toBeDisabled(),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("Course").querySelector('option[value="crs1"]'),
+      ).toBeInTheDocument(),
+    );
+    await user.selectOptions(screen.getByLabelText("Course"), "crs1");
+
+    // Grid / Save all should NOT be visible without a semester
+    expect(
+      screen.queryByRole("button", { name: /save all/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Alice Turing")).not.toBeInTheDocument();
+
+    // Now go back and select semester (resets downstream cascade)
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("Semester").querySelector('option[value="sem1"]'),
+      ).toBeInTheDocument(),
+    );
+    await user.selectOptions(screen.getByLabelText("Semester"), "sem1");
+
+    // Re-cascade from faculty after semester reset
+    await waitFor(() =>
+      expect(screen.getByLabelText("Faculty")).not.toBeDisabled(),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("Faculty").querySelector('option[value="fac1"]'),
+      ).toBeInTheDocument(),
+    );
+    await user.selectOptions(screen.getByLabelText("Faculty"), "fac1");
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Department")).not.toBeDisabled(),
+    );
+    await waitFor(() =>
+      expect(
+        screen
+          .getByLabelText("Department")
+          .querySelector('option[value="dept1"]'),
+      ).toBeInTheDocument(),
+    );
+    await user.selectOptions(screen.getByLabelText("Department"), "dept1");
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Programme")).not.toBeDisabled(),
+    );
+    await waitFor(() =>
+      expect(
+        screen
+          .getByLabelText("Programme")
+          .querySelector('option[value="prog1"]'),
+      ).toBeInTheDocument(),
+    );
+    await user.selectOptions(screen.getByLabelText("Programme"), "prog1");
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Course")).not.toBeDisabled(),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByLabelText("Course").querySelector('option[value="crs1"]'),
+      ).toBeInTheDocument(),
+    );
+    await user.selectOptions(screen.getByLabelText("Course"), "crs1");
+
+    // Now both roster rows and Save all should be visible
+    expect(await screen.findByText("Alice Turing")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /save all/i }),
+    ).toBeInTheDocument();
+
+    // Clicking Save all must pass a non-empty semesterId
+    await user.click(screen.getByRole("button", { name: /save all/i }));
+    await waitFor(() => {
+      expect(saveCourseResults).toHaveBeenCalledWith(
+        expect.objectContaining({ semesterId: "sem1" }),
+      );
+    });
+  }, 15000);
+
+  it("Save all calls saveCourseResults with entered rows and correct componentScores", async () => {
     const saveCourseResults = vi.fn(async () => ({
       saved: 2,
       skipped: 0,
@@ -179,14 +317,20 @@ describe("CourseRosterGrid", () => {
           courseId: "crs1",
           sitting: "NORMAL",
           rows: expect.arrayContaining([
-            expect.objectContaining({ studentId: "s1" }),
+            expect.objectContaining({
+              studentId: "s1",
+              componentScores: [
+                { key: "CA", score: 35 },
+                { key: "EXAM", score: 0 },
+              ],
+            }),
           ]),
         }),
       );
     });
   });
 
-  it("marking a student DID disables their score cells", async () => {
+  it("marking a student DID disables their score cells and saves componentScores: []", async () => {
     const saveCourseResults = vi.fn(async () => ({
       saved: 2,
       skipped: 0,
@@ -210,14 +354,18 @@ describe("CourseRosterGrid", () => {
     // Score inputs for s2 should still be enabled
     expect(screen.getByLabelText("CA score for s2")).not.toBeDisabled();
 
-    // Save and verify the row carries DID status
+    // Save and verify the row carries DID status and empty componentScores
     await user.click(screen.getByRole("button", { name: /save all/i }));
 
     await waitFor(() => {
       expect(saveCourseResults).toHaveBeenCalledWith(
         expect.objectContaining({
           rows: expect.arrayContaining([
-            expect.objectContaining({ studentId: "s1", status: "DID" }),
+            expect.objectContaining({
+              studentId: "s1",
+              status: "DID",
+              componentScores: [],
+            }),
           ]),
         }),
       );
@@ -246,6 +394,30 @@ describe("CourseRosterGrid", () => {
       expect(saveCourseResults).toHaveBeenCalledWith(
         expect.objectContaining({ sitting: "RESIT" }),
       );
+    });
+  });
+
+  // BUG 1 — switching sitting clears previously entered scores
+  it("switching sitting from NORMAL to RESIT clears entered scores", async () => {
+    const { user } = renderScreen(<CourseRosterGrid />, {
+      permissions: PERMISSIONS,
+      core: { ...BASE_CORE },
+    });
+
+    await cascadeToRoster(user);
+
+    // Type a score for Alice under NORMAL sitting
+    const caInput = await screen.findByLabelText("CA score for s1");
+    await user.clear(caInput);
+    await user.type(caInput, "30");
+    expect(caInput).toHaveValue(30);
+
+    // Switch sitting to RESIT — row states must be cleared
+    await user.selectOptions(screen.getByLabelText("Sitting"), "RESIT");
+
+    // The CA input for s1 should now be empty (score was cleared)
+    await waitFor(() => {
+      expect(screen.getByLabelText("CA score for s1")).toHaveValue(null);
     });
   });
 
@@ -287,5 +459,33 @@ describe("CourseRosterGrid", () => {
     expect(
       facultySelect.querySelector('option[value="f2"]'),
     ).not.toBeInTheDocument();
+  });
+
+  // BUG 4 — processAll continues on failure and reports summary
+  it("Process & lock all continues after per-student failures and shows a summary error", async () => {
+    const processSemester = vi
+      .fn()
+      .mockResolvedValueOnce({})
+      .mockRejectedValueOnce(new Error("lock failed for s2"));
+    const lockSemesterResults = vi.fn(async () => 1);
+
+    const { user } = renderScreen(<CourseRosterGrid />, {
+      permissions: PERMISSIONS,
+      core: { ...BASE_CORE, processSemester, lockSemesterResults },
+    });
+
+    await cascadeToRoster(user);
+
+    await user.click(
+      screen.getByRole("button", { name: /process.*lock all/i }),
+    );
+
+    // Should show a summary error mentioning partial success
+    await waitFor(() => {
+      expect(screen.getByText(/processed 1 of 2/i)).toBeInTheDocument();
+    });
+
+    // s1 was processed; s2 failed — processSemester called twice
+    expect(processSemester).toHaveBeenCalledTimes(2);
   });
 });
