@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
   EnterResult,
   LockSemesterResults,
@@ -191,6 +191,15 @@ describe("Lock / Unlock", () => {
   it("UnlockResult requires results.unlock", () => {
     const uc = new UnlockResult(results, audit);
     expect(uc.requiredPermissions).toEqual(["results.unlock"]);
+  });
+
+  it("locks only the named sitting", async () => {
+    const spy = vi.spyOn(results, "setLockedForSemester");
+    await new LockSemesterResults(results, audit).execute(
+      { studentId: "s", semesterId: "sem", sitting: "NORMAL" },
+      admin,
+    );
+    expect(spy).toHaveBeenCalledWith("s", "sem", true, "NORMAL");
   });
 });
 

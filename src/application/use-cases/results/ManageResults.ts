@@ -16,6 +16,7 @@ import type {
 import type { AuditLogPort } from "../../../domain/repositories";
 import type { GradingConfigService } from "../../services/GradingConfigService";
 import type { AuthorizedUseCase } from "../../authorization/AuthorizedUseCase";
+import type { ResultSitting } from "../../../domain/value-objects/ResultSitting";
 import {
   requireInScope,
   requireInFacultyScope,
@@ -126,6 +127,7 @@ export class EnterResult implements AuthorizedUseCase<
 export interface LockSemesterResultsInput {
   studentId: string;
   semesterId: string;
+  sitting?: ResultSitting;
 }
 export class LockSemesterResults implements AuthorizedUseCase<
   LockSemesterResultsInput,
@@ -142,13 +144,18 @@ export class LockSemesterResults implements AuthorizedUseCase<
       input.studentId,
       input.semesterId,
       true,
+      input.sitting,
     );
     await this.audit.record({
       userId: session.actorId,
       action: "LOCK",
       entity: "Result",
       recordId: input.studentId,
-      newValue: { semesterId: input.semesterId, locked: count },
+      newValue: {
+        semesterId: input.semesterId,
+        locked: count,
+        sitting: input.sitting,
+      },
     });
     return count;
   }
