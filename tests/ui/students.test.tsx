@@ -115,7 +115,7 @@ describe("StudentsScreen", () => {
     await within(dialog).findByText("SCI/2024/0001");
   });
 
-  it("manual override sends the typed matricule; auto omits it", async () => {
+  it("auto mode omits matricNumber when admitting", async () => {
     const faculties: Faculty[] = [{ id: "f1", name: "Science", code: "SCI" }];
     const sessions: AcademicSession[] = [
       { id: "sess1", name: "2024/2025", isCurrent: false },
@@ -150,11 +150,10 @@ describe("StudentsScreen", () => {
       },
     });
 
-    // --- AUTO mode first ---
     await user.click(
       await screen.findByRole("button", { name: /admit student/i }),
     );
-    let dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("dialog");
 
     await user.selectOptions(within(dialog).getByLabelText("Faculty"), "f1");
     await user.selectOptions(within(dialog).getByLabelText("Department"), "d1");
@@ -174,18 +173,49 @@ describe("StudentsScreen", () => {
     );
     // issued matricule shown on success
     await within(dialog).findByText("SCI/2024/AUTO");
+  });
 
-    // close the success modal
-    await user.click(within(dialog).getByRole("button", { name: /done/i }));
+  it("manual override sends the typed matricule", async () => {
+    const faculties: Faculty[] = [{ id: "f1", name: "Science", code: "SCI" }];
+    const sessions: AcademicSession[] = [
+      { id: "sess1", name: "2024/2025", isCurrent: false },
+    ];
+    const departments: Department[] = [
+      { id: "d1", name: "Computer Science", code: "CS", facultyId: "f1" },
+    ];
+    const programmes: Programme[] = [
+      {
+        id: "p1",
+        name: "B.Sc CS",
+        code: "BSCS",
+        departmentId: "d1",
+        durationLevels: 4,
+        creditsRequired: 120,
+      },
+    ];
+    const levels: Level[] = [
+      { id: "lv1", name: "Level 100", rank: 1, programmeId: "p1" },
+    ];
+    const issuedStudent = student({ matricNumber: "CS/MANUAL/001" });
+    const admitStudent = vi.fn(async () => ({ student: issuedStudent }));
+    const { user } = renderScreen(<StudentsScreen />, {
+      permissions: ["students.read", "students.create"],
+      core: {
+        listFaculties: async () => faculties,
+        listDepartments: async () => departments,
+        listProgrammes: async () => programmes,
+        listLevels: async () => levels,
+        listSessions: async () => sessions,
+        admitStudent,
+      },
+    });
 
-    // --- MANUAL mode ---
-    admitStudent.mockClear();
     await user.click(
       await screen.findByRole("button", { name: /admit student/i }),
     );
-    dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("dialog");
 
-    // toggle manual
+    // toggle manual override
     await user.click(within(dialog).getByLabelText(/enter manually/i));
     const matricInput = within(dialog).getByLabelText(/^matricule$/i);
     await user.type(matricInput, "CS/MANUAL/001");

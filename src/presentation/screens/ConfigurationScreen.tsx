@@ -5,6 +5,7 @@
  * by `*.manage`. All values come from and go to the core.
  */
 import { useEffect, useState, type ReactNode } from "react";
+import { expandMatricule } from "../../domain/services/Matricule";
 import { useCore, useSession } from "../runtime/CoreProvider";
 import { useKeyState } from "../runtime/KeyProvider";
 import { useAsync, useAction } from "../runtime/hooks";
@@ -569,16 +570,21 @@ function MatriculeTab({ notify }: { notify: (m: string) => void }) {
     },
   );
 
-  // Live sample: substitute the rule tokens with placeholder values
-  const liveSample = rule
-    .replace(/\{fac\}/gi, "SCI")
-    .replace(/\{dept\}/gi, "CS")
-    .replace(/\{year\}/gi, "2024")
-    .replace(/\{seq:0+\}/gi, (m) => {
-      const zeros = m.replace(/[^0]/g, "");
-      return "1".padStart(zeros.length, "0");
-    })
-    .replace(/\{seq\}/gi, "1");
+  // Live sample: use the pure domain function with representative token values
+  const liveSample = (() => {
+    try {
+      return expandMatricule(rule, {
+        institutionCode: "UB",
+        faculty: "SCI",
+        dept: "CS",
+        year: new Date().getFullYear(),
+        seq: 1,
+        checkScheme: scheme as "none" | "luhn" | "mod97",
+      });
+    } catch {
+      return "";
+    }
+  })();
 
   if (!loaded)
     return (
