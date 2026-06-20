@@ -279,7 +279,8 @@ model Student {
   levelId          String?
   level            Level?              @relation(fields: [levelId], references: [id])
   institutionId    String?
-  admissionSession String?
+  admissionSession  String?
+  previousStudentId String? // graduate re-admission link (loose id, no FK) — WS C
   status           String              @default("ACTIVE") // ACTIVE|SUSPENDED|DEFERRED|WITHDRAWN|GRADUATED
   version          Int                 @default(0) // optimistic concurrency (F-27)
   results          Result[]
@@ -292,6 +293,19 @@ model Student {
   @@index([departmentId])
   @@index([programmeId, levelId])
   @@index([institutionId])
+}
+
+// Per-(institution, faculty, admission-year) matricule sequence (WS C).
+model MatriculeCounter {
+  id            String   @id @default(cuid())
+  institutionId String?
+  facultyId     String
+  year          Int
+  next          Int      @default(1)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([institutionId, facultyId, year])
 }
 
 // Historizes a student's programme/level over time (transfers, progression).
