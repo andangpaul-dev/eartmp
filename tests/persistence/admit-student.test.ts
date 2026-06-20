@@ -11,6 +11,7 @@ import type {
 import type {
   ResultRepository,
   CourseRepository,
+  SemesterOrdering,
 } from "../../src/domain/repositories/records";
 import { CapturingAudit } from "../auth/fakes";
 import { FakeStudentRepo, FakeEnrollmentRepo } from "../records/fakes";
@@ -20,6 +21,12 @@ const admin = SessionContext.create("admin", "SUPER_ADMIN", [
 ]);
 const viewer = SessionContext.create("v", "VIEWER", []);
 
+const noopSemesterOrdering: SemesterOrdering = {
+  async order(ids) {
+    return new Map(ids.map((id) => [id, { sessionOrder: 0, rank: 0 }]));
+  },
+};
+
 function makeUow() {
   const students = new FakeStudentRepo();
   const enrollments = new FakeEnrollmentRepo();
@@ -28,7 +35,14 @@ function makeUow() {
   const courses = {} as CourseRepository;
   const uow: UnitOfWork = {
     run<T>(work: (r: TransactionalRepos) => Promise<T>) {
-      return work({ students, enrollments, courses, results, audit });
+      return work({
+        students,
+        enrollments,
+        courses,
+        results,
+        audit,
+        semesterOrdering: noopSemesterOrdering,
+      });
     },
   };
   return { uow, students, enrollments, audit };

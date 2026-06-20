@@ -15,6 +15,7 @@ import {
   PrismaCourseRepository,
   PrismaStudentEnrollmentRepository,
   PrismaResultRepository,
+  PrismaSemesterOrdering,
 } from "../repositories/PrismaRecordsRepositories";
 import { PrismaAuditLogAdapter } from "../repositories/PrismaAuthRepositories";
 
@@ -29,6 +30,7 @@ export class PrismaUnitOfWork implements UnitOfWork {
         courses: new PrismaCourseRepository(tx),
         results: new PrismaResultRepository(tx),
         audit: new PrismaAuditLogAdapter(tx),
+        semesterOrdering: new PrismaSemesterOrdering(tx),
       }),
     );
   }

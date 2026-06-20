@@ -9,10 +9,22 @@
  * review F-1) — a failure part-way through rolls back every result update, so a
  * semester can never be left half-processed. It also records grade provenance
  * (F-19) via the optional `gradeScaleId`.
+ *
+ * Workstream B update: uses selectEffective + SemesterOrdering to determine
+ * which attempt is GPA-effective per course; stamps ALL non-locked, non-pending
+ * rows (never throws on locked); computes GpaSummary from effective attempts only.
  */
 import { GpaEngine, type GpaSummary } from "../../domain/services/GpaEngine";
 import type { GradeScale } from "../../domain/value-objects/GradeScale";
 import type { UnitOfWork } from "../ports/UnitOfWork";
+import {
+  selectEffective,
+  type Attempt,
+} from "../../domain/services/ResultAttempts";
+import {
+  countsAsFail,
+  isPending,
+} from "../../domain/value-objects/ResultSitting";
 
 export interface ProcessSemesterInput {
   studentId: string;
@@ -30,55 +42,85 @@ export class ProcessSemesterResults {
     const engine = new GpaEngine(input.scale);
 
     return this.uow.run(async (repos) => {
-      const rawResults = await repos.results.findByStudentAndSemester(
-        input.studentId,
-        input.semesterId,
-      );
-      if (rawResults.length === 0) {
+      // Load all results for this student across all semesters for effective-attempt selection.
+      const all = await repos.results.findByStudent(input.studentId);
+      if (all.every((r) => r.semesterId !== input.semesterId)) {
         throw new Error(
           `No results found for student ${input.studentId} in semester ${input.semesterId}.`,
         );
       }
 
-      // A locked semester is immutable; unlock before re-processing (AD9.3).
-      const locked = rawResults.find((r) => r.isLocked);
-      if (locked) {
-        throw new Error(
-          `Result ${locked.id} is locked; unlock before re-processing.`,
-        );
-      }
+      // Determine each semester's chronological ordering for attempt selection.
+      const ord = await repos.semesterOrdering.order([
+        ...new Set(all.map((r) => r.semesterId)),
+      ]);
 
-      // Resolve credit values from the course registry.
-      const courseResults = [];
-      for (const r of rawResults) {
-        if (r.finalScore === undefined) {
-          throw new Error(`Result ${r.id} has no final score; import first.`);
-        }
+      // Select which attempt per course is GPA-effective (latest non-pending).
+      const sel = selectEffective(
+        all.map<Attempt>((r) => ({
+          id: r.id,
+          courseId: r.courseId,
+          sessionOrder: ord.get(r.semesterId)?.sessionOrder ?? 0,
+          semesterRank: ord.get(r.semesterId)?.rank ?? 0,
+          sitting: r.sitting,
+          status: r.status,
+        })),
+      );
+
+      // Work only over rows in the target semester.
+      const semRows = all.filter((r) => r.semesterId === input.semesterId);
+
+      const effectiveCourseResults: {
+        courseCode: string;
+        creditValue: number;
+        finalScore: number;
+      }[] = [];
+
+      for (const r of semRows) {
+        // INCOMPLETE rows: skip entirely — not stamped, not counted.
+        if (isPending(r.status)) continue;
+
         const course = await repos.courses.findById(r.courseId);
         if (!course) {
           throw new Error(`Course ${r.courseId} not found for result ${r.id}.`);
         }
-        courseResults.push({
-          courseCode: course.code,
-          creditValue: course.creditValue,
-          finalScore: r.finalScore,
-        });
+
+        // DID / DISQUALIFIED count as a 0-score fail; GRADED uses the actual score.
+        const score = countsAsFail(r.status) ? 0 : r.finalScore;
+        if (score === undefined) {
+          throw new Error(`Result ${r.id} has no final score; import first.`);
+        }
+
+        // Stamp the processed grade onto every non-locked row (skip locked silently).
+        if (!r.isLocked) {
+          const processed = engine.processSemester([
+            {
+              courseCode: course.code,
+              creditValue: course.creditValue,
+              finalScore: score,
+            },
+          ]).courses[0]!;
+          await repos.results.updateProcessed(r.id, {
+            grade: processed.grade,
+            gradePoint: processed.gradePoint,
+            creditsEarned: processed.creditsEarned,
+            finalScore: score,
+            ...(input.gradeScaleId ? { gradeScaleId: input.gradeScaleId } : {}),
+          });
+        }
+
+        // Only the GPA-effective attempt for each course counts toward the summary.
+        if (sel.effectiveIds.has(r.id)) {
+          effectiveCourseResults.push({
+            courseCode: course.code,
+            creditValue: course.creditValue,
+            finalScore: score,
+          });
+        }
       }
 
-      const summary = engine.processSemester(courseResults);
-
-      // Persist the processed grade/points back to each result (atomically).
-      for (let i = 0; i < rawResults.length; i++) {
-        const raw = rawResults[i]!;
-        const processed = summary.courses[i]!;
-        await repos.results.updateProcessed(raw.id, {
-          grade: processed.grade,
-          gradePoint: processed.gradePoint,
-          creditsEarned: processed.creditsEarned,
-          finalScore: processed.finalScore,
-          ...(input.gradeScaleId ? { gradeScaleId: input.gradeScaleId } : {}),
-        });
-      }
+      // Compute GPA from effective attempts only (empty → zeroed summary).
+      const summary = engine.processSemester(effectiveCourseResults);
 
       await repos.audit.record({
         userId: input.userId,

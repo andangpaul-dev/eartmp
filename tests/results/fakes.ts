@@ -8,6 +8,7 @@ import type {
   StudentRepository,
   CourseRepository,
   StudentEnrollmentRepository,
+  SemesterOrdering,
 } from "../../src/domain/repositories/records";
 import type {
   UnitOfWork,
@@ -18,6 +19,13 @@ import type {
   ResultSitting,
   ResultStatus,
 } from "../../src/domain/value-objects/ResultSitting";
+
+/** Default fake SemesterOrdering: maps every id to {sessionOrder:0, rank:0}. */
+export const defaultFakeSemesterOrdering: SemesterOrdering = {
+  async order(ids: string[]) {
+    return new Map(ids.map((id) => [id, { sessionOrder: 0, rank: 0 }]));
+  },
+};
 
 export class FakeResultRepo implements ResultRepository {
   readonly rows: ResultRecord[] = [];
@@ -130,6 +138,7 @@ export function fakeUow(repos: Partial<TransactionalRepos>): UnitOfWork {
         courses: {} as CourseRepository,
         results: {} as ResultRepository,
         audit: { async record() {} } as AuditLogPort,
+        semesterOrdering: defaultFakeSemesterOrdering,
         ...repos,
       });
     },

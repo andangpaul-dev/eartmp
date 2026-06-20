@@ -212,16 +212,112 @@ describe("ProcessSemester", () => {
     expect(results.provenance["r1"]).toBe(def.id);
   });
 
-  it("refuses to process a locked semester (AD9.3)", async () => {
+  it("does not mutate a locked row; recomputes only unlocked ones", async () => {
     const { grading } = await makeGrading();
-    const results = seededResults();
-    results.rows[0]!.isLocked = true;
+    const results = new FakeResultRepo();
+    // Same course c1 (credit 3): NORMAL locked, RESIT unlocked
+    results.rows.push(
+      {
+        id: "rNormalLocked",
+        studentId: "s1",
+        courseId: "c1",
+        semesterId: "sem1",
+        componentScores: [],
+        finalScore: 40,
+        isLocked: true,
+        sitting: "NORMAL" as const,
+        status: "GRADED" as const,
+      },
+      {
+        id: "rResitUnlocked",
+        studentId: "s1",
+        courseId: "c1",
+        semesterId: "sem1",
+        componentScores: [],
+        finalScore: 60,
+        isLocked: false,
+        sitting: "RESIT" as const,
+        status: "GRADED" as const,
+      },
+    );
     const uow = fakeUow({ results, courses });
-    await expect(
-      new ProcessSemester(uow, grading).execute(
-        { studentId: "s1", semesterId: "sem1" },
-        admin,
-      ),
-    ).rejects.toThrow(/locked/);
+    // Should NOT throw — locked rows are silently skipped for writes
+    const summary = await new ProcessSemester(uow, grading).execute(
+      { studentId: "s1", semesterId: "sem1" },
+      admin,
+    );
+    // Locked NORMAL must NOT have been written
+    expect(results.provenance["rNormalLocked"]).toBeUndefined();
+    // Unlocked RESIT must have been written
+    expect(results.provenance["rResitUnlocked"]).toBeDefined();
+    // Effective is RESIT (60 → P at 4): GPA = 4*3/3 = 4
+    expect(summary.gpa).toBe(4);
+  });
+
+  it("stamps both sittings but counts only the resit in GPA", async () => {
+    const { grading } = await makeGrading();
+    const results = new FakeResultRepo();
+    // NORMAL sitting: DID (no score, counts as fail=0); semesterId sem1
+    results.rows.push({
+      id: "rNormal",
+      studentId: "s1",
+      courseId: "c1",
+      semesterId: "sem1",
+      componentScores: [],
+      finalScore: undefined,
+      isLocked: false,
+      sitting: "NORMAL" as const,
+      status: "DID" as const,
+    });
+    // RESIT sitting: GRADED, finalScore=70; same semesterId sem1
+    results.rows.push({
+      id: "rResit",
+      studentId: "s1",
+      courseId: "c1",
+      semesterId: "sem1",
+      componentScores: [],
+      finalScore: 70,
+      isLocked: false,
+      sitting: "RESIT" as const,
+      status: "GRADED" as const,
+    });
+    // semesterOrdering: give RESIT a higher sitting rank so it is "latest" for same course
+    const uow = fakeUow({ results, courses });
+    const summary = await new ProcessSemester(uow, grading).execute(
+      { studentId: "s1", semesterId: "sem1" },
+      admin,
+    );
+    // Both rows stamped
+    expect(results.provenance["rNormal"]).toBeDefined();
+    expect(results.provenance["rResit"]).toBeDefined();
+    // Course c1 (credit 3) counted once: resit is effective (RESIT > NORMAL in sitting order)
+    expect(summary.creditsAttempted).toBe(3);
+    // 70 → "P"(4) on the simple scale, so GPA = 4*3/3 = 4
+    expect(summary.gpa).toBe(4);
+  });
+
+  it("excludes an INCOMPLETE course from GPA", async () => {
+    const { grading } = await makeGrading();
+    const results = new FakeResultRepo();
+    results.rows.push({
+      id: "rInc",
+      studentId: "s1",
+      courseId: "c1",
+      semesterId: "sem1",
+      componentScores: [],
+      finalScore: undefined,
+      isLocked: false,
+      sitting: "NORMAL" as const,
+      status: "INCOMPLETE" as const,
+    });
+    const uow = fakeUow({ results, courses });
+    const summary = await new ProcessSemester(uow, grading).execute(
+      { studentId: "s1", semesterId: "sem1" },
+      admin,
+    );
+    // INCOMPLETE is pending — not stamped, not counted
+    expect(results.provenance["rInc"]).toBeUndefined();
+    expect(summary.creditsAttempted).toBe(0);
+    expect(summary.gpa).toBe(0);
   });
 });

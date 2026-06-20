@@ -10,6 +10,7 @@ import type {
   ResultRepository,
   StudentRepository,
   StudentEnrollmentRepository,
+  SemesterOrdering,
 } from "../src/domain/repositories/records";
 import type { AuditLogPort } from "../src/domain/repositories";
 import type { Course, ResultRecord } from "../src/domain/entities";
@@ -96,8 +97,8 @@ function makeUow() {
     async existsFor() {
       return false;
     },
-    async findByStudent() {
-      return resultTable;
+    async findByStudent(studentId: string) {
+      return resultTable.filter((r) => r.studentId === studentId);
     },
     async updateScores() {},
     async setLockedForSemester() {
@@ -134,10 +135,22 @@ function makeUow() {
   // Students/enrollments unused by this use-case — minimal stubs.
   const students = {} as StudentRepository;
   const enrollments = {} as StudentEnrollmentRepository;
+  const semesterOrdering: SemesterOrdering = {
+    async order(ids) {
+      return new Map(ids.map((id) => [id, { sessionOrder: 0, rank: 0 }]));
+    },
+  };
 
   const uow: UnitOfWork = {
     run<T>(work: (repos: TransactionalRepos) => Promise<T>) {
-      return work({ students, enrollments, courses, results, audit });
+      return work({
+        students,
+        enrollments,
+        courses,
+        results,
+        audit,
+        semesterOrdering,
+      });
     },
   };
 
