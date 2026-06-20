@@ -237,4 +237,89 @@ describe("AdmitStudent", () => {
       ),
     ).rejects.toBeInstanceOf(AuthorizationError);
   });
+
+  // FIX 1: faculty-scoped officer with NO facultyId must also be rejected
+  it("rejects a faculty-scoped officer who omits facultyId (scope bypass guard)", async () => {
+    const scoped = SessionContext.create(
+      "o",
+      "FACULTY_OFFICER",
+      ["students.create"],
+      "inst1",
+      ["facX"],
+    );
+    await expect(
+      admit(
+        {
+          fullName: "A",
+          programmeId: "p",
+          levelId: "l",
+          // no facultyId — must NOT bypass the scope check
+          admissionSession: "2025/2026",
+        },
+        scoped,
+      ),
+    ).rejects.toBeInstanceOf(AuthorizationError);
+  });
+
+  // FIX 2: whitespace-only matricNumber routes to auto-generation
+  it("treats whitespace-only matricNumber as auto-generate (not stored as empty)", async () => {
+    const r = await admit({
+      matricNumber: "  ",
+      fullName: "A",
+      programmeId: "p",
+      levelId: "l",
+      facultyId: "facA",
+      admissionSession: "2025/2026",
+    });
+    // fakeGenerate always returns "FS25-0001"; empty string would not match
+    expect(r.student.matricNumber).toBe("FS25-0001");
+  });
+
+  // FIX 3: anchored regex rejects substrings, accepts exact match
+  it("rejects a matric that embeds the pattern but is not a full match (anchored regex)", async () => {
+    const { uow } = makeUow();
+    // fakeSettings format is "^[A-Z]{2}\\d{2}-\\d{4}$" — but AdmitStudent
+    // wraps it in ^(?:...)$ itself, so we use a raw unanchored pattern here
+    // to prove the anchoring is done by the use-case.
+    const unanchoredSettings: MatriculeSettingsPort = {
+      async matriculeRule() {
+        return "{faculty}{year}-{seq:4}";
+      },
+      async matriculeCheckScheme() {
+        return "none" as never;
+      },
+      async matriculeFormat() {
+        // Intentionally unanchored — AdmitStudent must anchor it.
+        return "[A-Z]{2}\\d{2}-\\d{4}";
+      },
+    };
+    const uc = new AdmitStudent(uow, fakeGenerate, unanchoredSettings);
+    // substring — must fail after anchoring
+    await expect(
+      uc.execute(
+        {
+          matricNumber: "JUNK FS25-0042 JUNK",
+          fullName: "A",
+          programmeId: "p",
+          levelId: "l",
+          facultyId: "facA",
+          admissionSession: "2025/2026",
+        },
+        admin,
+      ),
+    ).rejects.toThrow(/format/i);
+    // exact match — must pass
+    const r = await uc.execute(
+      {
+        matricNumber: "FS25-0042",
+        fullName: "A",
+        programmeId: "p",
+        levelId: "l",
+        facultyId: "facA",
+        admissionSession: "2025/2026",
+      },
+      admin,
+    );
+    expect(r.student.matricNumber).toBe("FS25-0042");
+  });
 });

@@ -39,8 +39,19 @@ import { Sha256Hasher } from "../src/infrastructure/crypto/Sha256Hasher";
 import { PdfMakeRenderer } from "../src/infrastructure/reporting/pdf/PdfMakeRenderer";
 import { GradingConfigService } from "../src/application/services/GradingConfigService";
 import { GraduationConfigService } from "../src/application/services/GraduationConfigService";
-import { buildDefaultRegistry } from "../src/domain/settings/SettingsRegistry";
+import {
+  buildDefaultRegistry,
+  SETTING_KEYS,
+} from "../src/domain/settings/SettingsRegistry";
 import { AdmitStudent } from "../src/application/use-cases/records/AdmitStudent";
+import {
+  GenerateMatricule,
+  type MatriculeSettingsPort,
+} from "../src/application/services/GenerateMatricule";
+import {
+  PrismaFacultyRepository,
+  PrismaDepartmentRepository,
+} from "../src/infrastructure/repositories/PrismaStructureRepositories";
 import { EnterResult } from "../src/application/use-cases/results/ManageResults";
 import { ProcessSemester } from "../src/application/use-cases/results/ProcessSemester";
 import { GetAcademicSummary } from "../src/application/use-cases/results/GetAcademicSummary";
@@ -68,6 +79,50 @@ async function main(): Promise<void> {
   const settings = new PrismaSettingRepository(db);
   const registry = buildDefaultRegistry();
   const uow = new PrismaUnitOfWork(db);
+  const facultyRepo = new PrismaFacultyRepository(db);
+  const departmentRepo = new PrismaDepartmentRepository(db);
+  const institutions = new PrismaInstitutionRepository(db);
+  const matriculeSettingsAdapter: MatriculeSettingsPort = {
+    async matriculeRule() {
+      const raw = await settings.getRaw(SETTING_KEYS.matriculeRule);
+      if (raw === null)
+        return registry.defaultValue(SETTING_KEYS.matriculeRule) as string;
+      return registry.deserialize(SETTING_KEYS.matriculeRule, raw) as string;
+    },
+    async matriculeCheckScheme() {
+      const raw = await settings.getRaw(SETTING_KEYS.matriculeCheckScheme);
+      const val =
+        raw === null
+          ? registry.defaultValue(SETTING_KEYS.matriculeCheckScheme)
+          : registry.deserialize(SETTING_KEYS.matriculeCheckScheme, raw);
+      return val as import("../src/domain/services/MatriculeCheck").CheckScheme;
+    },
+    async matriculeFormat() {
+      const raw = await settings.getRaw(SETTING_KEYS.matriculeFormat);
+      if (raw === null)
+        return registry.defaultValue(SETTING_KEYS.matriculeFormat) as string;
+      return registry.deserialize(SETTING_KEYS.matriculeFormat, raw) as string;
+    },
+  };
+  const generateMatricule = new GenerateMatricule(matriculeSettingsAdapter, {
+    async facultyCode(facultyId) {
+      const f = await facultyRepo.findById(facultyId);
+      return f?.code ?? undefined;
+    },
+    async departmentCode(departmentId) {
+      if (!departmentId) return undefined;
+      const d = await departmentRepo.findById(departmentId);
+      return d?.code ?? undefined;
+    },
+    async institutionCode(institutionId) {
+      if (!institutionId) {
+        const inst = await institutions.get();
+        return inst?.code ?? undefined;
+      }
+      const inst = await institutions.findById(institutionId);
+      return inst?.code ?? undefined;
+    },
+  });
   const students = new PrismaStudentRepository(db);
   const courses = new PrismaCourseRepository(db);
   const results = new PrismaResultRepository(db);
@@ -130,13 +185,19 @@ async function main(): Promise<void> {
   });
 
   console.log("1) Admit (atomic student + enrollment):");
-  const admitted = await new AdmitStudent(uow).execute(
+  const admitted = await new AdmitStudent(
+    uow,
+    generateMatricule,
+    matriculeSettingsAdapter,
+  ).execute(
     {
       matricNumber: "DE2E/0001",
       fullName: "Ada Lovelace",
       programmeId: prog.id,
       levelId: lvl.id,
-      fromSession: sess.name,
+      facultyId: fac.id,
+      departmentId: dep.id,
+      admissionSession: sess.name,
     },
     admin,
   );

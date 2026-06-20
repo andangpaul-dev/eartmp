@@ -36,7 +36,9 @@ async function main(): Promise<void> {
     fullName: "Grace Hopper",
     programmeId: prog.id,
     levelId: lvl.id,
-    fromSession: sess.name,
+    facultyId: fac.id,
+    departmentId: dep.id,
+    admissionSession: sess.name,
   };
 
   console.log("1) admitStudent:");

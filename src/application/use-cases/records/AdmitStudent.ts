@@ -66,26 +66,34 @@ export class AdmitStudent implements AuthorizedUseCase<
       });
     }
 
-    // Faculty-scope guard: a faculty-scoped officer can only admit into their
-    // own faculty (or no faculty specified).
-    if (input.facultyId) {
-      requireInFacultyScope(input.facultyId, session);
-    }
+    // Faculty-scope guard: ALWAYS call — a faculty-scoped officer without a
+    // facultyId in the input would otherwise bypass the check entirely.
+    // requireInFacultyScope is a no-op for non-scoped sessions but THROWS for
+    // faculty-scoped ones if facultyId is undefined or outside their set.
+    requireInFacultyScope(input.facultyId, session);
 
     return this.uow.run(async (repos) => {
       // --- resolve / validate matricule ---
       let matric: string;
-      if (input.matricNumber !== undefined) {
+      const trimmed = input.matricNumber?.trim();
+      if (trimmed) {
         // Manual override: validate against the configured format regex.
         const fmt = await this.settings.matriculeFormat();
         if (fmt) {
-          const re = new RegExp(fmt);
-          if (!re.test(input.matricNumber)) {
-            const msg = `Matric number "${input.matricNumber}" does not match the required format.`;
-            throw new RecordsError(msg, { matricNumber: msg });
+          let re: RegExp;
+          try {
+            re = new RegExp(`^(?:${fmt})$`);
+          } catch {
+            throw new RecordsError("Configured matricule format is invalid.");
+          }
+          if (!re.test(trimmed)) {
+            throw new RecordsError(
+              "Matricule does not match the required format.",
+              { matricNumber: "Invalid format." },
+            );
           }
         }
-        matric = input.matricNumber;
+        matric = trimmed;
       } else {
         // Auto-generate: facultyId is required for the counter key.
         if (!input.facultyId) {
