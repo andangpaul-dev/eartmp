@@ -13,6 +13,10 @@ export interface ReportCourse {
   grade?: string;
   gradePoint?: number;
   creditsEarned?: number;
+  /** True when this row is a reattempt (resit or cross-session retake). The renderer may print "*". */
+  afterReattempt?: boolean;
+  /** Status marker for special conditions rendered in the legend. */
+  marker?: "DQ" | "I";
 }
 
 export interface ReportSession {
@@ -49,6 +53,8 @@ export interface ReportData {
     standing: string;
   };
   remarks?: string;
+  /** Present only when the transcript contains reattempts or special-status rows. */
+  legendNotes?: string[];
   signatures: { role: string; name?: string; imagePath?: string }[];
   verification: { transcriptNumber: string; qrPayload: string };
   issuedAt: string;
