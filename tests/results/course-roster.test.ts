@@ -59,6 +59,7 @@ function makeEnrollmentRepo(
     findCurrent: async () => null,
     closeCurrent: async () => undefined,
     listByStudent: async (id) => map[id] ?? [],
+    reassignStudent: async () => 0,
   };
 }
 

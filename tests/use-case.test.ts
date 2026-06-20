@@ -106,6 +106,9 @@ function makeUow() {
       return 0;
     },
     async unlock() {},
+    async reassignStudent() {
+      return 0;
+    },
   } satisfies ResultRepository;
 
   const courses = {

@@ -122,6 +122,14 @@ export class PrismaTranscriptRepository implements TranscriptStore {
     });
   }
 
+  async reassignStudent(fromId: string, toId: string): Promise<number> {
+    const result = await this.db.transcript.updateMany({
+      where: { studentId: fromId, deletedAt: null },
+      data: { studentId: toId },
+    });
+    return result.count;
+  }
+
   async listRecords(
     filter?: TranscriptRecordFilter,
   ): Promise<TranscriptRecord[]> {

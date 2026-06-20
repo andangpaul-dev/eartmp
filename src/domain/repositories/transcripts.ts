@@ -70,6 +70,11 @@ export interface TranscriptStore {
    *  matricule regeneration — a student with issued transcripts cannot change
    *  their matricule as it would invalidate the signed documents. */
   countIssuedByStudent(studentId: string): Promise<number>;
+  /**
+   * Re-point every live transcript from `fromId` to `toId` (merge de-dup).
+   * Returns the number of rows updated.
+   */
+  reassignStudent(fromId: string, toId: string): Promise<number>;
 }
 
 /** Document family a template renders. */

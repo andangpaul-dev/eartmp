@@ -94,6 +94,9 @@ describe("ExportTranscript with DocxRenderer", () => {
       async countIssuedByStudent() {
         return 0;
       },
+      async reassignStudent() {
+        return 0;
+      },
     };
     const exporter = new ExportTranscript(
       store,

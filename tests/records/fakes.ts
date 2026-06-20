@@ -144,4 +144,14 @@ export class FakeEnrollmentRepo implements StudentEnrollmentRepository {
       .filter((e) => e.studentId === studentId)
       .map((e) => ({ ...e }));
   }
+  async reassignStudent(fromId: string, toId: string): Promise<number> {
+    let count = 0;
+    for (const e of this.rows) {
+      if (e.studentId === fromId) {
+        e.studentId = toId;
+        count++;
+      }
+    }
+    return count;
+  }
 }

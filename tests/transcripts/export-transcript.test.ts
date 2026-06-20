@@ -60,6 +60,9 @@ function storeWith(status: string, snap = snapshot): TranscriptStore {
     async countIssuedByStudent() {
       return 0;
     },
+    async reassignStudent() {
+      return 0;
+    },
   };
 }
 

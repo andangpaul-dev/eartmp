@@ -128,6 +128,16 @@ export class FakeResultRepo implements ResultRepository {
     const r = this.live(id);
     if (r) r.isLocked = false;
   }
+  async reassignStudent(fromId: string, toId: string): Promise<number> {
+    let count = 0;
+    for (const r of this.rows) {
+      if (r.studentId === fromId) {
+        r.studentId = toId;
+        count++;
+      }
+    }
+    return count;
+  }
 }
 
 class FakeMatriculeCounter implements MatriculeCounterRepository {
@@ -153,6 +163,8 @@ class FakeMatriculeCounter implements MatriculeCounterRepository {
 export class FakeTranscriptStore implements TranscriptStore {
   /** Map of studentId → issued transcript count (default 0). */
   issuedCounts = new Map<string, number>();
+  /** Simple in-memory rows for reassignStudent testing. */
+  readonly rows: Array<{ studentId: string }> = [];
 
   async countIssuedByStudent(studentId: string): Promise<number> {
     return this.issuedCounts.get(studentId) ?? 0;
@@ -180,6 +192,16 @@ export class FakeTranscriptStore implements TranscriptStore {
   }
   async listRecords(): Promise<never[]> {
     return [];
+  }
+  async reassignStudent(fromId: string, toId: string): Promise<number> {
+    let count = 0;
+    for (const r of this.rows) {
+      if (r.studentId === fromId) {
+        r.studentId = toId;
+        count++;
+      }
+    }
+    return count;
   }
 }
 

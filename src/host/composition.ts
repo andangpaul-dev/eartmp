@@ -74,6 +74,10 @@ import { ReadmitStudent } from "../application/use-cases/records/ReadmitStudent"
 import { PreviewMatricule } from "../application/use-cases/records/PreviewMatricule";
 import { RegenerateMatricule } from "../application/use-cases/records/RegenerateMatricule";
 import {
+  MergeStudents,
+  FindDuplicateCandidates,
+} from "../application/use-cases/records/MergeStudents";
+import {
   ListCourses,
   CreateCourse,
   UpdateCourse,
@@ -544,6 +548,14 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
       (i, s) => authorize(changeStudentStatus, i as never, s),
     ],
     ["deleteStudent", (i, s) => authorize(deleteStudent, i as never, s)],
+    [
+      "mergeStudents",
+      (i, s) => authorize(new MergeStudents(uow), i as never, s),
+    ],
+    [
+      "findDuplicateCandidates",
+      (i, s) => authorize(new FindDuplicateCandidates(students), i as never, s),
+    ],
     ["listFaculties", (i, s) => authorize(listFaculties, i as never, s)],
     ["listDepartments", (i, s) => authorize(listDepartments, i as never, s)],
     ["listProgrammes", (i, s) => authorize(listProgrammes, i as never, s)],

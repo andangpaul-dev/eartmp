@@ -513,6 +513,14 @@ export class PrismaStudentEnrollmentRepository implements StudentEnrollmentRepos
     });
     return rows.map(toEnrollment);
   }
+
+  async reassignStudent(fromId: string, toId: string): Promise<number> {
+    const result = await this.db.studentEnrollment.updateMany({
+      where: { studentId: fromId, deletedAt: null },
+      data: { studentId: toId },
+    });
+    return result.count;
+  }
 }
 
 type ResultRow = {
@@ -671,6 +679,14 @@ export class PrismaResultRepository implements ResultRepository {
           : {}),
       },
     });
+  }
+
+  async reassignStudent(fromId: string, toId: string): Promise<number> {
+    const result = await this.db.result.updateMany({
+      where: { studentId: fromId, deletedAt: null },
+      data: { studentId: toId },
+    });
+    return result.count;
   }
 }
 

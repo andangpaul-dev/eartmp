@@ -77,6 +77,16 @@ class FakeStore implements TranscriptStore {
         (r.status === "APPROVED" || r.status === "LOCKED"),
     ).length;
   }
+  async reassignStudent(fromId: string, toId: string): Promise<number> {
+    let count = 0;
+    for (const r of this.rows) {
+      if (r.studentId === fromId) {
+        r.studentId = toId;
+        count++;
+      }
+    }
+    return count;
+  }
 }
 
 const template: StoredTemplate = {

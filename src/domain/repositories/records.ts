@@ -77,6 +77,11 @@ export interface StudentEnrollmentRepository {
   /** Close the student's current enrollment (set toSession + isCurrent=false). */
   closeCurrent(studentId: string, toSession: string): Promise<void>;
   listByStudent(studentId: string): Promise<StudentEnrollment[]>;
+  /**
+   * Re-point every live enrollment from `fromId` to `toId` (merge de-dup).
+   * Returns the number of rows updated.
+   */
+  reassignStudent(fromId: string, toId: string): Promise<number>;
 }
 
 /** Canonical result port (Phase 9 full CRUD + lock workflow). */
@@ -90,6 +95,11 @@ export interface ResultRepository {
     semesterId: string,
     sitting: ResultSitting,
   ): Promise<boolean>;
+  /**
+   * Re-point every live result from `fromId` to `toId` (merge de-dup).
+   * Returns the number of rows updated.
+   */
+  reassignStudent(fromId: string, toId: string): Promise<number>;
   /** All live rows (every sitting) for a student's semester. */
   findByStudentAndSemester(
     studentId: string,
