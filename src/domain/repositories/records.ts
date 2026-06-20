@@ -150,3 +150,19 @@ export interface SemesterOrdering {
     semesterIds: string[],
   ): Promise<Map<string, { sessionOrder: number; rank: number }>>;
 }
+
+/** Atomic per-(institution, faculty, year) matricule sequence (WS C). */
+export interface MatriculeCounterRepository {
+  /** Read the current next value WITHOUT incrementing (preview). 1 if none. */
+  peek(
+    institutionId: string | null,
+    facultyId: string,
+    year: number,
+  ): Promise<number>;
+  /** Reserve and return the next value, incrementing atomically. */
+  reserve(
+    institutionId: string | null,
+    facultyId: string,
+    year: number,
+  ): Promise<number>;
+}

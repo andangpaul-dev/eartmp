@@ -16,6 +16,7 @@ import type {
   StudentEnrollmentRepository,
   ResultRepository,
   SemesterOrdering,
+  MatriculeCounterRepository,
 } from "../../domain/repositories/records";
 import type { AuditLogPort } from "../../domain/repositories";
 
@@ -26,6 +27,7 @@ export interface TransactionalRepos {
   results: ResultRepository;
   audit: AuditLogPort;
   semesterOrdering: SemesterOrdering;
+  matriculeCounter: MatriculeCounterRepository;
 }
 
 export interface UnitOfWork {

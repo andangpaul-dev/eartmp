@@ -9,6 +9,7 @@ import type {
   CourseRepository,
   StudentEnrollmentRepository,
   SemesterOrdering,
+  MatriculeCounterRepository,
 } from "../../src/domain/repositories/records";
 import type {
   UnitOfWork,
@@ -128,6 +129,22 @@ export class FakeResultRepo implements ResultRepository {
   }
 }
 
+class FakeMatriculeCounter implements MatriculeCounterRepository {
+  private counters = new Map<string, number>();
+  private key(i: string | null, f: string, y: number) {
+    return `${i}:${f}:${y}`;
+  }
+  async peek(institutionId: string | null, facultyId: string, year: number) {
+    return this.counters.get(this.key(institutionId, facultyId, year)) ?? 1;
+  }
+  async reserve(institutionId: string | null, facultyId: string, year: number) {
+    const k = this.key(institutionId, facultyId, year);
+    const current = this.counters.get(k) ?? 1;
+    this.counters.set(k, current + 1);
+    return current;
+  }
+}
+
 /** Fake UnitOfWork that runs the work against the given repos (no real tx). */
 export function fakeUow(repos: Partial<TransactionalRepos>): UnitOfWork {
   return {
@@ -139,6 +156,7 @@ export function fakeUow(repos: Partial<TransactionalRepos>): UnitOfWork {
         results: {} as ResultRepository,
         audit: { async record() {} } as AuditLogPort,
         semesterOrdering: defaultFakeSemesterOrdering,
+        matriculeCounter: new FakeMatriculeCounter(),
         ...repos,
       });
     },
