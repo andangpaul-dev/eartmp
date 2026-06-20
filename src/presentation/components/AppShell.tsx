@@ -29,7 +29,8 @@ export type Route =
   | "audit"
   | "backup"
   | "legal"
-  | "diagnostics";
+  | "diagnostics"
+  | "studentMaintenance";
 
 interface NavDef {
   key: Route;
@@ -67,6 +68,13 @@ const NAV: NavDef[] = [
     label: "Import students",
     icon: "students",
     perm: "students.create",
+    group: "Records",
+  },
+  {
+    key: "studentMaintenance",
+    label: "Student Maintenance",
+    icon: "students",
+    perm: "students.manage",
     group: "Records",
   },
   {
@@ -179,6 +187,10 @@ const TITLES: Record<Route, { t: string; s: string }> = {
   backup: { t: "Backup & restore", s: "Encrypted export, verify & restore" },
   legal: { t: "Legal", s: "Terms, disclaimer & user policies" },
   diagnostics: { t: "Diagnostics", s: "Support snapshot & integrity" },
+  studentMaintenance: {
+    t: "Student Maintenance",
+    s: "Merge duplicates & bulk regenerate matricules",
+  },
 };
 
 export function AppShell({
