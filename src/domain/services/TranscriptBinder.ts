@@ -141,6 +141,23 @@ function resolveBlock(block: Obj, data: ReportData): ResolvedBlock[] {
       }
       return data.sessions.map((session) => resolveCourseTable(child, session));
     }
+    case "legendNotes": {
+      // Emit one text block per legend note, prefixed with the appropriate symbol.
+      // Recognised note texts → symbol mapping (partial match is intentional so
+      // wording variations survive; the authoritative strings come from the
+      // BuildReportDataService that populates ReportData.legendNotes).
+      const legendSymbolMap: [RegExp, string][] = [
+        [/Resit\/Retake/i, "*"],
+        [/Disqualified|malpractice|DQ/i, "DQ"],
+        [/Incomplete/i, "I"],
+      ];
+      const notes = data.legendNotes ?? [];
+      return notes.map((note) => {
+        const match = legendSymbolMap.find(([re]) => re.test(note));
+        const symbol = match ? match[1] : "•";
+        return { type: "text" as const, text: `${symbol} ${note}` };
+      });
+    }
     case "courseTable":
       // Standalone course table over all sessions' courses is unusual; require a loop.
       throw new TranscriptError("courseTable must live inside a sessionLoop.");
@@ -149,6 +166,19 @@ function resolveBlock(block: Obj, data: ReportData): ResolvedBlock[] {
         `Unknown template block type "${stringify(type)}".`,
       );
   }
+}
+
+/**
+ * Render the grade cell for a course row, applying status-marker rules:
+ *   - marker "I"  → cell = "I" (overrides grade entirely)
+ *   - else        → start with grade (or ""); append "*" if afterReattempt; append " (DQ)" if marker "DQ"
+ */
+function resolveGradeCell(course: ReportCourse): string {
+  if (course.marker === "I") return "I";
+  let cell = course.grade ?? "";
+  if (course.afterReattempt) cell += "*";
+  if (course.marker === "DQ") cell += " (DQ)";
+  return cell;
 }
 
 function resolveCourseTable(block: Obj, session: ReportSession): ResolvedBlock {
@@ -161,11 +191,14 @@ function resolveCourseTable(block: Obj, session: ReportSession): ResolvedBlock {
   );
   const columns = columnSpecs.map((c) => ({ header: stringify(c.header) }));
   const rows = session.courses.map((course: ReportCourse) =>
-    columnSpecs.map((c) =>
-      typeof c.bind === "string"
-        ? stringify(resolvePath(course, c.bind))
-        : stringify(c.value),
-    ),
+    columnSpecs.map((c) => {
+      if (typeof c.bind === "string") {
+        // Grade column: apply reattempt/marker rendering rules.
+        if (c.bind === "grade") return resolveGradeCell(course);
+        return stringify(resolvePath(course, c.bind));
+      }
+      return stringify(c.value);
+    }),
   );
   const footer = (
     block.footer ? asArray(block.footer, "courseTable.footer") : []
