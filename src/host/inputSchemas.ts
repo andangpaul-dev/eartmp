@@ -73,6 +73,37 @@ const SCHEMAS: Record<string, z.ZodType> = {
   }),
   // notifications
   markNotificationRead: z.looseObject({ id: str }),
+  // results — extended fields + batch entry + course roster
+  enterResult: z.looseObject({
+    studentId: str,
+    courseId: str,
+    semesterId: str,
+    componentScores: z.array(z.looseObject({ key: str, score: z.number() })),
+    sitting: z.enum(["NORMAL", "RESIT"]).optional(),
+    status: z.enum(["GRADED", "DID", "DISQUALIFIED", "INCOMPLETE"]).optional(),
+  }),
+  lockSemesterResults: z.looseObject({
+    studentId: str,
+    semesterId: str,
+    sitting: z.enum(["NORMAL", "RESIT"]).optional(),
+  }),
+  saveCourseResults: z.looseObject({
+    semesterId: str,
+    courseId: str,
+    sitting: z.enum(["NORMAL", "RESIT"]),
+    rows: z.array(
+      z.looseObject({
+        studentId: str,
+        componentScores: z.array(
+          z.looseObject({ key: str, score: z.number() }),
+        ),
+        status: z
+          .enum(["GRADED", "DID", "DISQUALIFIED", "INCOMPLETE"])
+          .optional(),
+      }),
+    ),
+  }),
+  listCourseRoster: z.looseObject({ courseId: str, sessionName: str }),
 };
 
 /** Every method at least requires its input to be an object (reject primitives). */
