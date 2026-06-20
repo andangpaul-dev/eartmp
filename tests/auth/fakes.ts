@@ -78,6 +78,19 @@ export class InMemoryUserRepository implements UserRepository {
     this.byId.set(id, updated);
     return { ...updated };
   }
+
+  readonly faculties = new Map<string, string[]>();
+  async facultyIds(userId: string): Promise<string[]> {
+    return [...(this.faculties.get(userId) ?? [])];
+  }
+  async facultyIdsByUser(): Promise<Record<string, string[]>> {
+    return Object.fromEntries(
+      [...this.faculties.entries()].map(([k, v]) => [k, [...v]]),
+    );
+  }
+  async setFaculties(userId: string, facultyIds: string[]): Promise<void> {
+    this.faculties.set(userId, [...new Set(facultyIds)]);
+  }
 }
 
 export class InMemoryRoleRepository implements RoleRepository {

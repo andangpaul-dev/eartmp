@@ -14,6 +14,11 @@ import type { AuthorizedUseCase } from "../../authorization/AuthorizedUseCase";
 export interface ListTranscriptRecordsInput {
   status?: string;
   search?: string;
+  // Browse filters (per faculty/department/programme). A faculty-scoped operator
+  // is constrained to their assigned faculties regardless of what's requested.
+  facultyId?: string;
+  departmentId?: string;
+  programmeId?: string;
 }
 
 export class ListTranscriptRecords implements AuthorizedUseCase<
@@ -29,10 +34,26 @@ export class ListTranscriptRecords implements AuthorizedUseCase<
     input: ListTranscriptRecordsInput,
     session: SessionContext,
   ): Promise<TranscriptRecord[]> {
+    // Effective faculty scope: a faculty-scoped operator is limited to their
+    // assigned faculties; a requested faculty must be within that set (a scoped
+    // user cannot widen past it). An unscoped operator may filter freely.
+    let facultyIds: string[] | undefined;
+    if (session.isFacultyScoped) {
+      facultyIds =
+        input.facultyId && session.facultyIds.includes(input.facultyId)
+          ? [input.facultyId]
+          : [...session.facultyIds];
+    } else if (input.facultyId) {
+      facultyIds = [input.facultyId];
+    }
+
     // Tenant isolation: a scoped operator only sees their institution's records.
     const records = await this.transcripts.listRecords({
       ...(input.status ? { status: input.status } : {}),
       ...(session.isGlobal ? {} : { institutionId: session.institutionId }),
+      ...(facultyIds ? { facultyIds } : {}),
+      ...(input.departmentId ? { departmentId: input.departmentId } : {}),
+      ...(input.programmeId ? { programmeId: input.programmeId } : {}),
     });
     const q = input.search?.trim().toLowerCase();
     if (!q) return records;

@@ -142,6 +142,8 @@ export interface SessionView {
   userId: string;
   role: string;
   permissions: string[];
+  /** Assigned faculties (empty = institution-wide). */
+  facultyIds: string[];
 }
 
 // --- inputs (subset wired in Milestone 1; grows per milestone) --------------
@@ -336,6 +338,9 @@ export interface CoreApi {
   listTranscriptRecords(input: {
     status?: string;
     search?: string;
+    facultyId?: string;
+    departmentId?: string;
+    programmeId?: string;
   }): Promise<TranscriptRecord[]>;
   generateTranscript(input: {
     studentId: string;
@@ -448,6 +453,11 @@ export interface CoreApi {
   // users & roles administration
   listUsers(input: Record<string, never>): Promise<UserSummary[]>;
   listRoles(input: Record<string, never>): Promise<Role[]>;
+  /** Replace a user's faculty access (empty = institution-wide). */
+  setUserFaculties(input: {
+    userId: string;
+    facultyIds: string[];
+  }): Promise<{ ok: true }>;
   createUser(input: {
     username: string;
     email: string;

@@ -17,7 +17,12 @@ import type {
 } from "../../src/presentation/runtime/contract";
 
 export function makeSession(permissions: string[] = []): SessionView {
-  return { userId: "u-test", role: "TEST_ROLE", permissions };
+  return {
+    userId: "u-test",
+    role: "TEST_ROLE",
+    permissions,
+    facultyIds: [],
+  };
 }
 
 /** A CoreApi whose every method resolves to a benign default; tests override. */
@@ -130,6 +135,7 @@ export function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
     listUsers: async () => [],
     listRoles: async () => [],
     createUser: async () => ({ id: "u-new" }),
+    setUserFaculties: async () => ({ ok: true as const }),
     deactivateUser: async () => {},
     activateUser: async () => {},
     assignRole: async () => {},

@@ -18,8 +18,9 @@ import type {
 import type { AuditLogPort } from "../../../domain/repositories";
 import type { AuthorizedUseCase } from "../../authorization/AuthorizedUseCase";
 import {
-  scopeWhere,
+  scopeStudentWhere,
   requireInScope,
+  requireInFacultyScope,
 } from "../../authorization/institutionScope";
 
 /**
@@ -124,6 +125,7 @@ export class UpdateStudent implements AuthorizedUseCase<
     const before = await this.students.findById(input.id);
     if (!before) throw new RecordsError("Student not found.");
     requireInScope(before.institutionId, session);
+    requireInFacultyScope(before.facultyId, session);
     const version = this.versioned
       ? await this.versioned.readVersion(input.id)
       : undefined;
@@ -157,6 +159,7 @@ export class GetStudent implements AuthorizedUseCase<GetStudentInput, Student> {
     const student = await this.students.findById(input.id);
     if (!student) throw new RecordsError("Student not found.");
     requireInScope(student.institutionId, session);
+    requireInFacultyScope(student.facultyId, session);
     return student;
   }
 }
@@ -173,7 +176,7 @@ export class ListStudents implements AuthorizedUseCase<
       ...input,
       // Tenant isolation: a scoped operator only ever sees their institution
       // (the host-supplied where cannot widen past it).
-      where: scopeWhere(input.where, session),
+      where: scopeStudentWhere(input.where, session),
       skip: input.skip ?? 0,
       take: clampTake(input.take),
     });
@@ -199,6 +202,7 @@ export class ChangeStudentStatus implements AuthorizedUseCase<
     const student = await this.students.findById(input.studentId);
     if (!student) throw new RecordsError("Student not found.");
     requireInScope(student.institutionId, session);
+    requireInFacultyScope(student.facultyId, session);
     // Capture the version at load time so a concurrent status change since this
     // read makes the write fail (ConcurrencyError) — two racing transitions on a
     // stale status can't both win.
@@ -258,6 +262,7 @@ export class DeleteStudent implements AuthorizedUseCase<
     const student = await this.students.findById(input.id);
     if (!student) throw new RecordsError("Student not found.");
     requireInScope(student.institutionId, session);
+    requireInFacultyScope(student.facultyId, session);
     await this.students.softDelete(input.id);
     await this.audit.record({
       userId: session.actorId,

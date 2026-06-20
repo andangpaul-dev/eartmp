@@ -64,11 +64,15 @@ export class AuthenticateUser implements AuthorizedUseCase<
       recordId: user.id,
     });
 
+    // Faculty access (workstream A): empty = institution-wide.
+    const facultyIds = await this.users.facultyIds(user.id);
+
     return SessionContext.create(
       user.id,
       role.name,
       rolePermissionKeys(role),
       user.institutionId,
+      facultyIds,
     );
   }
 }

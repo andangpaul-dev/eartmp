@@ -234,12 +234,20 @@ function EditUserModal({
   const [username, setUsername] = useState(user.username);
   const [email, setEmail] = useState(user.email);
   const [fullName, setFullName] = useState(user.fullName);
+  const faculties = useAsync(() => core.listFaculties({}), []);
+  const [facultyIds, setFacultyIds] = useState<string[]>(user.facultyIds);
+  const toggleFaculty = (id: string) =>
+    setFacultyIds((s) =>
+      s.includes(id) ? s.filter((x) => x !== id) : [...s, id],
+    );
   const save = useAction(
-    () =>
-      core.updateUserDetails({
+    async () => {
+      await core.updateUserDetails({
         userId: user.id,
         patch: { username, email, fullName },
-      }),
+      });
+      await core.setUserFaculties({ userId: user.id, facultyIds });
+    },
     { onSuccess: onDone },
   );
   const fieldErr = save.error?.fields;
@@ -266,6 +274,27 @@ function EditUserModal({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
+      </Field>
+      <Field label="Faculty access (none = all faculties)">
+        <div className="checklist">
+          {(faculties.data ?? []).length === 0 ? (
+            <span className="muted">No faculties.</span>
+          ) : (
+            (faculties.data ?? []).map((f) => (
+              <label key={f.id} className="checkrow">
+                <input
+                  type="checkbox"
+                  aria-label={f.name}
+                  checked={facultyIds.includes(f.id)}
+                  onChange={() => toggleFaculty(f.id)}
+                />
+                <span>
+                  <span className="mono">{f.code}</span> {f.name}
+                </span>
+              </label>
+            ))
+          )}
+        </div>
       </Field>
       {save.error && !fieldErr && (
         <div className="alert danger">{save.error.message}</div>

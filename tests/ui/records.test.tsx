@@ -48,6 +48,26 @@ describe("RecordsScreen", () => {
     );
   });
 
+  it("passes the faculty filter to the core query", async () => {
+    const listTranscriptRecords = vi.fn(async () => [] as TranscriptRecord[]);
+    const { user } = renderScreen(<RecordsScreen />, {
+      permissions: ["transcripts.read"],
+      core: {
+        listTranscriptRecords,
+        listFaculties: async () => [
+          { id: "f1", code: "SCI", name: "Science" } as never,
+        ],
+      },
+    });
+    await waitFor(() => expect(listTranscriptRecords).toHaveBeenCalled());
+    await user.selectOptions(screen.getByLabelText(/faculty filter/i), "f1");
+    await waitFor(() =>
+      expect(listTranscriptRecords).toHaveBeenLastCalledWith(
+        expect.objectContaining({ facultyId: "f1" }),
+      ),
+    );
+  });
+
   it("shows an empty state when there are no records", async () => {
     renderScreen(<RecordsScreen />, {
       permissions: ["transcripts.read"],

@@ -182,6 +182,7 @@ import {
   UpdateUserDetails,
   ListUsers,
   ListRoles,
+  SetUserFaculties,
 } from "../application/use-cases/auth/ManageUsers";
 import {
   CreateRole,
@@ -269,8 +270,11 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
   );
   const listSemesters = new ListSemesters(new PrismaSemesterRepository(db));
   const listCourses = new ListCourses(courses);
-  const enterResult = new EnterResult(results, grading, audit);
-  const getStudentSemesterResults = new GetStudentSemesterResults(results);
+  const enterResult = new EnterResult(results, grading, audit, students);
+  const getStudentSemesterResults = new GetStudentSemesterResults(
+    results,
+    students,
+  );
   // students + levelRepo let ProcessSemester resolve a per-level grade scale.
   const processSemester = new ProcessSemester(
     uow,
@@ -375,6 +379,7 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
   const listUsers = new ListUsers(users, roles);
   const listRoles = new ListRoles(roles);
   const createUser = new CreateUser(users, roles, hasher, audit);
+  const setUserFaculties = new SetUserFaculties(users, facultyRepo, audit);
   const deactivateUser = new DeactivateUser(users, audit);
   const activateUser = new ActivateUser(users, audit);
   const assignRole = new AssignRole(users, roles, audit);
@@ -638,6 +643,7 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
       (i, s) => authorize(changeKeyPassphrase, i as never, s),
     ],
     ["listUsers", (i, s) => authorize(listUsers, i as never, s)],
+    ["setUserFaculties", (i, s) => authorize(setUserFaculties, i as never, s)],
     ["listRoles", (i, s) => authorize(listRoles, i as never, s)],
     [
       "createUser",

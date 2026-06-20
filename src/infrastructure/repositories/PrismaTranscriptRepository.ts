@@ -113,6 +113,13 @@ export class PrismaTranscriptRepository implements TranscriptStore {
   async listRecords(
     filter?: TranscriptRecordFilter,
   ): Promise<TranscriptRecord[]> {
+    // Faculty/dept/programme filters live on the student, so apply them as a
+    // relation filter (the transcript itself carries no facultyId).
+    const studentWhere = {
+      ...(filter?.facultyIds ? { facultyId: { in: filter.facultyIds } } : {}),
+      ...(filter?.departmentId ? { departmentId: filter.departmentId } : {}),
+      ...(filter?.programmeId ? { programmeId: filter.programmeId } : {}),
+    };
     const rows = await this.db.transcript.findMany({
       where: {
         deletedAt: null,
@@ -120,6 +127,7 @@ export class PrismaTranscriptRepository implements TranscriptStore {
         ...(filter?.institutionId
           ? { institutionId: filter.institutionId }
           : {}),
+        ...(Object.keys(studentWhere).length ? { student: studentWhere } : {}),
       },
       orderBy: { generatedAt: "desc" },
       include: {

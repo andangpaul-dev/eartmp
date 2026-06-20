@@ -48,6 +48,10 @@ export interface TranscriptRecord {
 export interface TranscriptRecordFilter {
   status?: string;
   institutionId?: string;
+  // Faculty scope / browse filters — matched against the transcript's student.
+  facultyIds?: string[];
+  departmentId?: string;
+  programmeId?: string;
 }
 
 export interface TranscriptStore {

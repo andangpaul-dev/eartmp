@@ -109,6 +109,20 @@ const ROLES: { name: string; description: string; permissions: string[] }[] = [
     ],
   },
   {
+    name: "FACULTY_OFFICER",
+    description: "Academic records for assigned faculties only",
+    permissions: [
+      "students.read",
+      "results.read",
+      "results.import",
+      "results.process",
+      "transcripts.read",
+      "transcripts.generate",
+      "courses.read",
+      "graduation.read",
+    ],
+  },
+  {
     name: "VIEWER",
     description: "Read-only",
     permissions: ["students.read", "audit.read"],
@@ -334,6 +348,16 @@ export async function seedDatabase(prisma: PrismaClient): Promise<void> {
  * e.g. the degree certificate. The default per category is set only on first
  * creation, so an admin's later choice of default is preserved.
  */
+/**
+ * Built-in permissions + roles, refreshed on every launch (idempotent upserts)
+ * so an existing database gains newly-shipped permissions/roles — e.g. the
+ * FACULTY_OFFICER role — without a re-provision.
+ */
+export async function ensureBuiltinRoles(prisma: PrismaClient): Promise<void> {
+  const permIds = await seedPermissions(prisma);
+  await seedRoles(prisma, permIds);
+}
+
 export async function ensureBuiltinTemplates(
   prisma: PrismaClient,
 ): Promise<void> {

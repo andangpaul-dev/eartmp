@@ -44,3 +44,43 @@ export function requireInScope(
     throw new AuthorizationError("This record belongs to another institution.");
   }
 }
+
+// --- Faculty scoping (workstream A) — layered ON TOP of the institution scope.
+// A user with assigned faculties (session.facultyIds) may only see/touch rows in
+// those faculties; an unassigned user is unrestricted within their institution.
+
+/**
+ * Scope a student-list filter by institution AND (when assigned) faculty access.
+ * Student rows carry `facultyId`, so this forces `facultyId IN (assigned)`.
+ */
+export function scopeStudentWhere<
+  T extends { institutionId?: string; facultyId?: unknown },
+>(where: T | undefined, session: SessionContext): T | undefined {
+  let scoped = scopeWhere(where, session);
+  if (session.isFacultyScoped) {
+    scoped = {
+      ...((scoped ?? {}) as T),
+      facultyId: { in: [...session.facultyIds] },
+    } as T;
+  }
+  return scoped;
+}
+
+/** True if the row's faculty is within the operator's access (or unscoped). */
+export function assertInFacultyScope(
+  rowFacultyId: string | null | undefined,
+  session: SessionContext,
+): boolean {
+  if (!session.isFacultyScoped) return true;
+  return !!rowFacultyId && session.facultyIds.includes(rowFacultyId);
+}
+
+/** Throw FORBIDDEN if a faculty-scoped operator targets another faculty's row. */
+export function requireInFacultyScope(
+  rowFacultyId: string | null | undefined,
+  session: SessionContext,
+): void {
+  if (!assertInFacultyScope(rowFacultyId, session)) {
+    throw new AuthorizationError("This record belongs to another faculty.");
+  }
+}

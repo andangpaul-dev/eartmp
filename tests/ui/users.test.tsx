@@ -16,6 +16,7 @@ const user = (over: Partial<UserSummary> = {}): UserSummary => ({
   roleId: "r-viewer",
   roleName: "VIEWER",
   isActive: true,
+  facultyIds: [],
   ...over,
 });
 
@@ -90,6 +91,33 @@ describe("UsersScreen", () => {
     // The message renders inline on the Username field (.err inside its label).
     const err = await screen.findByText(/already exists/i);
     expect(err).toHaveClass("err");
+  });
+
+  it("assigns faculty access through setUserFaculties on edit", async () => {
+    const setUserFaculties = vi.fn(async () => ({ ok: true as const }));
+    const { user: u } = renderScreen(<UsersScreen />, {
+      permissions: adminPerms,
+      core: {
+        listUsers: async () => [user({ facultyIds: ["f1"] })],
+        listRoles: async () => roles,
+        listFaculties: async () => [
+          { id: "f1", code: "SCI", name: "Science" } as never,
+          { id: "f2", code: "ART", name: "Arts" } as never,
+        ],
+        updateUserDetails: async () => ({ id: "u1" }),
+        setUserFaculties,
+      },
+    });
+    await u.click(await screen.findByRole("button", { name: /edit/i }));
+    // f1 starts checked; tick f2 too, then save.
+    await u.click(await screen.findByRole("checkbox", { name: /Arts/i }));
+    await u.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() =>
+      expect(setUserFaculties).toHaveBeenCalledWith({
+        userId: "u1",
+        facultyIds: ["f1", "f2"],
+      }),
+    );
   });
 
   it("disables Deactivate for your own account", async () => {

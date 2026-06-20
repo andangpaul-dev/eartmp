@@ -14,6 +14,12 @@ export interface UserRepository {
     data: Omit<UserAccount, "id" | "lastLoginAt"> & { lastLoginAt?: Date },
   ): Promise<UserAccount>;
   update(id: string, patch: Partial<UserAccount>): Promise<UserAccount>;
+  /** A user's assigned faculties (empty = institution-wide / unscoped). */
+  facultyIds(userId: string): Promise<string[]>;
+  /** All users' faculty assignments at once (userId → facultyIds), for lists. */
+  facultyIdsByUser(): Promise<Record<string, string[]>>;
+  /** Replace a user's faculty assignments with exactly this set. */
+  setFaculties(userId: string, facultyIds: string[]): Promise<void>;
 }
 
 export interface RoleRepository {

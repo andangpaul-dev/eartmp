@@ -9,10 +9,35 @@
 import { SessionContext } from "../../../domain/value-objects/SessionContext";
 import { RecordsError } from "../../../domain/errors/records";
 import type { ResultRecord } from "../../../domain/entities";
-import type { ResultRepository } from "../../../domain/repositories/records";
+import type {
+  ResultRepository,
+  StudentRepository,
+} from "../../../domain/repositories/records";
 import type { AuditLogPort } from "../../../domain/repositories";
 import type { GradingConfigService } from "../../services/GradingConfigService";
 import type { AuthorizedUseCase } from "../../authorization/AuthorizedUseCase";
+import {
+  requireInScope,
+  requireInFacultyScope,
+} from "../../authorization/institutionScope";
+
+/**
+ * A result operation targets a student; when a student repository is wired (the
+ * host always wires it) confirm the student is within the operator's institution
+ * AND faculty access before touching their results. Optional so pure result-logic
+ * unit tests need no student fixture; production enforcement is host-wired.
+ */
+async function guardStudentScope(
+  students: StudentRepository | undefined,
+  studentId: string,
+  session: SessionContext,
+): Promise<void> {
+  if (!students) return;
+  const student = await students.findById(studentId);
+  if (!student) throw new RecordsError("Student not found.");
+  requireInScope(student.institutionId, session);
+  requireInFacultyScope(student.facultyId, session);
+}
 
 export interface EnterResultInput {
   studentId: string;
@@ -32,12 +57,14 @@ export class EnterResult implements AuthorizedUseCase<
     private readonly results: ResultRepository,
     private readonly grading: GradingConfigService,
     private readonly audit: AuditLogPort,
+    private readonly students?: StudentRepository,
   ) {}
 
   async execute(
     input: EnterResultInput,
     session: SessionContext,
   ): Promise<ResultRecord> {
+    await guardStudentScope(this.students, input.studentId, session);
     // Compute the final score via the configured assessment structure. The value
     // object validates component keys/ranges/completeness.
     const structure = await this.grading.loadAssessmentStructure();
@@ -163,11 +190,15 @@ export class GetStudentSemesterResults implements AuthorizedUseCase<
 > {
   readonly name = "GetStudentSemesterResults";
   readonly requiredPermissions = ["results.read"];
-  constructor(private readonly results: ResultRepository) {}
+  constructor(
+    private readonly results: ResultRepository,
+    private readonly students?: StudentRepository,
+  ) {}
   async execute(
     input: GetStudentSemesterResultsInput,
-    _session: SessionContext,
+    session: SessionContext,
   ) {
+    await guardStudentScope(this.students, input.studentId, session);
     return this.results.findByStudentAndSemester(
       input.studentId,
       input.semesterId,

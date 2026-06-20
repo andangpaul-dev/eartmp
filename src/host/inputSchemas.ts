@@ -49,6 +49,7 @@ const SCHEMAS: Record<string, z.ZodType> = {
     roleId: str,
     permissionKeys: z.array(str),
   }),
+  setUserFaculties: z.looseObject({ userId: str, facultyIds: z.array(str) }),
   // institutions
   createInstitution: z.looseObject({
     name: str,

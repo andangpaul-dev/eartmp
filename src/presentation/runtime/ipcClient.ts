@@ -218,6 +218,7 @@ export const ipcClient: CoreApi = {
   listUsers: (input) => rpc("listUsers", input),
   listRoles: (input) => rpc("listRoles", input),
   createUser: (input) => rpc("createUser", input),
+  setUserFaculties: (input) => rpc("setUserFaculties", input),
   deactivateUser: (input) => rpc("deactivateUser", input),
   activateUser: (input) => rpc("activateUser", input),
   assignRole: (input) => rpc("assignRole", input),

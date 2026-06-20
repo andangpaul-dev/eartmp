@@ -117,6 +117,39 @@ export class PrismaUserRepository implements UserRepository {
     });
     return toUser(row);
   }
+
+  async facultyIds(userId: string): Promise<string[]> {
+    const rows = await this.db.userFaculty.findMany({
+      where: { userId },
+      select: { facultyId: true },
+    });
+    return rows.map((r) => r.facultyId);
+  }
+
+  async facultyIdsByUser(): Promise<Record<string, string[]>> {
+    const rows = await this.db.userFaculty.findMany({
+      select: { userId: true, facultyId: true },
+    });
+    const out: Record<string, string[]> = {};
+    for (const r of rows) (out[r.userId] ??= []).push(r.facultyId);
+    return out;
+  }
+
+  async setFaculties(userId: string, facultyIds: string[]): Promise<void> {
+    const wanted = [...new Set(facultyIds)];
+    await this.db.$transaction([
+      this.db.userFaculty.deleteMany({
+        where: { userId, facultyId: { notIn: wanted.length ? wanted : [""] } },
+      }),
+      ...wanted.map((facultyId) =>
+        this.db.userFaculty.upsert({
+          where: { userId_facultyId: { userId, facultyId } },
+          update: {},
+          create: { userId, facultyId },
+        }),
+      ),
+    ]);
+  }
 }
 
 type PrismaRoleRow = {

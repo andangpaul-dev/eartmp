@@ -348,6 +348,25 @@ button {
   gap: 14px;
 }
 
+/* Faculty-access checklist (user editor) */
+.checklist {
+  max-height: 168px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.checkrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
 /* Notification bell + dropdown */
 .bell-wrap {
   position: relative;

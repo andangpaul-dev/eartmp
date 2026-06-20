@@ -45,6 +45,7 @@ function toView(s: SessionContext): SessionView {
     userId: s.actorId,
     role: s.roleName,
     permissions: s.permissionList(),
+    facultyIds: [...s.facultyIds],
   };
 }
 

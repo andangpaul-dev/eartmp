@@ -48,10 +48,19 @@ function downloadDoc(doc: ExportedDoc): void {
 
 export function RecordsScreen() {
   const core = useCore();
-  const { can } = useSession();
+  const { can, session } = useSession();
   const { sealed } = useKeyState();
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
+  const [facultyId, setFacultyId] = useState("");
+
+  // Faculty filter (#6). A faculty-scoped user only sees their faculties here;
+  // the server enforces the boundary regardless.
+  const scopedFaculties = session?.facultyIds ?? [];
+  const allFaculties = useAsync(() => core.listFaculties({}), []);
+  const facultyOptions = (allFaculties.data ?? []).filter(
+    (f) => scopedFaculties.length === 0 || scopedFaculties.includes(f.id),
+  );
   const [verifyOf, setVerifyOf] = useState<Record<string, VerifyResult>>({});
   const [preview, setPreview] = useState<{
     number: string;
@@ -64,8 +73,13 @@ export function RecordsScreen() {
   };
 
   const records = useAsync(
-    () => core.listTranscriptRecords({ status: status || undefined, search }),
-    [status, search],
+    () =>
+      core.listTranscriptRecords({
+        status: status || undefined,
+        search,
+        ...(facultyId ? { facultyId } : {}),
+      }),
+    [status, search, facultyId],
   );
 
   const verify = async (r: TranscriptRecord) => {
@@ -125,6 +139,23 @@ export function RecordsScreen() {
               {STATUSES.map((s) => (
                 <option key={s || "all"} value={s}>
                   {s || "All"}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Faculty">
+            <select
+              className="select"
+              aria-label="Faculty filter"
+              value={facultyId}
+              onChange={(e) => setFacultyId(e.target.value)}
+            >
+              <option value="">
+                {scopedFaculties.length ? "My faculties" : "All faculties"}
+              </option>
+              {facultyOptions.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.code} — {f.name}
                 </option>
               ))}
             </select>

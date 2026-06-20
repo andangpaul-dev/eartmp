@@ -14,7 +14,9 @@ import type {
   RoleRepository,
 } from "../../../domain/repositories/auth";
 import type { AuditLogPort } from "../../../domain/repositories";
+import type { FacultyRepository } from "../../../domain/repositories/structure";
 import type { HashingPort } from "../../ports/HashingPort";
+import { requireInScope } from "../../authorization/institutionScope";
 import type { AuthorizedUseCase } from "../../authorization/AuthorizedUseCase";
 
 /** Sanitized user view for listing (never carries the password hash). */
@@ -27,6 +29,8 @@ export interface UserSummary {
   roleName: string;
   isActive: boolean;
   lastLoginAt?: string;
+  /** Assigned faculties (empty = institution-wide / unscoped). */
+  facultyIds: string[];
 }
 
 export interface CreateUserInput {
@@ -273,9 +277,10 @@ export class ListUsers implements AuthorizedUseCase<
     _input: Record<string, never>,
     _session: SessionContext,
   ): Promise<UserSummary[]> {
-    const [users, roles] = await Promise.all([
+    const [users, roles, facultiesByUser] = await Promise.all([
       this.users.list(),
       this.roles.list(),
+      this.users.facultyIdsByUser(),
     ]);
     const roleName = new Map(roles.map((r) => [r.id, r.name]));
     return users.map((u) => ({
@@ -287,7 +292,57 @@ export class ListUsers implements AuthorizedUseCase<
       roleName: roleName.get(u.roleId) ?? "—",
       isActive: u.isActive,
       lastLoginAt: u.lastLoginAt?.toISOString(),
+      facultyIds: facultiesByUser[u.id] ?? [],
     }));
+  }
+}
+
+/**
+ * SetUserFaculties — replace a user's faculty access set. Empty = institution-
+ * wide. A scoped admin may only assign faculties within their own institution
+ * (and only to a user in their institution). Gated users.update; audited.
+ */
+export interface SetUserFacultiesInput {
+  userId: string;
+  facultyIds: string[];
+}
+export class SetUserFaculties implements AuthorizedUseCase<
+  SetUserFacultiesInput,
+  { ok: true }
+> {
+  readonly name = "SetUserFaculties";
+  readonly requiredPermissions = ["users.update"];
+
+  constructor(
+    private readonly users: UserRepository,
+    private readonly faculties: FacultyRepository,
+    private readonly audit: AuditLogPort,
+  ) {}
+
+  async execute(
+    input: SetUserFacultiesInput,
+    session: SessionContext,
+  ): Promise<{ ok: true }> {
+    const user = await this.users.findById(input.userId);
+    if (!user) throw new ValidationError("User not found.");
+    requireInScope(user.institutionId, session);
+
+    // Every assigned faculty must exist and be within the admin's institution.
+    for (const facultyId of input.facultyIds) {
+      const faculty = await this.faculties.findById(facultyId);
+      if (!faculty) throw new ValidationError("Faculty not found.");
+      requireInScope(faculty.institutionId, session);
+    }
+
+    await this.users.setFaculties(input.userId, input.facultyIds);
+    await this.audit.record({
+      userId: session.actorId,
+      action: "UPDATE",
+      entity: "User",
+      recordId: input.userId,
+      newValue: { facultyIds: input.facultyIds },
+    });
+    return { ok: true };
   }
 }
 

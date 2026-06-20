@@ -16,6 +16,8 @@ export class SessionContext {
     public readonly isAnonymous: boolean,
     /** The institution this actor is scoped to; undefined = global operator. */
     public readonly institutionId: string | undefined,
+    /** Faculties this actor may act on; empty = institution-wide (unscoped). */
+    public readonly facultyIds: readonly string[],
   ) {}
 
   /** Build an authenticated session from resolved permission keys. */
@@ -24,6 +26,7 @@ export class SessionContext {
     roleName: string,
     permissionKeys: string[],
     institutionId?: string,
+    facultyIds: readonly string[] = [],
   ): SessionContext {
     if (!actorId) {
       throw new Error("SessionContext requires an actor id.");
@@ -34,17 +37,23 @@ export class SessionContext {
       new Set(permissionKeys),
       false,
       institutionId,
+      facultyIds,
     );
   }
 
   /** The unauthenticated session used only for public use-cases. */
   static anonymous(): SessionContext {
-    return new SessionContext("", "", new Set(), true, undefined);
+    return new SessionContext("", "", new Set(), true, undefined, []);
   }
 
   /** True for a global operator (not scoped to a single institution). */
   get isGlobal(): boolean {
     return this.institutionId === undefined;
+  }
+
+  /** True when the actor is limited to a subset of faculties. */
+  get isFacultyScoped(): boolean {
+    return this.facultyIds.length > 0;
   }
 
   has(permission: string): boolean {
