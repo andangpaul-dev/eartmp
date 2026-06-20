@@ -8,7 +8,9 @@ manual override. Builds on the existing `Student`/`StudentEnrollment`/settings
 model and the faculty scoping shipped in Workstream A. **Folded in during
 review:** the four formerly-deferred items — **per-row multi-faculty import**,
 **graduate re-admission**, **matricule check-digit + format validation**, and
-**matricule regeneration on admission-session correction**.
+**matricule regeneration on admission-session correction** — plus a second round
+(§1.2): a **configurable check scheme** (Luhn or ISO 7064 mod-97), **student-record
+merge / de-duplication** (operator-confirmed), and **bulk matricule regeneration**.
 
 ---
 
@@ -51,6 +53,28 @@ review:** the four formerly-deferred items — **per-row multi-faculty import**,
   `admissionSession`, they may **opt in** to regenerate the matricule (reserve a
   fresh number for the corrected `(faculty, year)`); the old value is freed and the
   change is audited. Never automatic.
+
+### 1.2 Folded-in decisions (round 2)
+
+- **Configurable check scheme.** A new setting `student.matriculeCheckScheme` ∈
+  `none | luhn | mod97` selects how the `{check}` token is computed: **Luhn**
+  (one decimal digit over the decimal digits) or **ISO 7064 MOD 97-10** (two digits
+  over the full alphanumeric body, letters A–Z → 10–35). `none` makes `{check}`
+  expand to empty. Both are pure functions.
+- **Student-record merge / de-duplication (operator-confirmed).** A `MergeStudents`
+  use-case consolidates a **duplicate** record into a **surviving** one: it
+  re-points the duplicate's results, transcripts and enrollments to the survivor,
+  soft-deletes the duplicate, and audits the merge (incl. the duplicate's matricule
+  for provenance). The survivor keeps its own matricule. **The action is never
+  automatic** — the UI surfaces _candidate_ duplicates (records sharing a
+  `previousStudentId` link or an exact name match) and the operator must
+  **explicitly confirm the specific survivor→duplicate merge** before it runs.
+  Gated by `students.manage`.
+- **Bulk matricule regeneration (operator-confirmed).** A `BulkRegenerateMatricules`
+  use-case regenerates matricules for a selected scope (institution + faculty +
+  admission year), reusing the per-student regeneration logic, **skipping** any
+  student with issued transcripts, in one transaction, audited. Also confirmation-
+  gated in the UI (shows the affected/skipped counts before applying).
 
 ---
 
@@ -136,9 +160,10 @@ the row exists, atomically `next += 1`, return the value just consumed.
   concurrent admits).
 
 **Check digit.** If the template contains `{check}`, `expandMatricule` first
-expands the rest, then appends a **Luhn (mod-10) check digit** computed over the
-decimal digits present in the expanded body — deterministic and pure, so preview
-and commit agree.
+expands the rest, then appends the check per `student.matriculeCheckScheme`
+(§1.2): **Luhn** (one decimal digit over the decimal digits), **mod97** (ISO 7064
+MOD 97-10, two digits over the alphanumeric body), or **none** (empty). Each is a
+pure, deterministic function, so preview and commit agree.
 
 **Format validation (manual entries).** When `student.matriculeFormat` is set, a
 **manual** matricule must match that regex (validated in the use-case, surfaced as
@@ -202,6 +227,34 @@ corrected `(faculty, year)`, free the old value, and audit the change. Regenerat
 is refused when the student already has issued/sealed transcripts (those reference
 the old matricule) — surfaced as a clear error.
 
+### Duplicate merge (folded in, §1.2)
+
+`MergeStudents({ survivingId, duplicateId })` consolidates two records for the
+same person (e.g. a graduate re-admission's new record and the prior one). In a
+single `UnitOfWork` transaction it **re-points** the duplicate's `Result`,
+`Transcript`, and `StudentEnrollment` rows to the survivor (new repo methods
+`reassignStudent(fromId, toId)` per repository), **soft-deletes** the duplicate,
+and audits the merge (recording the duplicate's matricule + id for provenance).
+The survivor keeps its own matricule, programme/level placement, and status. Gated
+by `students.manage` + faculty scope on **both** records.
+
+**Never automatic.** A `findDuplicateCandidates` read surfaces likely duplicates
+(records linked by `previousStudentId`, or an exact normalized name match across
+live records); the operator must **explicitly confirm a specific survivor →
+duplicate pair** before `MergeStudents` runs. Conflicts that can't be auto-merged
+(e.g. the same course graded differently on both records) are reported, not
+silently overwritten — the merge refuses and lists them for manual resolution.
+
+### Bulk matricule regeneration (folded in, §1.2)
+
+`BulkRegenerateMatricules({ institutionId?, facultyId, year })` regenerates
+matricules across a scope, reusing the single-student regeneration path: for each
+in-scope live student it reserves a fresh `(faculty, year)` number and reassigns
+the matricule, **skipping** any student with issued transcripts. Runs in one
+transaction; returns `{ regenerated, skipped[] }`; fully audited; gated by
+`students.manage` + faculty scope. The UI shows the affected/skipped counts and
+requires confirmation before applying.
+
 ---
 
 ## 5. Import flow
@@ -263,15 +316,28 @@ calls `readmitStudent(...)`.
 
 The student edit form's **admission-session correction** offers an opt-in
 **"regenerate matricule"** checkbox (disabled, with a reason, when the student has
-issued transcripts). The config **template editor** also previews the `{check}`
-digit and exposes the optional `student.matriculeFormat` regex field.
+issued transcripts). The config **template editor** previews the `{check}` digit,
+exposes the `student.matriculeCheckScheme` selector (none/luhn/mod97), and the
+optional `student.matriculeFormat` regex field.
+
+### Identity maintenance (merge & bulk regen)
+
+- **Merge:** a "Possible duplicates" view lists `findDuplicateCandidates` pairs;
+  selecting one opens a **confirmation dialog** showing exactly what will move
+  (results/transcripts/enrollments counts) and which record survives, and any
+  blocking conflicts. The merge runs **only** on explicit confirm. Calls
+  `mergeStudents({ survivingId, duplicateId })`.
+- **Bulk regenerate:** a small admin screen picks faculty + admission year, shows
+  affected/skipped counts (preview), and applies on confirm via
+  `bulkRegenerateMatricules(...)`.
 
 ### Contract additions
 
-`previewMatricule`, `readmitStudent`, and the extended `admitStudent` input
-(`admissionSession` + optional `matricNumber` + `facultyId`/`departmentId`) — all
-faculty-scoped and Zod-validated at the host seam, per the Workstream A/B pattern.
-`updateStudent` gains an optional `regenerateMatricule` flag.
+`previewMatricule`, `readmitStudent`, `findDuplicateCandidates`, `mergeStudents`,
+`bulkRegenerateMatricules`, the extended `admitStudent` input (`admissionSession` +
+optional `matricNumber` + `facultyId`/`departmentId`), and an optional
+`updateStudent.regenerateMatricule` flag — all faculty-scoped and Zod-validated at
+the host seam, per the Workstream A/B pattern.
 
 ---
 
@@ -297,28 +363,38 @@ faculty-scoped and Zod-validated at the host seam, per the Workstream A/B patter
   counter); `ReadmitStudent` (**WITHDRAWN** reuse-identity vs **GRADUATED** new-record
   - `previousStudentId` + new matricule); **matricule regeneration on
     admission-session correction (+ refusal when transcripts exist)**; settings
-    validation (rule + format regex); migration (`MatriculeCounter` + `previousStudentId`,
-    idempotent); UI (preview + manual toggle + issued value, template editor live
-    sample + check + format, readmit/graduate modal, regenerate checkbox); boundary
-    fitness (expander stays pure).
+    validation (rule + format regex + check scheme); **check schemes** (Luhn + ISO
+    7064 mod-97 known vectors, `none`); **`MergeStudents`** (re-points
+    results/transcripts/enrollments, soft-deletes duplicate, audits, refuses on
+    conflict, scope on both, explicit-pair only — no auto-merge);
+    **`findDuplicateCandidates`** (previousStudentId + exact-name, scoped);
+    **`BulkRegenerateMatricules`** (regenerates in scope, skips transcript-bearing
+    students, returns counts, audited); migration (`MatriculeCounter` +
+    `previousStudentId`, idempotent); UI (preview + manual toggle + issued value,
+    template editor + check + format, readmit/graduate modal, regenerate checkbox,
+    **merge confirm dialog**, **bulk-regen preview/confirm**); boundary fitness
+    (expander + check functions stay pure).
 
 ## 8. Definition of done
 
 - [ ] `MatriculeCounter` model + `Student.previousStudentId` + migration (applied, idempotent) + client regen.
 - [ ] `student.matriculeRule` + `student.matriculeFormat` settings in `SETTING_KEYS`/registry with token validation + defaults.
-- [ ] `expandMatricule` (pure, incl. `{check}` Luhn) + `GenerateMatricule` (peek/reserve) + counter repo port & Prisma impl.
+- [ ] `expandMatricule` (pure, incl. `{check}` via configurable scheme: Luhn + ISO 7064 mod-97 + none) + `GenerateMatricule` (peek/reserve) + counter repo port & Prisma impl.
 - [ ] `AdmitStudent`: required `admissionSession`, optional/auto `matricNumber`, manual format-regex check, sets denormalized `facultyId`/`departmentId`; faculty-scope guard.
 - [ ] `ImportStudents`: per-row auto/manual matricule, per-row admission session, **per-row faculty + scope**, rollback-safe counter.
 - [ ] `ReadmitStudent`: WITHDRAWN reuse-identity **and** GRADUATED new-record (+ `previousStudentId`, new matricule).
 - [ ] Matricule regeneration on admission-session correction (opt-in, refused when transcripts exist).
-- [ ] Contract/host/ipc/zod: `previewMatricule`, `readmitStudent`, extended `admitStudent`, `updateStudent.regenerateMatricule`.
-- [ ] UI: admit preview + manual toggle + issued value; config template editor (+ check/format); readmit/graduate modal; regenerate checkbox.
+- [ ] `student.matriculeCheckScheme` setting + Luhn & ISO 7064 mod-97 check functions (pure).
+- [ ] `MergeStudents` + `findDuplicateCandidates` (+ repo `reassignStudent` methods); operator-confirmed, conflict-refusing, audited.
+- [ ] `BulkRegenerateMatricules` (scoped, skips transcript-bearing students, audited).
+- [ ] Contract/host/ipc/zod: `previewMatricule`, `readmitStudent`, `findDuplicateCandidates`, `mergeStudents`, `bulkRegenerateMatricules`, extended `admitStudent`, `updateStudent.regenerateMatricule`.
+- [ ] UI: admit preview + manual toggle + issued value; config template editor (+ check scheme/format); readmit/graduate modal; regenerate checkbox; merge confirm dialog; bulk-regen preview/confirm.
 - [ ] Tests green; `tsc` strict + lint + boundary fitness clean.
 - [ ] `/docs` updated; summary posted.
 
 ## 9. Out of scope (future work)
 
-- Matricule schemes beyond Luhn `{check}` (e.g. ISO 7064 mod-97 over alphanumerics).
-- Merging/de-duplicating a person across multiple `Student` records (graduate
-  re-admission links via `previousStudentId` but does not merge).
-- Bulk matricule regeneration (correction-driven regeneration is per-student).
+- Fuzzy/automated duplicate detection (candidate surfacing is exact name +
+  `previousStudentId` link only; matching is operator-judged).
+- Cross-institution merge or merge of records in different tenants.
+- Matricule check schemes beyond Luhn / ISO 7064 mod-97.
