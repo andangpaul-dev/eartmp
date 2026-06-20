@@ -326,6 +326,43 @@ describe("Lock / Unlock", () => {
   });
 });
 
+describe("EnterResult – non-graded status clears finalScore", () => {
+  it("clears finalScore when an existing graded row is changed to DID", async () => {
+    const uc = new EnterResult(results, await makeGrading(), audit);
+    // Seed an existing GRADED NORMAL row with a finalScore
+    await results.create({
+      studentId: "s",
+      courseId: "c",
+      semesterId: "sem",
+      componentScores: [
+        { key: "ca", score: 28 },
+        { key: "exam", score: 65 },
+      ],
+      finalScore: 93,
+      isLocked: false,
+      sitting: "NORMAL",
+      status: "GRADED",
+    });
+
+    // Now change it to DID with no component scores
+    const returned = await uc.execute(
+      {
+        studentId: "s",
+        courseId: "c",
+        semesterId: "sem",
+        status: "DID",
+        componentScores: [],
+      },
+      admin,
+    );
+
+    // The stored row must have no finalScore
+    expect(results.rows[0]!.finalScore).toBeUndefined();
+    // The returned record must also have no finalScore
+    expect(returned.finalScore).toBeUndefined();
+  });
+});
+
 describe("GetStudentSemesterResults", () => {
   it("returns results for the student's semester", async () => {
     await results.create({

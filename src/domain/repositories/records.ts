@@ -102,7 +102,7 @@ export interface ResultRepository {
     id: string,
     data: {
       componentScores: { key: string; score: number }[];
-      finalScore?: number;
+      finalScore?: number | null;
       status?: ResultStatus;
     },
   ): Promise<void>;

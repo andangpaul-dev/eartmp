@@ -64,13 +64,19 @@ export class FakeResultRepo implements ResultRepository {
     id: string,
     data: {
       componentScores: { key: string; score: number }[];
-      finalScore?: number;
+      finalScore?: number | null;
       status?: ResultStatus;
     },
   ) {
     const r = this.live(id)!;
     r.componentScores = data.componentScores;
-    if (data.finalScore !== undefined) r.finalScore = data.finalScore;
+    if ("finalScore" in data) {
+      if (data.finalScore == null) {
+        delete r.finalScore;
+      } else {
+        r.finalScore = data.finalScore;
+      }
+    }
     if (data.status !== undefined) r.status = data.status;
   }
   async updateProcessed(

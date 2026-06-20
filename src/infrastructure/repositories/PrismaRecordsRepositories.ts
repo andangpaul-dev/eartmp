@@ -606,7 +606,7 @@ export class PrismaResultRepository implements ResultRepository {
     id: string,
     data: {
       componentScores: { key: string; score: number }[];
-      finalScore?: number;
+      finalScore?: number | null;
       status?: ResultStatus;
     },
   ): Promise<void> {
@@ -614,9 +614,7 @@ export class PrismaResultRepository implements ResultRepository {
       where: { id },
       data: {
         componentScores: JSON.stringify(data.componentScores),
-        ...(data.finalScore !== undefined
-          ? { finalScore: data.finalScore }
-          : {}),
+        ...("finalScore" in data ? { finalScore: data.finalScore } : {}),
         ...(data.status !== undefined ? { status: data.status } : {}),
       },
     });

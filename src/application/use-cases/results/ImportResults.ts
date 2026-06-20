@@ -117,7 +117,7 @@ export class ImportResults implements AuthorizedUseCase<
               student.id,
               input.semesterId,
             )
-          ).find((r) => r.courseId === course.id);
+          ).find((r) => r.courseId === course.id && r.sitting === "NORMAL");
           if (existing?.isLocked) {
             messages.push(
               "Existing result is locked; unlock before importing.",

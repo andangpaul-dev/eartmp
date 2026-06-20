@@ -195,6 +195,37 @@ describe("ImportResults", () => {
     expect(ctx.results.rows[0]!.finalScore).toBe(100);
   });
 
+  it("does not overwrite an existing RESIT row when importing NORMAL", async () => {
+    // Seed a RESIT row for st1/co1 — import must not touch it
+    await ctx.results.create({
+      studentId: "st1",
+      courseId: "co1",
+      semesterId: SEM,
+      componentScores: [
+        { key: "ca", score: 5 },
+        { key: "exam", score: 10 },
+      ],
+      finalScore: 15,
+      isLocked: false,
+      sitting: "RESIT",
+      status: "GRADED",
+    });
+    const report = await ctx.uc.execute(
+      {
+        semesterId: SEM,
+        rows: [{ matricNumber: "M/1", courseCode: "CS101", ca: 30, exam: 70 }],
+      },
+      admin,
+    );
+    expect(report.imported).toBe(1);
+    // Must have TWO rows: the original RESIT unchanged, plus a new NORMAL
+    expect(ctx.results.rows).toHaveLength(2);
+    const resitRow = ctx.results.rows.find((r) => r.sitting === "RESIT")!;
+    expect(resitRow.finalScore).toBe(15); // untouched
+    const normalRow = ctx.results.rows.find((r) => r.sitting === "NORMAL")!;
+    expect(normalRow.finalScore).toBe(100);
+  });
+
   it("is denied without results.import", async () => {
     const viewer = SessionContext.create("v", "VIEWER", ["results.read"]);
     await expect(

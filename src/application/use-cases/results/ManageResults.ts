@@ -108,7 +108,7 @@ export class EnterResult implements AuthorizedUseCase<
     if (existing) {
       await this.results.updateScores(existing.id, {
         componentScores: input.componentScores,
-        ...(finalScore !== undefined ? { finalScore } : {}),
+        finalScore: graded ? finalScore : null,
         status,
       });
       await this.audit.record({
@@ -117,17 +117,19 @@ export class EnterResult implements AuthorizedUseCase<
         entity: "Result",
         recordId: existing.id,
         newValue: {
-          finalScore,
+          ...(graded ? { finalScore } : {}),
           status,
           ...(existing.isLocked && override ? { override: true } : {}),
         },
       });
-      return {
+      const ret: ResultRecord = {
         ...existing,
         componentScores: input.componentScores,
-        ...(finalScore !== undefined ? { finalScore } : {}),
         status,
       };
+      if (graded) ret.finalScore = finalScore;
+      else delete ret.finalScore;
+      return ret;
     }
 
     const created = await this.results.create({
