@@ -72,6 +72,7 @@ import {
 import { AdmitStudent } from "../application/use-cases/records/AdmitStudent";
 import { ReadmitStudent } from "../application/use-cases/records/ReadmitStudent";
 import { PreviewMatricule } from "../application/use-cases/records/PreviewMatricule";
+import { RegenerateMatricule } from "../application/use-cases/records/RegenerateMatricule";
 import {
   ListCourses,
   CreateCourse,
@@ -373,6 +374,7 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
 
   const readmitStudent = new ReadmitStudent(uow, generateMatricule);
   const previewMatricule = new PreviewMatricule(uow, generateMatricule);
+  const regenerateMatricule = new RegenerateMatricule(uow, generateMatricule);
 
   // ImportStudents: same GenerateMatricule + settings as AdmitStudent, plus a
   // faculty-by-code lookup for per-row faculty overrides.
@@ -532,6 +534,10 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     ["admitStudent", (i, s) => authorize(admitStudent, i as never, s)],
     ["readmitStudent", (i, s) => authorize(readmitStudent, i as never, s)],
     ["previewMatricule", (i, s) => authorize(previewMatricule, i as never, s)],
+    [
+      "regenerateMatricule",
+      (i, s) => authorize(regenerateMatricule, i as never, s),
+    ],
     ["updateStudent", (i, s) => authorize(updateStudent, i as never, s)],
     [
       "changeStudentStatus",

@@ -94,6 +94,11 @@ function makeUow() {
         audit,
         semesterOrdering: noopSemesterOrdering,
         matriculeCounter: noopMatriculeCounter,
+        transcripts: {
+          async countIssuedByStudent() {
+            return 0;
+          },
+        } as never,
       });
     },
   };

@@ -20,6 +20,7 @@ import type {
   ResultSitting,
   ResultStatus,
 } from "../../src/domain/value-objects/ResultSitting";
+import type { TranscriptStore } from "../../src/domain/repositories/transcripts";
 
 /** Default fake SemesterOrdering: maps every id to {sessionOrder:0, rank:0}. */
 export const defaultFakeSemesterOrdering: SemesterOrdering = {
@@ -145,6 +146,43 @@ class FakeMatriculeCounter implements MatriculeCounterRepository {
   }
 }
 
+/**
+ * Minimal fake TranscriptStore for tests. By default, countIssuedByStudent
+ * returns 0. Override the `issuedCounts` map to simulate issued transcripts.
+ */
+export class FakeTranscriptStore implements TranscriptStore {
+  /** Map of studentId → issued transcript count (default 0). */
+  issuedCounts = new Map<string, number>();
+
+  async countIssuedByStudent(studentId: string): Promise<number> {
+    return this.issuedCounts.get(studentId) ?? 0;
+  }
+
+  // The remaining TranscriptStore methods are not needed in records tests;
+  // they throw to surface accidental calls.
+  async create(): Promise<never> {
+    throw new Error("FakeTranscriptStore.create not implemented");
+  }
+  async findById(): Promise<null> {
+    return null;
+  }
+  async findByNumber(): Promise<null> {
+    return null;
+  }
+  async findByStudent(): Promise<never[]> {
+    return [];
+  }
+  async updateStatus(): Promise<never> {
+    throw new Error("FakeTranscriptStore.updateStatus not implemented");
+  }
+  async nextTranscriptNumber(): Promise<string> {
+    return "T-0001";
+  }
+  async listRecords(): Promise<never[]> {
+    return [];
+  }
+}
+
 /** Fake UnitOfWork that runs the work against the given repos (no real tx). */
 export function fakeUow(repos: Partial<TransactionalRepos>): UnitOfWork {
   return {
@@ -157,6 +195,7 @@ export function fakeUow(repos: Partial<TransactionalRepos>): UnitOfWork {
         audit: { async record() {} } as AuditLogPort,
         semesterOrdering: defaultFakeSemesterOrdering,
         matriculeCounter: new FakeMatriculeCounter(),
+        transcripts: new FakeTranscriptStore(),
         ...repos,
       });
     },

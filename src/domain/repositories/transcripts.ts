@@ -66,6 +66,10 @@ export interface TranscriptStore {
   /** All transcripts (newest first), enriched with student identity, for the
    *  Records registry. Optionally narrowed by status. */
   listRecords(filter?: TranscriptRecordFilter): Promise<TranscriptRecord[]>;
+  /** Count issued (APPROVED or LOCKED) transcripts for a student. Used to guard
+   *  matricule regeneration — a student with issued transcripts cannot change
+   *  their matricule as it would invalidate the signed documents. */
+  countIssuedByStudent(studentId: string): Promise<number>;
 }
 
 /** Document family a template renders. */

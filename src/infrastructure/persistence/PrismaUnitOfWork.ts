@@ -19,6 +19,7 @@ import {
   PrismaMatriculeCounter,
 } from "../repositories/PrismaRecordsRepositories";
 import { PrismaAuditLogAdapter } from "../repositories/PrismaAuthRepositories";
+import { PrismaTranscriptRepository } from "../repositories/PrismaTranscriptRepository";
 
 export class PrismaUnitOfWork implements UnitOfWork {
   constructor(private readonly db: PrismaClient) {}
@@ -33,6 +34,7 @@ export class PrismaUnitOfWork implements UnitOfWork {
         audit: new PrismaAuditLogAdapter(tx),
         semesterOrdering: new PrismaSemesterOrdering(tx),
         matriculeCounter: new PrismaMatriculeCounter(tx),
+        transcripts: new PrismaTranscriptRepository(tx),
       }),
     );
   }

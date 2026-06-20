@@ -160,6 +160,11 @@ function makeUow() {
         audit,
         semesterOrdering,
         matriculeCounter,
+        transcripts: {
+          async countIssuedByStudent() {
+            return 0;
+          },
+        } as never,
       });
     },
   };

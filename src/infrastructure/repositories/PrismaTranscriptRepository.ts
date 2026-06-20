@@ -3,7 +3,7 @@
  * Tauri-SQL data layer in the shell phase). Numbering expands the institution
  * rule with a count-based sequence (single-operator v1).
  */
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { expandNumberRule } from "../../domain/services/TranscriptNumber";
 import { UniqueConstraintError } from "../../domain/errors/persistence";
 import type {
@@ -16,6 +16,8 @@ import type {
   StoredTemplate,
   NewTemplate,
 } from "../../domain/repositories/transcripts";
+
+type Db = Prisma.TransactionClient | PrismaClient;
 
 type Row = {
   id: string;
@@ -46,7 +48,7 @@ function toTranscript(r: Row): StoredTranscript {
 }
 
 export class PrismaTranscriptRepository implements TranscriptStore {
-  constructor(private readonly db: PrismaClient) {}
+  constructor(private readonly db: Db) {}
 
   async create(data: NewTranscript): Promise<StoredTranscript> {
     try {
@@ -108,6 +110,16 @@ export class PrismaTranscriptRepository implements TranscriptStore {
         institutionId ? { where: { institutionId } } : undefined,
       )) + 1;
     return expandNumberRule(rule, new Date().getFullYear(), seq);
+  }
+
+  async countIssuedByStudent(studentId: string): Promise<number> {
+    return this.db.transcript.count({
+      where: {
+        studentId,
+        status: { in: ["APPROVED", "LOCKED"] },
+        deletedAt: null,
+      },
+    });
   }
 
   async listRecords(

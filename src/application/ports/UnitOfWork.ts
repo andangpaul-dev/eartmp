@@ -19,6 +19,7 @@ import type {
   MatriculeCounterRepository,
 } from "../../domain/repositories/records";
 import type { AuditLogPort } from "../../domain/repositories";
+import type { TranscriptStore } from "../../domain/repositories/transcripts";
 
 export interface TransactionalRepos {
   students: StudentRepository;
@@ -28,6 +29,7 @@ export interface TransactionalRepos {
   audit: AuditLogPort;
   semesterOrdering: SemesterOrdering;
   matriculeCounter: MatriculeCounterRepository;
+  transcripts: TranscriptStore;
 }
 
 export interface UnitOfWork {

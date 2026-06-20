@@ -70,6 +70,13 @@ class FakeStore implements TranscriptStore {
         generatedAt: "2026-01-01T00:00:00.000Z",
       }));
   }
+  async countIssuedByStudent(studentId: string) {
+    return this.rows.filter(
+      (r) =>
+        r.studentId === studentId &&
+        (r.status === "APPROVED" || r.status === "LOCKED"),
+    ).length;
+  }
 }
 
 const template: StoredTemplate = {

@@ -57,6 +57,9 @@ function storeWith(status: string, snap = snapshot): TranscriptStore {
     async listRecords() {
       return [];
     },
+    async countIssuedByStudent() {
+      return 0;
+    },
   };
 }
 

@@ -92,6 +92,7 @@ function studentWriteData(
   patch: Partial<Omit<Student, "id">>,
 ): Record<string, unknown> {
   const keys: (keyof Omit<Student, "id">)[] = [
+    "matricNumber",
     "regNumber",
     "fullName",
     "gender",
