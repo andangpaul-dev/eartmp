@@ -24,7 +24,7 @@ interface OpenEnrollmentInput {
  * transaction's repos so they commit together — a failure can never leave a
  * student with no current enrollment or a stale placement mirror (F-1/F-22).
  */
-async function openEnrollment(
+export async function openEnrollment(
   repos: TransactionalRepos,
   session: SessionContext,
   action: string,
