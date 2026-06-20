@@ -1,8 +1,14 @@
 // @vitest-environment jsdom
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { StudentsScreen } from "../../src/presentation/screens/StudentsScreen";
 import type { Student } from "../../src/domain/entities";
-import type { Faculty } from "../../src/presentation/runtime/contract";
+import type {
+  Faculty,
+  Department,
+  Programme,
+  Level,
+} from "../../src/presentation/runtime/contract";
+import type { AcademicSession } from "../../src/domain/entities/structure";
 import { renderScreen } from "./harness";
 
 const student = (over: Partial<Student> = {}): Student =>
@@ -68,6 +74,256 @@ describe("StudentsScreen", () => {
           where: expect.objectContaining({ facultyId: "f1" }),
         }),
       ),
+    );
+  });
+
+  it("previews the matricule when faculty + admission session are set", async () => {
+    const faculties: Faculty[] = [{ id: "f1", name: "Science", code: "SCI" }];
+    const sessions: AcademicSession[] = [
+      { id: "sess1", name: "2024/2025", isCurrent: false },
+    ];
+    const previewMatricule = vi.fn(async () => ({
+      matricule: "SCI/2024/0001",
+    }));
+    const { user } = renderScreen(<StudentsScreen />, {
+      permissions: ["students.read", "students.create"],
+      core: {
+        listFaculties: async () => faculties,
+        listSessions: async () => sessions,
+        previewMatricule,
+      },
+    });
+    await user.click(
+      await screen.findByRole("button", { name: /admit student/i }),
+    );
+    const dialog = await screen.findByRole("dialog");
+
+    await user.selectOptions(within(dialog).getByLabelText("Faculty"), "f1");
+    await user.selectOptions(
+      within(dialog).getByLabelText("Admission session"),
+      "2024/2025",
+    );
+
+    await waitFor(() =>
+      expect(previewMatricule).toHaveBeenCalledWith(
+        expect.objectContaining({
+          facultyId: "f1",
+          admissionSession: "2024/2025",
+        }),
+      ),
+    );
+    await within(dialog).findByText("SCI/2024/0001");
+  });
+
+  it("manual override sends the typed matricule; auto omits it", async () => {
+    const faculties: Faculty[] = [{ id: "f1", name: "Science", code: "SCI" }];
+    const sessions: AcademicSession[] = [
+      { id: "sess1", name: "2024/2025", isCurrent: false },
+    ];
+    const departments: Department[] = [
+      { id: "d1", name: "Computer Science", code: "CS", facultyId: "f1" },
+    ];
+    const programmes: Programme[] = [
+      {
+        id: "p1",
+        name: "B.Sc CS",
+        code: "BSCS",
+        departmentId: "d1",
+        durationLevels: 4,
+        creditsRequired: 120,
+      },
+    ];
+    const levels: Level[] = [
+      { id: "lv1", name: "Level 100", rank: 1, programmeId: "p1" },
+    ];
+    const issuedStudent = student({ matricNumber: "SCI/2024/AUTO" });
+    const admitStudent = vi.fn(async () => ({ student: issuedStudent }));
+    const { user } = renderScreen(<StudentsScreen />, {
+      permissions: ["students.read", "students.create"],
+      core: {
+        listFaculties: async () => faculties,
+        listDepartments: async () => departments,
+        listProgrammes: async () => programmes,
+        listLevels: async () => levels,
+        listSessions: async () => sessions,
+        admitStudent,
+      },
+    });
+
+    // --- AUTO mode first ---
+    await user.click(
+      await screen.findByRole("button", { name: /admit student/i }),
+    );
+    let dialog = await screen.findByRole("dialog");
+
+    await user.selectOptions(within(dialog).getByLabelText("Faculty"), "f1");
+    await user.selectOptions(within(dialog).getByLabelText("Department"), "d1");
+    await user.selectOptions(within(dialog).getByLabelText("Programme"), "p1");
+    await user.selectOptions(within(dialog).getByLabelText("Level"), "lv1");
+    await user.selectOptions(
+      within(dialog).getByLabelText("Admission session"),
+      "2024/2025",
+    );
+    await user.type(within(dialog).getByLabelText("Full name"), "Test Student");
+    await user.click(within(dialog).getByRole("button", { name: /^admit$/i }));
+
+    await waitFor(() =>
+      expect(admitStudent).toHaveBeenCalledWith(
+        expect.not.objectContaining({ matricNumber: expect.anything() }),
+      ),
+    );
+    // issued matricule shown on success
+    await within(dialog).findByText("SCI/2024/AUTO");
+
+    // close the success modal
+    await user.click(within(dialog).getByRole("button", { name: /done/i }));
+
+    // --- MANUAL mode ---
+    admitStudent.mockClear();
+    await user.click(
+      await screen.findByRole("button", { name: /admit student/i }),
+    );
+    dialog = await screen.findByRole("dialog");
+
+    // toggle manual
+    await user.click(within(dialog).getByLabelText(/enter manually/i));
+    const matricInput = within(dialog).getByLabelText(/^matricule$/i);
+    await user.type(matricInput, "CS/MANUAL/001");
+
+    await user.selectOptions(within(dialog).getByLabelText("Faculty"), "f1");
+    await user.selectOptions(within(dialog).getByLabelText("Department"), "d1");
+    await user.selectOptions(within(dialog).getByLabelText("Programme"), "p1");
+    await user.selectOptions(within(dialog).getByLabelText("Level"), "lv1");
+    await user.selectOptions(
+      within(dialog).getByLabelText("Admission session"),
+      "2024/2025",
+    );
+    await user.type(
+      within(dialog).getByLabelText("Full name"),
+      "Test Student 2",
+    );
+    await user.click(within(dialog).getByRole("button", { name: /^admit$/i }));
+
+    await waitFor(() =>
+      expect(admitStudent).toHaveBeenCalledWith(
+        expect.objectContaining({ matricNumber: "CS/MANUAL/001" }),
+      ),
+    );
+  });
+
+  it("readmit a withdrawn student", async () => {
+    const withdrawn = student({
+      id: "s2",
+      status: "WITHDRAWN",
+      fullName: "Old Student",
+    });
+    const departments: Department[] = [
+      { id: "d1", name: "CS Dept", code: "CS", facultyId: "f1" },
+    ];
+    const programmes: Programme[] = [
+      {
+        id: "p1",
+        name: "B.Sc CS",
+        code: "BSCS",
+        departmentId: "d1",
+        durationLevels: 4,
+        creditsRequired: 120,
+      },
+    ];
+    const levels: Level[] = [
+      { id: "lv1", name: "Level 100", rank: 1, programmeId: "p1" },
+    ];
+    const sessions: AcademicSession[] = [
+      { id: "sess1", name: "2025/2026", isCurrent: false },
+    ];
+    const readmitStudent = vi.fn(async () => withdrawn);
+    const { user } = renderScreen(<StudentsScreen />, {
+      permissions: ["students.read", "students.update"],
+      core: {
+        listStudents: async () => ({ items: [withdrawn], total: 1 }),
+        listDepartments: async () => departments,
+        listProgrammes: async () => programmes,
+        listLevels: async () => levels,
+        listSessions: async () => sessions,
+        readmitStudent,
+      },
+    });
+
+    await user.click(await screen.findByText("Old Student"));
+    await user.click(await screen.findByRole("button", { name: /^readmit$/i }));
+
+    // profile modal closes, readmit modal opens
+    const readmitDialog = await screen.findByRole("dialog", {
+      name: /readmit student/i,
+    });
+    await user.selectOptions(
+      within(readmitDialog).getByLabelText("Programme"),
+      "p1",
+    );
+    await user.selectOptions(
+      within(readmitDialog).getByLabelText("Level"),
+      "lv1",
+    );
+    await user.selectOptions(
+      within(readmitDialog).getByLabelText(/from session/i),
+      "2025/2026",
+    );
+    await user.click(
+      within(readmitDialog).getByRole("button", { name: /^save$/i }),
+    );
+
+    await waitFor(() =>
+      expect(readmitStudent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          studentId: "s2",
+          programmeId: "p1",
+          levelId: "lv1",
+          fromSession: "2025/2026",
+        }),
+      ),
+    );
+  });
+
+  it("regenerate matricule with confirmation", async () => {
+    const s = student({ id: "s3" });
+    const regenerateMatricule = vi.fn(async () => ({ matricule: "NEW/001" }));
+    const { user } = renderScreen(<StudentsScreen />, {
+      permissions: ["students.read", "students.update"],
+      core: {
+        listStudents: async () => ({ items: [s], total: 1 }),
+        regenerateMatricule,
+      },
+    });
+
+    await user.click(await screen.findByText("Ada Lovelace"));
+    await user.click(
+      await screen.findByRole("button", { name: /regenerate matricule/i }),
+    );
+
+    // confirm dialog should appear
+    const confirmDialog1 = await screen.findByRole("dialog", {
+      name: /regenerate matricule/i,
+    });
+    expect(confirmDialog1).toBeInTheDocument();
+    // Cancel — should NOT call
+    await user.click(
+      within(confirmDialog1).getByRole("button", { name: /cancel/i }),
+    );
+    expect(regenerateMatricule).not.toHaveBeenCalled();
+
+    // now confirm
+    await user.click(
+      await screen.findByRole("button", { name: /regenerate matricule/i }),
+    );
+    const confirmDialog2 = await screen.findByRole("dialog", {
+      name: /regenerate matricule/i,
+    });
+    await user.click(
+      within(confirmDialog2).getByRole("button", { name: /confirm/i }),
+    );
+
+    await waitFor(() =>
+      expect(regenerateMatricule).toHaveBeenCalledWith({ studentId: "s3" }),
     );
   });
 

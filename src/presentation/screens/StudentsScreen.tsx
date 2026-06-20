@@ -5,9 +5,10 @@
  * confirm. The host re-checks every permission; the UI only mirrors what it
  * granted.
  */
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useCore, useSession } from "../runtime/CoreProvider";
 import { useAsync, useAction } from "../runtime/hooks";
+import { useDialogs } from "../runtime/DialogProvider";
 import {
   Button,
   Card,
@@ -55,6 +56,7 @@ export function StudentsScreen() {
   const [admitting, setAdmitting] = useState(false);
   const [selected, setSelected] = useState<Student | null>(null);
   const [editing, setEditing] = useState<Student | null>(null);
+  const [readmitting, setReadmitting] = useState<Student | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   // Grouping filters: Faculty/School → Department → Sub-department.
@@ -286,6 +288,26 @@ export function StudentsScreen() {
             list.reload();
             notify("Status updated");
           }}
+          onReadmit={() => {
+            setReadmitting(selected);
+            setSelected(null);
+          }}
+          onRegenerated={() => {
+            list.reload();
+            notify("Matricule regenerated");
+          }}
+        />
+      )}
+
+      {readmitting && (
+        <ReadmitModal
+          student={readmitting}
+          onClose={() => setReadmitting(null)}
+          onDone={() => {
+            setReadmitting(null);
+            list.reload();
+            notify("Student readmitted");
+          }}
         />
       )}
 
@@ -316,6 +338,7 @@ function AdmitModal({
   onDone: () => void;
 }) {
   const core = useCore();
+  const [manualMode, setManualMode] = useState(false);
   const [matricNumber, setMatric] = useState("");
   const [fullName, setFullName] = useState("");
   const [regNumber, setReg] = useState("");
@@ -324,6 +347,8 @@ function AdmitModal({
   const [programmeId, setProgramme] = useState("");
   const [levelId, setLevel] = useState("");
   const [admissionSession, setSession] = useState("");
+  const [preview, setPreview] = useState<string | null>(null);
+  const [issuedMatricule, setIssuedMatricule] = useState<string | null>(null);
 
   const faculties = useAsync(() => core.listFaculties({}), []);
   const departments = useAsync(
@@ -345,10 +370,30 @@ function AdmitModal({
   );
   const sessions = useAsync(() => core.listSessions({}), []);
 
+  // Live preview: call previewMatricule whenever facultyId + admissionSession are set
+  useEffect(() => {
+    if (!facultyId || !admissionSession) {
+      setPreview(null);
+      return;
+    }
+    let cancelled = false;
+    core
+      .previewMatricule({ facultyId, admissionSession })
+      .then((res) => {
+        if (!cancelled) setPreview(res.matricule);
+      })
+      .catch(() => {
+        if (!cancelled) setPreview(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [facultyId, admissionSession]);
+
   const submit = useAction(
     () =>
       core.admitStudent({
-        matricNumber: matricNumber || undefined,
+        ...(manualMode && matricNumber ? { matricNumber } : {}),
         fullName,
         ...(regNumber ? { regNumber } : {}),
         ...(facultyId ? { facultyId } : {}),
@@ -357,7 +402,11 @@ function AdmitModal({
         levelId,
         admissionSession,
       }),
-    { onSuccess: onDone },
+    {
+      onSuccess: (result) => {
+        setIssuedMatricule(result.student.matricNumber ?? null);
+      },
+    },
   );
 
   // Prefer per-field messages from the host (CoreError.fields); fall back to
@@ -374,15 +423,51 @@ function AdmitModal({
       subtitle="Creates the record and its first enrollment atomically."
       onClose={onClose}
     >
-      <Field label="Matric number" error={matricError}>
-        <input
-          className="input mono"
-          value={matricNumber}
-          onChange={(e) => setMatric(e.target.value)}
-        />
-      </Field>
+      <div style={{ marginBottom: 10 }}>
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            fontSize: 13,
+          }}
+        >
+          <input
+            type="checkbox"
+            aria-label="Enter manually"
+            checked={manualMode}
+            onChange={(e) => setManualMode(e.target.checked)}
+          />
+          Enter manually
+        </label>
+      </div>
+
+      {manualMode ? (
+        <Field label="Matricule" error={matricError}>
+          <input
+            className="input mono"
+            aria-label="Matricule"
+            value={matricNumber}
+            onChange={(e) => setMatric(e.target.value)}
+          />
+        </Field>
+      ) : (
+        preview && (
+          <div className="muted" style={{ fontSize: 12.5, marginBottom: 8 }}>
+            Preview: <span className="mono">{preview}</span>
+          </div>
+        )
+      )}
+
+      {issuedMatricule && (
+        <div className="alert" style={{ marginBottom: 8 }}>
+          Issued matricule: <span className="mono">{issuedMatricule}</span>
+        </div>
+      )}
+
       <Field label="Full name" error={fullNameError}>
         <input
+          aria-label="Full name"
           className="input"
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
@@ -406,6 +491,7 @@ function AdmitModal({
             setDepartment("");
             setProgramme("");
             setLevel("");
+            setPreview(null);
           }}
         />
         <Cascade
@@ -440,6 +526,7 @@ function AdmitModal({
       <Field label="Admission session">
         <select
           className="select"
+          aria-label="Admission session"
           value={admissionSession}
           onChange={(e) => setSession(e.target.value)}
           disabled={!sessions.data?.length}
@@ -460,15 +547,23 @@ function AdmitModal({
       )}
 
       <div className="actions">
-        <Button onClick={onClose}>Cancel</Button>
-        <Button
-          variant="primary"
-          disabled={!valid}
-          loading={submit.loading}
-          onClick={submit.run}
-        >
-          Admit
-        </Button>
+        {issuedMatricule ? (
+          <Button variant="primary" onClick={onDone}>
+            Done
+          </Button>
+        ) : (
+          <>
+            <Button onClick={onClose}>Cancel</Button>
+            <Button
+              variant="primary"
+              disabled={!valid}
+              loading={submit.loading}
+              onClick={submit.run}
+            >
+              Admit
+            </Button>
+          </>
+        )}
       </div>
     </Modal>
   );
@@ -491,6 +586,7 @@ function Cascade({
     <Field label={label}>
       <select
         className="select"
+        aria-label={label}
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
@@ -513,16 +609,24 @@ function ProfileModal({
   onClose,
   onEdit,
   onChanged,
+  onReadmit,
+  onRegenerated,
 }: {
   student: Student;
   onClose: () => void;
   onEdit: () => void;
   onChanged: () => void;
+  onReadmit: () => void;
+  onRegenerated: () => void;
 }) {
   const core = useCore();
   const { can } = useSession();
+  const { confirm } = useDialogs();
   const [to, setTo] = useState<StudentStatus | "">("");
-  const [confirm, setConfirm] = useState(false);
+  const [confirmStatus, setConfirmStatus] = useState(false);
+
+  const canReadmit =
+    student.status === "WITHDRAWN" || student.status === "GRADUATED";
 
   const targets = STUDENT_STATUS_TRANSITIONS[student.status].filter((t) =>
     canTransition(student.status, t),
@@ -537,6 +641,19 @@ function ProfileModal({
     { onSuccess: onChanged },
   );
 
+  const handleRegenerate = async () => {
+    const ok = await confirm({
+      title: "Regenerate matricule?",
+      message:
+        "This will assign a new matricule to the student. The old one is permanently replaced.",
+      confirmLabel: "Confirm",
+      danger: true,
+    });
+    if (!ok) return;
+    await core.regenerateMatricule({ studentId: student.id });
+    onRegenerated();
+  };
+
   return (
     <Modal
       title={student.fullName}
@@ -548,9 +665,19 @@ function ProfileModal({
           <span className="muted" style={{ fontSize: 12.5 }}>
             Admission & contact details
           </span>
-          <Button variant="ghost" onClick={onEdit}>
-            <Icon name="config" size={14} /> Edit details
-          </Button>
+          <div className="row" style={{ gap: 8 }}>
+            {canReadmit && (
+              <Button variant="ghost" onClick={onReadmit}>
+                Readmit
+              </Button>
+            )}
+            <Button variant="ghost" onClick={() => void handleRegenerate()}>
+              Regenerate matricule
+            </Button>
+            <Button variant="ghost" onClick={onEdit}>
+              <Icon name="config" size={14} /> Edit details
+            </Button>
+          </div>
         </div>
       )}
       <div className="stack" style={{ gap: 10 }}>
@@ -603,7 +730,7 @@ function ProfileModal({
               <Button
                 variant="primary"
                 disabled={!to}
-                onClick={() => setConfirm(true)}
+                onClick={() => setConfirmStatus(true)}
               >
                 Apply
               </Button>
@@ -612,7 +739,7 @@ function ProfileModal({
         </div>
       )}
 
-      {confirm && to && (
+      {confirmStatus && to && (
         <Modal
           title={`Set status to ${to}?`}
           subtitle={
@@ -620,13 +747,13 @@ function ProfileModal({
               ? "This is a terminal state and cannot be reversed."
               : "This change is recorded in the audit log."
           }
-          onClose={() => setConfirm(false)}
+          onClose={() => setConfirmStatus(false)}
         >
           {change.error && (
             <div className="alert danger">{change.error.message}</div>
           )}
           <div className="actions">
-            <Button onClick={() => setConfirm(false)}>Cancel</Button>
+            <Button onClick={() => setConfirmStatus(false)}>Cancel</Button>
             <Button
               variant="primary"
               loading={change.loading}
@@ -637,6 +764,111 @@ function ProfileModal({
           </div>
         </Modal>
       )}
+    </Modal>
+  );
+}
+
+// ---- Readmit modal (for WITHDRAWN/GRADUATED students) ----
+
+function ReadmitModal({
+  student,
+  onClose,
+  onDone,
+}: {
+  student: Student;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const core = useCore();
+  const [programmeId, setProgramme] = useState(student.programmeId ?? "");
+  const [levelId, setLevel] = useState(student.levelId ?? "");
+  const [fromSession, setFromSession] = useState("");
+  const [departmentId] = useState(student.departmentId ?? "");
+
+  const programmes = useAsync(
+    () => core.listProgrammes({ departmentId: departmentId || "" }),
+    [departmentId],
+  );
+  const levels = useAsync(
+    () =>
+      programmeId ? core.listLevels({ programmeId }) : Promise.resolve([]),
+    [programmeId],
+  );
+  const sessions = useAsync(() => core.listSessions({}), []);
+
+  const save = useAction(
+    () =>
+      core.readmitStudent({
+        studentId: student.id,
+        programmeId,
+        levelId,
+        fromSession,
+        ...(student.facultyId ? { facultyId: student.facultyId } : {}),
+        ...(departmentId ? { departmentId } : {}),
+      }),
+    { onSuccess: onDone },
+  );
+
+  const valid = programmeId && levelId && fromSession;
+
+  return (
+    <Modal
+      title="Readmit student"
+      subtitle={`Reinstate ${student.fullName} into a programme.`}
+      onClose={onClose}
+    >
+      <div className="form-grid">
+        <Cascade
+          label="Programme"
+          value={programmeId}
+          options={programmes.data}
+          onChange={(v) => {
+            setProgramme(v);
+            setLevel("");
+          }}
+        />
+        <Cascade
+          label="Level"
+          value={levelId}
+          options={levels.data}
+          disabled={!programmeId}
+          onChange={setLevel}
+        />
+      </div>
+      <Field label="From session">
+        <select
+          className="select"
+          aria-label="From session"
+          value={fromSession}
+          onChange={(e) => setFromSession(e.target.value)}
+          disabled={!sessions.data?.length}
+        >
+          <option value="">
+            {sessions.data?.length ? "Select…" : "No sessions configured"}
+          </option>
+          {sessions.data?.map((s) => (
+            <option key={s.id} value={s.name}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {save.error && (
+        <div className="alert danger" style={{ marginTop: 8 }}>
+          {save.error.message}
+        </div>
+      )}
+      <div className="actions">
+        <Button onClick={onClose}>Cancel</Button>
+        <Button
+          variant="primary"
+          disabled={!valid}
+          loading={save.loading}
+          onClick={save.run}
+        >
+          Save
+        </Button>
+      </div>
     </Modal>
   );
 }
