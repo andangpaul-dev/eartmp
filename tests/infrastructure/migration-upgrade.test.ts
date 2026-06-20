@@ -75,3 +75,87 @@ describe("runtime migration runner — upgrade path", () => {
     expect(await runMigrations(db, MIGRATIONS)).toEqual([]);
   }, 60_000);
 });
+
+// ---------------------------------------------------------------------------
+// Workstream B: Result sitting/status upgrade path
+// ---------------------------------------------------------------------------
+
+// Exclude the Workstream B migration so we can simulate a pre-B database.
+const RECENT_B = /result_sitting_status/;
+
+const DB_B = `${process.cwd().replace(/\\/g, "/")}/.tmp-upgrade-b.db`;
+const URL_B = `file:${DB_B}`;
+
+let dbB: PrismaClient;
+let oldDirB: string;
+
+const cleanupB = () => {
+  for (const f of [DB_B, `${DB_B}-journal`]) if (existsSync(f)) rmSync(f);
+};
+
+async function hasColumnB(table: string, col: string): Promise<boolean> {
+  // PRAGMA, not SELECT: SQLite treats a double-quoted unknown identifier as a
+  // string literal, so `SELECT "col"` wouldn't error on a missing column.
+  const cols = (await dbB.$queryRawUnsafe(`PRAGMA table_info("${table}")`)) as {
+    name: string;
+  }[];
+  return cols.some((c) => c.name === col);
+}
+
+async function hasIndexB(table: string, indexName: string): Promise<boolean> {
+  const rows = (await dbB.$queryRawUnsafe(`PRAGMA index_list("${table}")`)) as {
+    name: string;
+  }[];
+  return rows.some((r) => r.name === indexName);
+}
+
+describe("runtime migration runner — Workstream B upgrade path (Result sitting/status)", () => {
+  beforeAll(() => {
+    cleanupB();
+    dbB = new PrismaClient({ datasourceUrl: URL_B });
+    // An "old app" migrations dir: everything except the Workstream B migration.
+    oldDirB = mkdtempSync(join(tmpdir(), "eartmp-old-b-"));
+    for (const e of readdirSync(MIGRATIONS, { withFileTypes: true })) {
+      if (!e.isDirectory() || RECENT_B.test(e.name)) continue;
+      cpSync(join(MIGRATIONS, e.name), join(oldDirB, e.name), {
+        recursive: true,
+      });
+    }
+  });
+
+  afterAll(async () => {
+    await dbB?.$disconnect();
+    cleanupB();
+    if (oldDirB && existsSync(oldDirB))
+      rmSync(oldDirB, { recursive: true, force: true });
+  });
+
+  it("adds sitting/status columns and re-keyed unique index on upgrade, idempotently", async () => {
+    // 1. Provision the pre-B schema (sitting/status columns absent).
+    await runMigrations(dbB, oldDirB);
+    expect(await hasColumnB("Result", "sitting")).toBe(false);
+    expect(await hasColumnB("Result", "status")).toBe(false);
+
+    // 2. Ship the Workstream B migration → runner applies only the missing one.
+    const applied = await runMigrations(dbB, MIGRATIONS);
+    expect(applied.some((n) => /result_sitting_status/.test(n))).toBe(true);
+
+    // Columns now present.
+    expect(await hasColumnB("Result", "sitting")).toBe(true);
+    expect(await hasColumnB("Result", "status")).toBe(true);
+
+    // New composite unique index exists, old one is gone.
+    expect(
+      await hasIndexB(
+        "Result",
+        "Result_studentId_courseId_semesterId_sitting_key",
+      ),
+    ).toBe(true);
+    expect(
+      await hasIndexB("Result", "Result_studentId_courseId_semesterId_key"),
+    ).toBe(false);
+
+    // 3. Idempotent: a second run re-applies nothing.
+    expect(await runMigrations(dbB, MIGRATIONS)).toEqual([]);
+  }, 60_000);
+});
