@@ -5,7 +5,10 @@
 **Scope:** Items 1 & 4 of the records upgrade set — configure the **admission
 session per student** (all scenarios), and a **template-built matricule** with
 manual override. Builds on the existing `Student`/`StudentEnrollment`/settings
-model and the faculty scoping shipped in Workstream A.
+model and the faculty scoping shipped in Workstream A. **Folded in during
+review:** the four formerly-deferred items — **per-row multi-faculty import**,
+**graduate re-admission**, **matricule check-digit + format validation**, and
+**matricule regeneration on admission-session correction**.
 
 ---
 
@@ -26,6 +29,28 @@ model and the faculty scoping shipped in Workstream A.
 - **Structural approach (A):** a dedicated atomic `MatriculeCounter` table.
   Rejected: deriving `max(seq)+1` from existing students (fragile, race-prone);
   counters in a Settings JSON blob (read-modify-write isn't atomic).
+
+### 1.1 Folded-in decisions (Section 9 brought into scope)
+
+- **Per-row multi-faculty import.** An import row may carry its own `faculty`
+  (code) column; the `{faculty}` token and counter scope then resolve **per row**,
+  so a single file can span faculties. Absent a row faculty, the batch faculty
+  applies. Each row's faculty must be within the operator's faculty scope.
+- **Graduate re-admission.** Re-admitting a `GRADUATED` student into a new
+  programme is a **fresh admission**: it creates a **new `Student` record** with a
+  **new matricule + new admission session**, linked to the prior record by a new
+  nullable `previousStudentId` for provenance. (Contrast with `WITHDRAWN`
+  re-admission, which reuses the record and keeps the identity.) — _This new-record
+  vs. same-record choice is the one judgement call; see §4._
+- **Matricule check-digit + format validation.** The template gains an optional
+  `{check}` token — a **Luhn (mod-10) check digit** over the decimal digits of the
+  otherwise-expanded matricule. A separate optional `student.matriculeFormat`
+  setting (a regex) validates **manual** matricule entries (auto values are
+  trusted by construction).
+- **Matricule regeneration on correction.** When an admin corrects a student's
+  `admissionSession`, they may **opt in** to regenerate the matricule (reserve a
+  fresh number for the corrected `(faculty, year)`); the old value is freed and the
+  change is audited. Never automatic.
 
 ---
 
@@ -52,13 +77,25 @@ transaction**, serialized by the transaction + unique constraint.
 
 ### Config — one new setting
 
-`student.matriculeRule` (a template string), added to `SETTING_KEYS` and
-`SettingsRegistry` alongside `transcriptNumberRule`. Example:
-`"{institutionCode}{faculty}{year2}-{seq:0000}"` → `"UBFS25-0042"`. Ships with a
-sensible default. The registry **validates** the template at `SetSetting` time:
-only the §1 tokens (plus literals) are allowed; an unknown `{token}` is rejected.
+Two new settings, added to `SETTING_KEYS` and `SettingsRegistry` alongside
+`transcriptNumberRule`:
 
-### No other schema change
+- `student.matriculeRule` — the template string. Example:
+  `"{institutionCode}{faculty}{year2}-{seq:0000}{check}"` → `"UBFS25-00428"`. Ships
+  with a sensible default. The registry **validates** the template at `SetSetting`
+  time: only the §1 tokens (plus literals) are allowed; an unknown `{token}` is
+  rejected.
+- `student.matriculeFormat` — an **optional** regex that **manual** matricule
+  entries must match (auto values are correct by construction). Empty = no
+  manual-format constraint.
+
+### Schema change: `Student.previousStudentId`
+
+One nullable field is added to `Student` (+ migration): `previousStudentId
+String?` — links a graduate re-admission's new record to the prior one (§1.1,
+§4). No FK relation required (loose id, like other provenance ids).
+
+### Otherwise no schema change
 
 - `Student.admissionSession` **already exists** (nullable string) — we start
   populating it. `Student.facultyId`/`departmentId` already exist — admission now
@@ -98,6 +135,15 @@ the row exists, atomically `next += 1`, return the value just consumed.
   committed matricule is whatever the transaction reserves (correct under
   concurrent admits).
 
+**Check digit.** If the template contains `{check}`, `expandMatricule` first
+expands the rest, then appends a **Luhn (mod-10) check digit** computed over the
+decimal digits present in the expanded body — deterministic and pure, so preview
+and commit agree.
+
+**Format validation (manual entries).** When `student.matriculeFormat` is set, a
+**manual** matricule must match that regex (validated in the use-case, surfaced as
+a field error); auto-generated values are trusted by construction.
+
 **Manual override** never calls `GenerateMatricule` — the counter is untouched.
 
 ---
@@ -130,19 +176,31 @@ admissionSession`).
 
 ### Re-admission
 
-A withdrawn student keeps their matricule + admission session, so this is **not**
-a new `AdmitStudent`. A new **`ReadmitStudent`** use-case (gated, audited)
-transitions `WITHDRAWN → ACTIVE` and opens a fresh enrollment (possibly new
-programme/level/session via the existing `EnrollStudent`), leaving `matricNumber`
-and `admissionSession` untouched. This adds a `WITHDRAWN → ACTIVE` transition for
-this path only. (Re-admitting a **graduate** into a new programme is a new
-admission with a new matricule — out of scope here.)
+A new **`ReadmitStudent`** use-case (gated, audited) handles two cases by the
+prior status:
+
+- **`WITHDRAWN` → reuse identity.** Transitions `WITHDRAWN → ACTIVE` and opens a
+  fresh enrollment (possibly new programme/level/session via `EnrollStudent`),
+  leaving `matricNumber` and `admissionSession` **untouched**. Adds a
+  `WITHDRAWN → ACTIVE` transition for this path only.
+- **`GRADUATED` → fresh admission (folded in, §1.1).** Re-admitting a graduate
+  into a new programme creates a **new `Student` record** (via the admission flow)
+  with a **new matricule + new admission session**, copying the person's details
+  and setting `previousStudentId` to the graduate record. The graduate record is
+  left intact (its transcript stays valid). **Judgement call:** new-record (chosen)
+  keeps each programme's matricule/transcript clean and avoids rewriting an issued
+  matricule on a record that already has sealed transcripts; the alternative
+  (same-record, swap matricule) would orphan prior documents. Flagged for review.
 
 ### Immutability & correction
 
 Once issued, the matricule is independent of later edits. `admissionSession` is
-set at admission; an admin correction via `UpdateStudent` is allowed and audited
-but does **not** retro-rewrite an already-issued matricule.
+set at admission; an admin correction via `UpdateStudent` is allowed and audited.
+By default it does **not** rewrite the matricule, **but** (folded in, §1.1) the
+correction may **opt in** to regenerate it: reserve a fresh number for the
+corrected `(faculty, year)`, free the old value, and audit the change. Regeneration
+is refused when the student already has issued/sealed transcripts (those reference
+the old matricule) — surfaced as a clear error.
 
 ---
 
@@ -162,9 +220,11 @@ transaction. Changes:
 - **Admission session.** Batch `admissionSession` applies to all rows (and is the
   matricule-year source); an optional per-row `admissionSession` column overrides
   it for mixed-cohort files. An unparseable year is a row-level error.
-- **Faculty stays batch-level (v1).** The `{faculty}` token + counter scope use
-  the batch `facultyId`; multi-faculty files mean separate imports. Deliberate v1
-  boundary.
+- **Per-row faculty (folded in, §1.1).** A row may carry a `faculty` (code)
+  column; the `{faculty}` token and the `(faculty, year)` counter then resolve
+  **per row**, so one file can span faculties. Absent a row faculty, the batch
+  `facultyId` applies. Each row's resolved faculty must be within the operator's
+  faculty scope (else a row-level error); an unknown faculty code is a row error.
 - Import also reliably sets the denormalized `facultyId`/`departmentId` (same
   scoping fix as admission).
 - The validation report gains clear per-row messages for the new failure modes
@@ -194,16 +254,24 @@ Sits beside the transcript-number rule config.
 
 ### Re-admission
 
-A **"Readmit"** action on a withdrawn student opens a modal to choose the new
-programme/level/session; `matricNumber` + `admissionSession` shown read-only.
-Gated by permission; calls `readmitStudent({ studentId, programmeId, levelId,
-fromSession })`.
+A **"Readmit"** action on a withdrawn or graduated student opens a modal to choose
+the new programme/level/session. For a **withdrawn** student, `matricNumber` +
+`admissionSession` are shown read-only (retained). For a **graduate**, the modal
+makes clear this is a **fresh admission** (new matricule preview + new admission
+session, person details copied, linked to the prior record). Gated by permission;
+calls `readmitStudent(...)`.
+
+The student edit form's **admission-session correction** offers an opt-in
+**"regenerate matricule"** checkbox (disabled, with a reason, when the student has
+issued transcripts). The config **template editor** also previews the `{check}`
+digit and exposes the optional `student.matriculeFormat` regex field.
 
 ### Contract additions
 
 `previewMatricule`, `readmitStudent`, and the extended `admitStudent` input
 (`admissionSession` + optional `matricNumber` + `facultyId`/`departmentId`) — all
 faculty-scoped and Zod-validated at the host seam, per the Workstream A/B pattern.
+`updateStudent` gains an optional `regenerateMatricule` flag.
 
 ---
 
@@ -215,37 +283,42 @@ faculty-scoped and Zod-validated at the host seam, per the Workstream A/B patter
   `AdmitStudent`/`ImportStudents`/`ReadmitStudent` are use-cases; UI via the core.
 - **Security.** `admitStudent`/`readmitStudent`/import gated by existing
   `students.*` permissions **and** Workstream-A faculty scope
-  (`requireInFacultyScope(facultyId)` — an officer admits only into their
-  faculties and advances only their counters). `setSetting("student.matriculeRule")`
-  gated by `settings.manage`. Atomic counter (transaction + `@@unique`); manual
-  matricules hit the live partial-unique index.
+  (`requireInFacultyScope(facultyId)` — per row for multi-faculty import, so an
+  officer admits only into their faculties and advances only their counters).
+  `setSetting("student.matricule*")` gated by `settings.manage`. Atomic counter
+  (transaction + `@@unique`); manual matricules hit the live partial-unique index.
 - **Tests (Vitest):** `expandMatricule` (padding, `{year2}`, literals,
-  unknown-token rejection); `GenerateMatricule` (reserve increments, peek doesn't,
-  per-`(faculty,year)` reset, year parsed from session, missing-`code` error);
-  `AdmitStudent` (auto sets matricule + admissionSession + denormalized
-  faculty/dept; manual skips counter; faculty-scope guard); `ImportStudents`
-  (mixed manual/auto, per-row session, rollback doesn't burn the counter);
-  `ReadmitStudent` (WITHDRAWN→ACTIVE + new enrollment, identity retained); settings
-  validation; migration (table created, idempotent); UI (preview + manual toggle +
-  issued value, template editor live sample, readmit modal); boundary fitness
-  (expander stays pure).
+  unknown-token rejection, **`{check}` Luhn digit**); `GenerateMatricule` (reserve
+  increments, peek doesn't, per-`(faculty,year)` reset, year parsed from session,
+  missing-`code` error); `AdmitStudent` (auto sets matricule + admissionSession +
+  denormalized faculty/dept; manual skips counter; **manual format-regex enforced**;
+  faculty-scope guard); `ImportStudents` (mixed manual/auto, per-row session,
+  **per-row faculty → correct counter + scope guard**, rollback doesn't burn the
+  counter); `ReadmitStudent` (**WITHDRAWN** reuse-identity vs **GRADUATED** new-record
+  - `previousStudentId` + new matricule); **matricule regeneration on
+    admission-session correction (+ refusal when transcripts exist)**; settings
+    validation (rule + format regex); migration (`MatriculeCounter` + `previousStudentId`,
+    idempotent); UI (preview + manual toggle + issued value, template editor live
+    sample + check + format, readmit/graduate modal, regenerate checkbox); boundary
+    fitness (expander stays pure).
 
 ## 8. Definition of done
 
-- [ ] `MatriculeCounter` model + migration (applied, idempotent) + client regen.
-- [ ] `student.matriculeRule` setting in `SETTING_KEYS`/registry with token validation + default.
-- [ ] `expandMatricule` (pure) + `GenerateMatricule` (peek/reserve) + counter repo port & Prisma impl.
-- [ ] `AdmitStudent`: required `admissionSession`, optional/auto `matricNumber`, sets denormalized `facultyId`/`departmentId`; faculty-scope guard.
-- [ ] `ImportStudents`: per-row auto/manual matricule, per-row admission session, rollback-safe counter.
-- [ ] `ReadmitStudent` use-case (WITHDRAWN→ACTIVE + new enrollment, identity retained).
-- [ ] Contract/host/ipc/zod: `previewMatricule`, `readmitStudent`, extended `admitStudent`.
-- [ ] UI: admit preview + manual toggle + issued value; config template editor; readmit modal.
+- [ ] `MatriculeCounter` model + `Student.previousStudentId` + migration (applied, idempotent) + client regen.
+- [ ] `student.matriculeRule` + `student.matriculeFormat` settings in `SETTING_KEYS`/registry with token validation + defaults.
+- [ ] `expandMatricule` (pure, incl. `{check}` Luhn) + `GenerateMatricule` (peek/reserve) + counter repo port & Prisma impl.
+- [ ] `AdmitStudent`: required `admissionSession`, optional/auto `matricNumber`, manual format-regex check, sets denormalized `facultyId`/`departmentId`; faculty-scope guard.
+- [ ] `ImportStudents`: per-row auto/manual matricule, per-row admission session, **per-row faculty + scope**, rollback-safe counter.
+- [ ] `ReadmitStudent`: WITHDRAWN reuse-identity **and** GRADUATED new-record (+ `previousStudentId`, new matricule).
+- [ ] Matricule regeneration on admission-session correction (opt-in, refused when transcripts exist).
+- [ ] Contract/host/ipc/zod: `previewMatricule`, `readmitStudent`, extended `admitStudent`, `updateStudent.regenerateMatricule`.
+- [ ] UI: admit preview + manual toggle + issued value; config template editor (+ check/format); readmit/graduate modal; regenerate checkbox.
 - [ ] Tests green; `tsc` strict + lint + boundary fitness clean.
 - [ ] `/docs` updated; summary posted.
 
 ## 9. Out of scope (future work)
 
-- Per-row multi-faculty import (faculty stays batch-level).
-- Re-admitting a **graduate** into a new programme (treated as a new admission).
-- Matricule check-digits or format validation beyond the template tokens.
-- Retroactively rewriting an issued matricule when `admissionSession` is corrected.
+- Matricule schemes beyond Luhn `{check}` (e.g. ISO 7064 mod-97 over alphanumerics).
+- Merging/de-duplicating a person across multiple `Student` records (graduate
+  re-admission links via `previousStudentId` but does not merge).
+- Bulk matricule regeneration (correction-driven regeneration is per-student).
