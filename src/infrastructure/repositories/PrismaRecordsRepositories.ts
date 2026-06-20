@@ -25,6 +25,7 @@ import type {
   StudentEnrollmentRepository,
   ResultRepository,
   VersionedStudentWrites,
+  SemesterOrdering,
   StudentQuery,
   CourseQuery,
   Page,
@@ -667,5 +668,42 @@ export class PrismaResultRepository implements ResultRepository {
           : {}),
       },
     });
+  }
+}
+
+/**
+ * Resolves each semester's chronological position (sessionOrder, rank) for
+ * effective-attempt selection (Workstream B). Sessions are ranked by
+ * startDate ?? createdAt ascending (0-based). Soft-deleted semesters are
+ * excluded. Unknown semesterIds are omitted from the returned Map.
+ */
+export class PrismaSemesterOrdering implements SemesterOrdering {
+  constructor(private readonly prisma: Db) {}
+
+  async order(
+    semesterIds: string[],
+  ): Promise<Map<string, { sessionOrder: number; rank: number }>> {
+    const sems = await this.prisma.semester.findMany({
+      where: { id: { in: semesterIds }, deletedAt: null },
+      include: { session: true },
+    });
+
+    const sessionMap = new Map(sems.map((s) => [s.sessionId, s.session]));
+    const sessions = [...sessionMap.values()];
+    sessions.sort(
+      (a, b) =>
+        (a.startDate ?? a.createdAt).getTime() -
+        (b.startDate ?? b.createdAt).getTime(),
+    );
+    const sessionOrder = new Map(sessions.map((s, i) => [s.id, i]));
+
+    const out = new Map<string, { sessionOrder: number; rank: number }>();
+    for (const s of sems) {
+      out.set(s.id, {
+        sessionOrder: sessionOrder.get(s.sessionId) ?? 0,
+        rank: s.rank,
+      });
+    }
+    return out;
   }
 }

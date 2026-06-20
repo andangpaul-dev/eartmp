@@ -142,3 +142,11 @@ export interface VersionedStudentWrites {
     expectedVersion: number,
   ): Promise<number>;
 }
+
+/** Resolves a semester's chronological position for attempt ordering (WS B). */
+export interface SemesterOrdering {
+  /** Map every given semesterId to its (sessionOrder, rank). Unknown → omitted. */
+  order(
+    semesterIds: string[],
+  ): Promise<Map<string, { sessionOrder: number; rank: number }>>;
+}
