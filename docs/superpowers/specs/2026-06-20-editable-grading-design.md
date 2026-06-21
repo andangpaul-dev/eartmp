@@ -1,7 +1,7 @@
 # Editable grading system (Workstream D)
 
 **Date:** 2026-06-20
-**Status:** Approved (pending final spec review)
+**Status:** Implemented (2026-06-20)
 **Scope:** Item 7 of the records upgrade set — make the grading system editable
 through the UI: **grade scales (bands)**, **assessment structures (components)**,
 and **standing/classification bands**. The domain value-objects and the
@@ -139,16 +139,16 @@ add/remove rows; a **prominent running weight total**. Live validation mirroring
 
 ## 8. Definition of done
 
-- [ ] Contract/host/ipc/zod/harness: `create/update/deleteGradeScale` +
+- [x] Contract/host/ipc/zod/harness: `create/update/deleteGradeScale` +
       `create/update/deleteAssessmentConfig` exposed through `authorize`.
-- [ ] `UpdateGradeScale` / `UpdateAssessmentConfig` unit tests added.
-- [ ] Grade-scale editor (bands) with live cover-0–100 validation + New/Edit/Delete.
-- [ ] Assessment-structure editor (components) with weight-sum-100 gating + New/Edit/Delete.
-- [ ] Standing-bands editor via `getSetting`/`setSetting`.
-- [ ] Forward-only warning in each editor; Delete disabled for the default;
+- [x] `UpdateGradeScale` / `UpdateAssessmentConfig` unit tests added.
+- [x] Grade-scale editor (bands) with live cover-0–100 validation + New/Edit/Delete.
+- [x] Assessment-structure editor (components) with weight-sum-100 gating + New/Edit/Delete.
+- [x] Standing-bands editor via `getSetting`/`setSetting`.
+- [x] Forward-only warning in each editor; Delete disabled for the default;
       `config.manage` gating.
-- [ ] Tests green; `tsc` strict + lint + boundary fitness clean.
-- [ ] `/docs` updated; summary posted.
+- [x] Tests green; `tsc` strict + lint + boundary fitness clean.
+- [x] `/docs` updated; summary posted.
 
 ## 9. Out of scope (future work)
 
