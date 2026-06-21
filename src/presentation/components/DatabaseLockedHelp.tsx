@@ -7,7 +7,9 @@ import { Button } from "./ui";
 
 export function isDatabaseLockedError(message: string | undefined): boolean {
   if (!message) return false;
-  return /database is locked|is locked|SQLITE_BUSY/i.test(message);
+  // Match ONLY the DB-lock condition — not a generic "X is locked" message
+  // (e.g. a future "account is locked"), which must show its own error.
+  return /database is locked|SQLITE_BUSY/i.test(message);
 }
 
 export function DatabaseLockedHelp({ onRetry }: { onRetry?: () => void }) {

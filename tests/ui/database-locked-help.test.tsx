@@ -25,6 +25,12 @@ describe("isDatabaseLockedError", () => {
     expect(isDatabaseLockedError("bad password")).toBe(false);
   });
 
+  it('does NOT match a generic "is locked" (e.g. account locked)', () => {
+    expect(isDatabaseLockedError("Account is locked after 5 attempts")).toBe(
+      false,
+    );
+  });
+
   it("returns false for undefined", () => {
     expect(isDatabaseLockedError(undefined)).toBe(false);
   });
