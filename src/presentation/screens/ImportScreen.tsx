@@ -16,6 +16,7 @@ import {
   EmptyState,
 } from "../components/ui";
 import type { RawRow, ImportReport } from "../runtime/contract";
+import { downloadCsvTemplate } from "./import/csvTemplate";
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -41,6 +42,14 @@ export function ImportScreen() {
     () => (sessionId ? core.listSemesters({ sessionId }) : Promise.resolve([])),
     [sessionId],
   );
+  const structure = useAsync(() => core.getAssessmentStructure({}), []);
+  const templateHeaders = [
+    "matricNumber",
+    "courseCode",
+    ...(structure.data ?? []).map((c) => c.key),
+    "sitting",
+    "status",
+  ];
 
   const onFile = async (file: File | undefined) => {
     if (!file) return;
@@ -113,13 +122,24 @@ export function ImportScreen() {
             </select>
           </Field>
           <Field label="Spreadsheet (.xlsx / .csv)">
-            <input
-              className="input"
-              type="file"
-              accept=".xlsx,.csv"
-              aria-label="Spreadsheet file"
-              onChange={(e) => onFile(e.target.files?.[0])}
-            />
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                className="input"
+                type="file"
+                accept=".xlsx,.csv"
+                aria-label="Spreadsheet file"
+                onChange={(e) => onFile(e.target.files?.[0])}
+              />
+              <Button
+                variant="ghost"
+                aria-label="Download template"
+                onClick={() =>
+                  downloadCsvTemplate("results-template.csv", templateHeaders)
+                }
+              >
+                Download template
+              </Button>
+            </div>
           </Field>
         </div>
         {rows && (
@@ -127,6 +147,16 @@ export function ImportScreen() {
             <span className="mono">{fileName}</span> · {rows.length} rows parsed
           </div>
         )}
+        <div className="muted" style={{ marginTop: 6, fontSize: 12.5 }}>
+          Columns: <span className="mono">matricNumber</span>,{" "}
+          <span className="mono">courseCode</span>, and one column per
+          assessment component (e.g. <span className="mono">ca</span>,{" "}
+          <span className="mono">exam</span>) — required for graded rows.
+          Optional: <span className="mono">sitting</span> (NORMAL/RESIT, default
+          NORMAL) and <span className="mono">status</span>{" "}
+          (GRADED/DID/DISQUALIFIED/INCOMPLETE, default GRADED). Non-graded rows
+          need no scores.
+        </div>
       </Card>
 
       {rows && rows.length > 0 && (

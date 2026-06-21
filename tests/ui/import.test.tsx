@@ -73,4 +73,33 @@ describe("ImportScreen", () => {
       await screen.findByText(/unknown matric number/i),
     ).toBeInTheDocument();
   });
+
+  it("download template button present (dynamic component headers)", async () => {
+    const createObjectURL = vi.fn(() => "blob:test");
+    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL: vi.fn() });
+    renderScreen(<ImportScreen />, {
+      permissions: ["results.import"],
+      core: {
+        ...baseCore,
+        getAssessmentStructure: async () => [
+          { key: "ca", label: "CA", weight: 30, maxScore: 30 },
+          { key: "exam", label: "Exam", weight: 70, maxScore: 70 },
+        ],
+      },
+    });
+    const btn = await screen.findByRole("button", {
+      name: /download template/i,
+    });
+    btn.click(); // must not throw
+    expect(createObjectURL).toHaveBeenCalled();
+  });
+
+  it("shows inline column help including sitting and status", async () => {
+    renderScreen(<ImportScreen />, {
+      permissions: ["results.import"],
+      core: { ...baseCore },
+    });
+    expect(await screen.findByText(/sitting/i)).toBeInTheDocument();
+    expect(screen.getByText(/status/i)).toBeInTheDocument();
+  });
 });
