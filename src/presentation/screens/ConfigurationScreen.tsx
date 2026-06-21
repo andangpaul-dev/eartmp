@@ -14,6 +14,7 @@ import {
   Card,
   Badge,
   Field,
+  Modal,
   Toast,
   EmptyState,
 } from "../components/ui";
@@ -23,6 +24,7 @@ import type {
   StoredAssessmentConfig,
   GraduationRequirements,
 } from "../runtime/contract";
+import { validateBands, type BandRow } from "./grading/bandsValidation";
 
 const CALENDAR_TYPES = ["SEMESTER", "TRIMESTER", "QUARTER"] as const;
 const GRAD_KEY = "graduation.requirements";
@@ -227,6 +229,11 @@ function GradingTab({ notify }: { notify: (m: string) => void }) {
   const configs = useAsync(() => core.listAssessmentConfigs({}), []);
   const manage = can("config.manage");
 
+  // modal state: null = closed, "new" = creating, StoredGradeScale = editing
+  const [scaleModal, setScaleModal] = useState<"new" | StoredGradeScale | null>(
+    null,
+  );
+
   const setScaleDefault = async (s: StoredGradeScale) => {
     try {
       await core.setDefaultGradeScale({ id: s.id });
@@ -236,6 +243,17 @@ function GradingTab({ notify }: { notify: (m: string) => void }) {
       notify(e instanceof Error ? e.message : "Failed");
     }
   };
+
+  const deleteScale = async (s: StoredGradeScale) => {
+    try {
+      await core.deleteGradeScale({ id: s.id });
+      scales.reload();
+      notify(`"${s.name}" deleted`);
+    } catch (e) {
+      notify(e instanceof Error ? e.message : "Failed");
+    }
+  };
+
   const setConfigDefault = async (c: StoredAssessmentConfig) => {
     try {
       await core.setDefaultAssessmentConfig({ id: c.id });
@@ -249,6 +267,13 @@ function GradingTab({ notify }: { notify: (m: string) => void }) {
   return (
     <>
       <Card title="Grade scales">
+        {manage && (
+          <div style={{ marginBottom: 12 }}>
+            <Button variant="primary" onClick={() => setScaleModal("new")}>
+              New scale
+            </Button>
+          </div>
+        )}
         <ListState
           loading={scales.loading}
           error={scales.error?.message}
@@ -257,13 +282,13 @@ function GradingTab({ notify }: { notify: (m: string) => void }) {
         >
           <div className="stack" style={{ gap: 10 }}>
             {scales.data?.map((s) => (
-              <ConfigRow
+              <GradeScaleConfigRow
                 key={s.id}
-                name={s.name}
-                isDefault={s.isDefault}
-                detail={<BandsTable bands={s.bands} />}
+                scale={s}
                 canManage={manage}
                 onSetDefault={() => setScaleDefault(s)}
+                onEdit={() => setScaleModal(s)}
+                onDelete={() => deleteScale(s)}
               />
             ))}
           </div>
@@ -291,7 +316,286 @@ function GradingTab({ notify }: { notify: (m: string) => void }) {
           </div>
         </ListState>
       </Card>
+
+      {scaleModal !== null && (
+        <GradeScaleEditorModal
+          initial={scaleModal === "new" ? null : scaleModal}
+          onClose={() => setScaleModal(null)}
+          onDone={() => {
+            setScaleModal(null);
+            scales.reload();
+            notify(
+              scaleModal === "new"
+                ? "Grade scale created"
+                : "Grade scale updated",
+            );
+          }}
+        />
+      )}
     </>
+  );
+}
+
+/** Per-row wrapper that renders BandsTable + Edit/Delete buttons for a scale. */
+function GradeScaleConfigRow({
+  scale,
+  canManage,
+  onSetDefault,
+  onEdit,
+  onDelete,
+}: {
+  scale: StoredGradeScale;
+  canManage: boolean;
+  onSetDefault: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="config-row">
+      <div className="spread">
+        <div className="row" style={{ gap: 10 }}>
+          <strong>{scale.name}</strong>
+          {scale.isDefault && <Badge tone="success">Default</Badge>}
+        </div>
+        <div className="row" style={{ gap: 8 }}>
+          <Button variant="ghost" onClick={() => setOpen((o) => !o)}>
+            {open ? "Hide" : "View"}
+          </Button>
+          {canManage && !scale.isDefault && (
+            <Button variant="ghost" onClick={onSetDefault}>
+              Set default
+            </Button>
+          )}
+          {canManage && (
+            <Button variant="ghost" onClick={onEdit}>
+              Edit &ldquo;{scale.name}&rdquo;
+            </Button>
+          )}
+          {canManage && (
+            <Button
+              variant="ghost"
+              disabled={scale.isDefault}
+              title={
+                scale.isDefault ? "Cannot delete the default scale" : undefined
+              }
+              aria-label={`Delete "${scale.name}"`}
+              onClick={onDelete}
+            >
+              Delete &ldquo;{scale.name}&rdquo;
+            </Button>
+          )}
+        </div>
+      </div>
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          <BandsTable bands={scale.bands} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Blank band added by "Add band": starts where the last band left off. */
+function blankBand(rows: BandRow[]): BandRow {
+  const lastMax = rows.length > 0 ? (rows[rows.length - 1]?.maxMark ?? -1) : -1;
+  return {
+    minMark: lastMax + 1,
+    maxMark: 100,
+    grade: "",
+    gradePoint: 0,
+    isPass: true,
+  };
+}
+
+/** Modal for creating or editing a grade scale (bands editor). */
+function GradeScaleEditorModal({
+  initial,
+  onClose,
+  onDone,
+}: {
+  initial: StoredGradeScale | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const core = useCore();
+  const [name, setName] = useState(initial?.name ?? "");
+  const [rows, setRows] = useState<BandRow[]>(() => {
+    if (!initial)
+      return [
+        { minMark: 0, maxMark: 100, grade: "", gradePoint: 0, isPass: true },
+      ];
+    try {
+      return JSON.parse(initial.bands) as BandRow[];
+    } catch {
+      return [];
+    }
+  });
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const validationErrors = validateBands(rows);
+  const canSave = name.trim() !== "" && validationErrors.length === 0;
+
+  const updateRow = (i: number, patch: Partial<BandRow>) => {
+    setRows((prev) =>
+      prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)),
+    );
+  };
+
+  const removeRow = (i: number) => {
+    setRows((prev) => prev.filter((_, idx) => idx !== i));
+  };
+
+  const addBand = () => {
+    setRows((prev) => [...prev, blankBand(prev)]);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setServerError(null);
+    try {
+      if (initial) {
+        await core.updateGradeScale({ id: initial.id, name, bands: rows });
+      } else {
+        await core.createGradeScale({ name, bands: rows });
+      }
+      onDone();
+    } catch (e) {
+      setServerError(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      title={initial ? `Edit grade scale · ${initial.name}` : "New grade scale"}
+      subtitle="Changes apply to future processing only — already-processed results keep their original grades."
+      onClose={onClose}
+    >
+      <Field label="Scale name">
+        <input
+          className="input"
+          aria-label="Scale name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </Field>
+
+      <div style={{ marginTop: 16 }}>
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Min mark</th>
+              <th>Max mark</th>
+              <th>Grade</th>
+              <th>Grade point</th>
+              <th>Pass?</th>
+              <th aria-label="Actions" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i}>
+                <td>
+                  <input
+                    className="input mono"
+                    type="number"
+                    aria-label="Min mark"
+                    min={0}
+                    max={100}
+                    value={row.minMark}
+                    onChange={(e) =>
+                      updateRow(i, { minMark: Number(e.target.value) })
+                    }
+                  />
+                </td>
+                <td>
+                  <input
+                    className="input mono"
+                    type="number"
+                    aria-label="Max mark"
+                    min={0}
+                    max={100}
+                    value={row.maxMark}
+                    onChange={(e) =>
+                      updateRow(i, { maxMark: Number(e.target.value) })
+                    }
+                  />
+                </td>
+                <td>
+                  <input
+                    className="input"
+                    aria-label="Grade"
+                    value={row.grade}
+                    onChange={(e) => updateRow(i, { grade: e.target.value })}
+                  />
+                </td>
+                <td>
+                  <input
+                    className="input mono"
+                    type="number"
+                    aria-label="Grade point"
+                    min={0}
+                    step={0.1}
+                    value={row.gradePoint}
+                    onChange={(e) =>
+                      updateRow(i, { gradePoint: Number(e.target.value) })
+                    }
+                  />
+                </td>
+                <td>
+                  <input
+                    type="checkbox"
+                    aria-label="Is pass"
+                    checked={row.isPass}
+                    onChange={(e) => updateRow(i, { isPass: e.target.checked })}
+                  />
+                </td>
+                <td>
+                  <Button variant="ghost" onClick={() => removeRow(i)}>
+                    Remove
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div style={{ marginTop: 8 }}>
+          <Button variant="ghost" onClick={addBand}>
+            Add band
+          </Button>
+        </div>
+      </div>
+
+      {validationErrors.length > 0 && (
+        <div className="alert danger" style={{ marginTop: 12 }}>
+          {validationErrors.map((e, i) => (
+            <div key={i}>{e}</div>
+          ))}
+        </div>
+      )}
+
+      {serverError && (
+        <div className="alert danger" style={{ marginTop: 12 }}>
+          {serverError}
+        </div>
+      )}
+
+      <div className="actions" style={{ marginTop: 16 }}>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button
+          variant="primary"
+          disabled={!canSave || saving}
+          loading={saving}
+          onClick={save}
+        >
+          Save
+        </Button>
+      </div>
+    </Modal>
   );
 }
 
