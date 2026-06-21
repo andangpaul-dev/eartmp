@@ -133,6 +133,7 @@ export function ImportScreen() {
               <Button
                 variant="ghost"
                 aria-label="Download template"
+                disabled={!structure.data}
                 onClick={() =>
                   downloadCsvTemplate("results-template.csv", templateHeaders)
                 }

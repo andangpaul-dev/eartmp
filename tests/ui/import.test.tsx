@@ -90,6 +90,7 @@ describe("ImportScreen", () => {
     const btn = await screen.findByRole("button", {
       name: /download template/i,
     });
+    await waitFor(() => expect(btn).not.toBeDisabled());
     btn.click(); // must not throw
     expect(createObjectURL).toHaveBeenCalled();
   });
