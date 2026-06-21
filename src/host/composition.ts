@@ -218,7 +218,7 @@ import {
   buildDefaultRegistry,
   SETTING_KEYS,
 } from "../domain/settings/SettingsRegistry";
-import { AuthorizationError } from "../domain/errors/auth";
+import { AuthenticationError, AuthorizationError } from "../domain/errors/auth";
 import { TranscriptError } from "../domain/errors/transcript";
 import { SessionContext } from "../domain/value-objects/SessionContext";
 import type { ComponentScore } from "../domain/value-objects/AssessmentStructure";
@@ -863,7 +863,7 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     );
   });
   registry.set("parseWorkbook", async (i, s) => {
-    requirePerm(s, "results.import");
+    if (!s) throw new AuthenticationError("Authentication required.");
     const bytes = new Uint8Array(
       Buffer.from((i as { base64: string }).base64, "base64"),
     );
