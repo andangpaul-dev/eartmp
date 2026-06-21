@@ -295,6 +295,30 @@ describe("ImportResults", () => {
     expect(row.finalScore).toBeUndefined();
   });
 
+  it("re-imports a DID row as GRADED, updating the same row with a finalScore", async () => {
+    await ctx.results.create({
+      studentId: "st1",
+      courseId: "co1",
+      semesterId: SEM,
+      componentScores: [],
+      isLocked: false,
+      sitting: "NORMAL",
+      status: "DID",
+    });
+    const report = await ctx.uc.execute(
+      {
+        semesterId: SEM,
+        rows: [{ matricNumber: "M/1", courseCode: "CS101", ca: 30, exam: 70 }],
+      },
+      admin,
+    );
+    expect(report.imported).toBe(1);
+    expect(ctx.results.rows).toHaveLength(1); // updated in place
+    const row = ctx.results.rows[0]!;
+    expect(row.status).toBe("GRADED");
+    expect(row.finalScore).toBe(100);
+  });
+
   it("flags an unknown sitting or status value", async () => {
     const report = await ctx.uc.execute(
       {

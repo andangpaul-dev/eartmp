@@ -101,7 +101,8 @@ export class ImportResults implements AuthorizedUseCase<
         if (code && !course) messages.push(`Unknown course "${code}".`);
 
         // Optional sitting / status (default NORMAL / GRADED), validated against
-        // the value-object's allowed set. A blank cell keeps the default.
+        // the value-object's allowed set. A blank OR whitespace-only cell keeps
+        // the default; any other unrecognised value is a row error.
         const sittingRaw =
           String(row.sitting ?? row.Sitting ?? "")
             .trim()
@@ -200,11 +201,11 @@ export class ImportResults implements AuthorizedUseCase<
       if (input.dryRun || errors.length > 0) return base;
 
       for (const v of valid) {
-        const graded = v.status === "GRADED";
         if (v.existingId) {
           await repos.results.updateScores(v.existingId, {
             componentScores: v.componentScores,
-            finalScore: graded ? v.finalScore! : null,
+            // Graded rows carry a finalScore; non-graded rows clear it.
+            finalScore: v.finalScore ?? null,
             status: v.status,
           });
         } else {
@@ -213,7 +214,7 @@ export class ImportResults implements AuthorizedUseCase<
             courseId: v.courseId,
             semesterId: input.semesterId,
             componentScores: v.componentScores,
-            ...(graded ? { finalScore: v.finalScore! } : {}),
+            ...(v.finalScore !== undefined ? { finalScore: v.finalScore } : {}),
             isLocked: false,
             sitting: v.sitting,
             status: v.status,
