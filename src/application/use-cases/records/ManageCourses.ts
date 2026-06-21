@@ -16,7 +16,7 @@ import type { AuthorizedUseCase } from "../../authorization/AuthorizedUseCase";
 import { scopeWhere } from "../../authorization/institutionScope";
 import { DEFAULT_TAKE, MAX_TAKE } from "./ManageStudents";
 
-const COURSE_TYPES: readonly CourseType[] = [
+export const COURSE_TYPES: readonly CourseType[] = [
   "CORE",
   "ELECTIVE",
   "PRACTICAL",
