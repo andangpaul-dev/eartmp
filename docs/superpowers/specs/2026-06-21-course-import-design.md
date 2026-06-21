@@ -1,7 +1,7 @@
 # Bulk course import
 
 **Date:** 2026-06-21
-**Status:** Approved (pending final spec review)
+**Status:** Implemented (2026-06-21)
 **Scope:** Add the ability to bulk-import courses from a spreadsheet, scoped per
 programme → level → semester, with columns **Course code | Course title | Credit
 Value | Course type** — mirroring the existing student-import flow. Plus a
@@ -169,14 +169,14 @@ actual `importCourses`/`importStudents`/`importResults` use-cases.)
 
 ## 8. Definition of done
 
-- [ ] `ImportCourses` use-case (upsert, all-or-nothing, alias parsing, report) + tests.
-- [ ] Client-side `downloadCsvTemplate` helper + test.
-- [ ] `ImportCoursesScreen` (cascade, template, validate/commit) + nav entry + tests.
-- [ ] Student import screen gains the Download-template button.
-- [ ] `parseWorkbook` gating relaxed to authenticated-only (+ test).
-- [ ] Contract/host/zod/ipc/harness wiring for `importCourses`.
-- [ ] Tests green; `tsc` strict + lint + boundary fitness clean.
-- [ ] `/docs` updated; summary posted.
+- [x] `ImportCourses` use-case (upsert, all-or-nothing, alias parsing, report) + tests.
+- [x] Client-side `downloadCsvTemplate` helper + test.
+- [x] `ImportCoursesScreen` (cascade, template, validate/commit) + nav entry + tests.
+- [x] Student import screen gains the Download-template button.
+- [x] `parseWorkbook` gating relaxed to authenticated-only (+ test).
+- [x] Contract/host/zod/ipc/harness wiring for `importCourses`.
+- [x] Tests green; `tsc` strict + lint + boundary fitness clean.
+- [x] `/docs` updated; summary posted.
 
 ## 9. Out of scope (future work)
 
