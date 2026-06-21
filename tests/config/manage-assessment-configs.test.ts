@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
   CreateAssessmentConfig,
+  UpdateAssessmentConfig,
   DeleteAssessmentConfig,
   SetDefaultAssessmentConfig,
   ListAssessmentConfigs,
@@ -48,6 +49,60 @@ describe("CreateAssessmentConfig (write-side validation)", () => {
       ),
     ).rejects.toBeInstanceOf(AssessmentError);
     expect(configs.byId.size).toBe(0);
+  });
+});
+
+describe("UpdateAssessmentConfig", () => {
+  it("name-only edit keeps existing components", async () => {
+    const created = await new CreateAssessmentConfig(configs, audit).execute(
+      { name: "Original", components: validComponents },
+      admin,
+    );
+    const updated = await new UpdateAssessmentConfig(configs, audit).execute(
+      { id: created.id, name: "Renamed" },
+      admin,
+    );
+    expect(updated.name).toBe("Renamed");
+    expect(updated.components).toBe(created.components);
+  });
+
+  it("components edit re-validates and re-serializes", async () => {
+    const created = await new CreateAssessmentConfig(configs, audit).execute(
+      { name: "Struct", components: validComponents },
+      admin,
+    );
+    const newComponents = [
+      { key: "mid", label: "Mid", weight: 40, maxScore: 40 },
+      { key: "final", label: "Final", weight: 60, maxScore: 60 },
+    ];
+    const updated = await new UpdateAssessmentConfig(configs, audit).execute(
+      { id: created.id, components: newComponents },
+      admin,
+    );
+    const parsed: unknown[] = JSON.parse(updated.components);
+    expect(parsed).toHaveLength(2);
+  });
+
+  it("weights != 100 → rejects AssessmentError", async () => {
+    const created = await new CreateAssessmentConfig(configs, audit).execute(
+      { name: "StructBad", components: validComponents },
+      admin,
+    );
+    await expect(
+      new UpdateAssessmentConfig(configs, audit).execute(
+        { id: created.id, components: badComponents },
+        admin,
+      ),
+    ).rejects.toBeInstanceOf(AssessmentError);
+  });
+
+  it("missing id → throws", async () => {
+    await expect(
+      new UpdateAssessmentConfig(configs, audit).execute(
+        { id: "nonexistent" },
+        admin,
+      ),
+    ).rejects.toThrow();
   });
 });
 

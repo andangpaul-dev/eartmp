@@ -78,6 +78,17 @@ describe("CreateGradeScale (write-side validation)", () => {
   });
 });
 
+const VALID_BANDS = [
+  { minMark: 0, maxMark: 44, grade: "F", gradePoint: 0, isPass: false },
+  { minMark: 45, maxMark: 59, grade: "C", gradePoint: 2, isPass: true },
+  { minMark: 60, maxMark: 100, grade: "A", gradePoint: 4, isPass: true },
+];
+const BANDS_WITH_GAP = [
+  { minMark: 0, maxMark: 44, grade: "F", gradePoint: 0, isPass: false },
+  // 45-59 missing
+  { minMark: 60, maxMark: 100, grade: "A", gradePoint: 4, isPass: true },
+];
+
 describe("UpdateGradeScale", () => {
   it("re-validates bands on edit", async () => {
     const created = await new CreateGradeScale(scales, audit).execute(
@@ -90,6 +101,52 @@ describe("UpdateGradeScale", () => {
     ).rejects.toBeInstanceOf(GradeScaleError);
     const ok = await uc.execute({ id: created.id, name: "Renamed" }, admin);
     expect(ok.name).toBe("Renamed");
+  });
+
+  it("name-only edit keeps existing bands", async () => {
+    const created = await new CreateGradeScale(scales, audit).execute(
+      { name: "Original", bands: VALID_BANDS },
+      admin,
+    );
+    const updated = await new UpdateGradeScale(scales, audit).execute(
+      { id: created.id, name: "Renamed" },
+      admin,
+    );
+    expect(updated.name).toBe("Renamed");
+    expect(updated.bands).toBe(created.bands);
+  });
+
+  it("bands edit re-validates and re-serializes", async () => {
+    const created = await new CreateGradeScale(scales, audit).execute(
+      { name: "S2", bands: validBands },
+      admin,
+    );
+    const newBands = VALID_BANDS;
+    const updated = await new UpdateGradeScale(scales, audit).execute(
+      { id: created.id, bands: newBands },
+      admin,
+    );
+    const parsed: unknown[] = JSON.parse(updated.bands);
+    expect(parsed).toHaveLength(3);
+  });
+
+  it("bands with a gap → rejects GradeScaleError", async () => {
+    const created = await new CreateGradeScale(scales, audit).execute(
+      { name: "S3", bands: validBands },
+      admin,
+    );
+    await expect(
+      new UpdateGradeScale(scales, audit).execute(
+        { id: created.id, bands: BANDS_WITH_GAP },
+        admin,
+      ),
+    ).rejects.toBeInstanceOf(GradeScaleError);
+  });
+
+  it("missing id → throws /not found/i", async () => {
+    await expect(
+      new UpdateGradeScale(scales, audit).execute({ id: "nonexistent" }, admin),
+    ).rejects.toThrow(/not found/i);
   });
 });
 
