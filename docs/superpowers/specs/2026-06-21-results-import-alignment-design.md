@@ -1,7 +1,7 @@
 # Results import — align to the student-import principle
 
 **Date:** 2026-06-21
-**Status:** Approved (pending final spec review)
+**Status:** Implemented (2026-06-21)
 **Scope:** Bring the results import (`ImportResults` + `ImportScreen`) to UX parity
 with the student/course imports — a downloadable template, inline column-help,
 and column aliases — **plus** optional `sitting`/`status` columns so bulk import
@@ -95,12 +95,12 @@ errors }` (`imported` = rows written) — kept to match the student import; the
 
 ## 5. Definition of done
 
-- [ ] `ImportResults`: aliases + optional `sitting`/`status` (validated), non-graded
+- [x] `ImportResults`: aliases + optional `sitting`/`status` (validated), non-graded
       rows skip scores, sitting-aware dedupe/lookup, create/update carry sitting+status.
-- [ ] `ImportScreen`: Download-template (dynamic headers incl. sitting/status) +
+- [x] `ImportScreen`: Download-template (dynamic headers incl. sitting/status) +
       inline column-help.
-- [ ] Tests green; `tsc` strict + lint + boundary fitness clean.
-- [ ] `/docs` updated; summary posted.
+- [x] Tests green; `tsc` strict + lint + boundary fitness clean.
+- [x] `/docs` updated; summary posted.
 
 ## 6. Out of scope (future work)
 
