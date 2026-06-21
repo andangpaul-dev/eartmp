@@ -25,6 +25,11 @@ import type {
   GraduationRequirements,
 } from "../runtime/contract";
 import { validateBands, type BandRow } from "./grading/bandsValidation";
+import {
+  validateComponents,
+  weightTotal,
+  type ComponentRow,
+} from "./grading/componentsValidation";
 
 const CALENDAR_TYPES = ["SEMESTER", "TRIMESTER", "QUARTER"] as const;
 const GRAD_KEY = "graduation.requirements";
@@ -233,6 +238,10 @@ function GradingTab({ notify }: { notify: (m: string) => void }) {
   const [scaleModal, setScaleModal] = useState<"new" | StoredGradeScale | null>(
     null,
   );
+  // assessment modal state
+  const [configModal, setConfigModal] = useState<
+    "new" | StoredAssessmentConfig | null
+  >(null);
 
   const setScaleDefault = async (s: StoredGradeScale) => {
     try {
@@ -259,6 +268,16 @@ function GradingTab({ notify }: { notify: (m: string) => void }) {
       await core.setDefaultAssessmentConfig({ id: c.id });
       configs.reload();
       notify(`"${c.name}" is now the default assessment structure`);
+    } catch (e) {
+      notify(e instanceof Error ? e.message : "Failed");
+    }
+  };
+
+  const deleteConfig = async (c: StoredAssessmentConfig) => {
+    try {
+      await core.deleteAssessmentConfig({ id: c.id });
+      configs.reload();
+      notify(`"${c.name}" deleted`);
     } catch (e) {
       notify(e instanceof Error ? e.message : "Failed");
     }
@@ -296,6 +315,13 @@ function GradingTab({ notify }: { notify: (m: string) => void }) {
       </Card>
 
       <Card title="Assessment structures">
+        {manage && (
+          <div style={{ marginBottom: 12 }}>
+            <Button variant="primary" onClick={() => setConfigModal("new")}>
+              New structure
+            </Button>
+          </div>
+        )}
         <ListState
           loading={configs.loading}
           error={configs.error?.message}
@@ -304,13 +330,13 @@ function GradingTab({ notify }: { notify: (m: string) => void }) {
         >
           <div className="stack" style={{ gap: 10 }}>
             {configs.data?.map((c) => (
-              <ConfigRow
+              <AssessmentConfigRow
                 key={c.id}
-                name={c.name}
-                isDefault={c.isDefault}
-                detail={<ComponentsTable components={c.components} />}
+                config={c}
                 canManage={manage}
                 onSetDefault={() => setConfigDefault(c)}
+                onEdit={() => setConfigModal(c)}
+                onDelete={() => deleteConfig(c)}
               />
             ))}
           </div>
@@ -328,6 +354,22 @@ function GradingTab({ notify }: { notify: (m: string) => void }) {
               scaleModal === "new"
                 ? "Grade scale created"
                 : "Grade scale updated",
+            );
+          }}
+        />
+      )}
+
+      {configModal !== null && (
+        <AssessmentEditorModal
+          initial={configModal === "new" ? null : configModal}
+          onClose={() => setConfigModal(null)}
+          onDone={() => {
+            setConfigModal(null);
+            configs.reload();
+            notify(
+              configModal === "new"
+                ? "Assessment structure created"
+                : "Assessment structure updated",
             );
           }}
         />
@@ -568,6 +610,273 @@ function GradeScaleEditorModal({
             Add band
           </Button>
         </div>
+      </div>
+
+      {validationErrors.length > 0 && (
+        <div className="alert danger" style={{ marginTop: 12 }}>
+          {validationErrors.map((e, i) => (
+            <div key={i}>{e}</div>
+          ))}
+        </div>
+      )}
+
+      {serverError && (
+        <div className="alert danger" style={{ marginTop: 12 }}>
+          {serverError}
+        </div>
+      )}
+
+      <div className="actions" style={{ marginTop: 16 }}>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button
+          variant="primary"
+          disabled={!canSave || saving}
+          loading={saving}
+          onClick={save}
+        >
+          Save
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+/** Per-row wrapper for an assessment config with Edit/Delete buttons. */
+function AssessmentConfigRow({
+  config,
+  canManage,
+  onSetDefault,
+  onEdit,
+  onDelete,
+}: {
+  config: StoredAssessmentConfig;
+  canManage: boolean;
+  onSetDefault: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="config-row">
+      <div className="spread">
+        <div className="row" style={{ gap: 10 }}>
+          <strong>{config.name}</strong>
+          {config.isDefault && <Badge tone="success">Default</Badge>}
+        </div>
+        <div className="row" style={{ gap: 8 }}>
+          <Button variant="ghost" onClick={() => setOpen((o) => !o)}>
+            {open ? "Hide" : "View"}
+          </Button>
+          {canManage && !config.isDefault && (
+            <Button variant="ghost" onClick={onSetDefault}>
+              Set default
+            </Button>
+          )}
+          {canManage && (
+            <Button variant="ghost" onClick={onEdit}>
+              Edit &ldquo;{config.name}&rdquo;
+            </Button>
+          )}
+          {canManage && (
+            <Button
+              variant="ghost"
+              disabled={config.isDefault}
+              title={
+                config.isDefault
+                  ? "Cannot delete the default structure"
+                  : undefined
+              }
+              aria-label={`Delete "${config.name}"`}
+              onClick={onDelete}
+            >
+              Delete &ldquo;{config.name}&rdquo;
+            </Button>
+          )}
+        </div>
+      </div>
+      {open && (
+        <div style={{ marginTop: 10 }}>
+          <ComponentsTable components={config.components} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Blank component added by "Add component". */
+function blankComponent(): ComponentRow {
+  return { key: "", label: "", weight: 0, maxScore: 100 };
+}
+
+/** Modal for creating or editing an assessment structure (components editor). */
+function AssessmentEditorModal({
+  initial,
+  onClose,
+  onDone,
+}: {
+  initial: StoredAssessmentConfig | null;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const core = useCore();
+  const [name, setName] = useState(initial?.name ?? "");
+  const [rows, setRows] = useState<ComponentRow[]>(() => {
+    if (!initial) return [blankComponent()];
+    try {
+      return JSON.parse(initial.components) as ComponentRow[];
+    } catch {
+      return [];
+    }
+  });
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const validationErrors = validateComponents(rows);
+  const total = weightTotal(rows);
+  const canSave = name.trim() !== "" && validationErrors.length === 0;
+
+  const updateRow = (i: number, patch: Partial<ComponentRow>) => {
+    setRows((prev) =>
+      prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)),
+    );
+  };
+
+  const removeRow = (i: number) => {
+    setRows((prev) => prev.filter((_, idx) => idx !== i));
+  };
+
+  const addComponent = () => {
+    setRows((prev) => [...prev, blankComponent()]);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setServerError(null);
+    try {
+      const components = rows.map((r) => ({
+        key: r.key,
+        label: r.label,
+        weight: Number(r.weight),
+        maxScore: Number(r.maxScore),
+      }));
+      if (initial) {
+        await core.updateAssessmentConfig({ id: initial.id, name, components });
+      } else {
+        await core.createAssessmentConfig({ name, components });
+      }
+      onDone();
+    } catch (e) {
+      setServerError(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      title={
+        initial
+          ? `Edit assessment structure · ${initial.name}`
+          : "New assessment structure"
+      }
+      subtitle="Changes apply to future processing only — already-processed results keep their original structure."
+      onClose={onClose}
+    >
+      <Field label="Structure name">
+        <input
+          className="input"
+          aria-label="Structure name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </Field>
+
+      <div style={{ marginTop: 16 }}>
+        <table className="data">
+          <thead>
+            <tr>
+              <th>Key</th>
+              <th>Label</th>
+              <th>Weight (%)</th>
+              <th>Max score</th>
+              <th aria-label="Actions" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i}>
+                <td>
+                  <input
+                    className="input mono"
+                    aria-label="Key"
+                    value={row.key}
+                    onChange={(e) => updateRow(i, { key: e.target.value })}
+                  />
+                </td>
+                <td>
+                  <input
+                    className="input"
+                    aria-label="Label"
+                    value={row.label}
+                    onChange={(e) => updateRow(i, { label: e.target.value })}
+                  />
+                </td>
+                <td>
+                  <input
+                    className="input mono"
+                    type="number"
+                    aria-label="Weight"
+                    min={0}
+                    max={100}
+                    value={row.weight}
+                    onChange={(e) =>
+                      updateRow(i, { weight: Number(e.target.value) })
+                    }
+                  />
+                </td>
+                <td>
+                  <input
+                    className="input mono"
+                    type="number"
+                    aria-label="Max score"
+                    min={1}
+                    value={row.maxScore}
+                    onChange={(e) =>
+                      updateRow(i, { maxScore: Number(e.target.value) })
+                    }
+                  />
+                </td>
+                <td>
+                  <Button
+                    variant="ghost"
+                    aria-label={`Remove component ${i + 1}`}
+                    onClick={() => removeRow(i)}
+                  >
+                    Remove
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        <div style={{ marginTop: 8 }}>
+          <Button variant="ghost" onClick={addComponent}>
+            Add component
+          </Button>
+        </div>
+      </div>
+
+      <div style={{ marginTop: 10 }}>
+        <span className="muted" style={{ fontSize: 12.5 }}>
+          Total weight:{" "}
+        </span>
+        <output
+          aria-label="Total weight"
+          className={`mono strong ${Math.abs(total - 100) < 1e-6 ? "" : "weight-bad"}`}
+        >
+          {total}%
+        </output>
       </div>
 
       {validationErrors.length > 0 && (
@@ -986,43 +1295,6 @@ function ListState({
   if (error) return <div className="alert danger">{error}</div>;
   if (empty) return <EmptyState title={emptyTitle} />;
   return <>{children}</>;
-}
-
-function ConfigRow({
-  name,
-  isDefault,
-  detail,
-  canManage,
-  onSetDefault,
-}: {
-  name: string;
-  isDefault: boolean;
-  detail: ReactNode;
-  canManage: boolean;
-  onSetDefault: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="config-row">
-      <div className="spread">
-        <div className="row" style={{ gap: 10 }}>
-          <strong>{name}</strong>
-          {isDefault && <Badge tone="success">Default</Badge>}
-        </div>
-        <div className="row" style={{ gap: 8 }}>
-          <Button variant="ghost" onClick={() => setOpen((o) => !o)}>
-            {open ? "Hide" : "View"}
-          </Button>
-          {canManage && !isDefault && (
-            <Button variant="ghost" onClick={onSetDefault}>
-              Set default
-            </Button>
-          )}
-        </div>
-      </div>
-      {open && <div style={{ marginTop: 10 }}>{detail}</div>}
-    </div>
-  );
 }
 
 interface Band {

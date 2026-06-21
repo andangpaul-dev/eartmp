@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { screen, waitFor } from "@testing-library/react";
 import { ConfigurationScreen } from "../../src/presentation/screens/ConfigurationScreen";
-import type { StoredGradeScale } from "../../src/presentation/runtime/contract";
+import type {
+  StoredGradeScale,
+  StoredAssessmentConfig,
+} from "../../src/presentation/runtime/contract";
 import { renderScreen } from "./harness";
 
 /** Build a minimal StoredGradeScale with JSON-serialised bands. */
@@ -187,4 +190,127 @@ describe("GradeScaleEditorModal", () => {
     expect(screen.queryByRole("button", { name: /^edit/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /^delete/i })).toBeNull();
   });
+});
+
+/** Build a minimal StoredAssessmentConfig with JSON-serialised components. */
+function makeConfig(
+  overrides: Partial<StoredAssessmentConfig> = {},
+): StoredAssessmentConfig {
+  return {
+    id: "ac-1",
+    name: "Standard",
+    components: JSON.stringify([
+      { key: "ca", label: "Continuous Assessment", weight: 30, maxScore: 30 },
+      { key: "exam", label: "Exam", weight: 70, maxScore: 100 },
+    ]),
+    isDefault: false,
+    ...overrides,
+  };
+}
+
+describe("AssessmentEditorModal", () => {
+  it("creates an assessment config; Save gated on weights=100", async () => {
+    const createAssessmentConfig = vi.fn(async () =>
+      makeConfig({ id: "ac-new", name: "My Structure" }),
+    );
+    const { user } = renderScreen(<ConfigurationScreen />, {
+      permissions: ["config.read", "config.manage"],
+      core: {
+        listAssessmentConfigs: async () => [],
+        createAssessmentConfig,
+      },
+    });
+
+    await openGradingTab(user);
+
+    // Open the New structure modal
+    await user.click(
+      await screen.findByRole("button", { name: /new structure/i }),
+    );
+
+    // Fill in the name
+    const nameInput = await screen.findByLabelText(/structure name/i);
+    await user.clear(nameInput);
+    await user.type(nameInput, "My Structure");
+
+    // The modal starts with one blank row; clear it and set ca (weight 30, maxScore 30)
+    const keyInputs = await screen.findAllByLabelText(/^key$/i);
+    const weightInputs = await screen.findAllByLabelText(/^weight$/i);
+    const maxScoreInputs = await screen.findAllByLabelText(/^max score$/i);
+
+    await user.clear(keyInputs[0]!);
+    await user.type(keyInputs[0]!, "ca");
+    await user.clear(weightInputs[0]!);
+    await user.type(weightInputs[0]!, "30");
+    await user.clear(maxScoreInputs[0]!);
+    await user.type(maxScoreInputs[0]!, "30");
+
+    // Add a second component: exam (weight 70, maxScore 70)
+    await user.click(screen.getByRole("button", { name: /add component/i }));
+
+    const keyInputs2 = await screen.findAllByLabelText(/^key$/i);
+    const weightInputs2 = await screen.findAllByLabelText(/^weight$/i);
+    const maxScoreInputs2 = await screen.findAllByLabelText(/^max score$/i);
+
+    await user.clear(keyInputs2[1]!);
+    await user.type(keyInputs2[1]!, "exam");
+    await user.clear(weightInputs2[1]!);
+    await user.type(weightInputs2[1]!, "70");
+    await user.clear(maxScoreInputs2[1]!);
+    await user.type(maxScoreInputs2[1]!, "70");
+
+    // Save should be enabled (weights = 100)
+    const saveBtn = await screen.findByRole("button", { name: /^save$/i });
+    await waitFor(() => expect(saveBtn).not.toBeDisabled());
+
+    await user.click(saveBtn);
+
+    await waitFor(() =>
+      expect(createAssessmentConfig).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "My Structure",
+          components: expect.any(Array),
+        }),
+      ),
+    );
+  });
+
+  it("shows running weight total and blocks Save at !=100", async () => {
+    const { user } = renderScreen(<ConfigurationScreen />, {
+      permissions: ["config.read", "config.manage"],
+      core: {
+        listAssessmentConfigs: async () => [],
+      },
+    });
+
+    await openGradingTab(user);
+    await user.click(
+      await screen.findByRole("button", { name: /new structure/i }),
+    );
+
+    // Set one row with weight 90 (total != 100)
+    const keyInputs = await screen.findAllByLabelText(/^key$/i);
+    const weightInputs = await screen.findAllByLabelText(/^weight$/i);
+    const maxScoreInputs = await screen.findAllByLabelText(/^max score$/i);
+
+    await user.clear(keyInputs[0]!);
+    await user.type(keyInputs[0]!, "ca");
+    await user.clear(weightInputs[0]!);
+    await user.type(weightInputs[0]!, "90");
+    await user.clear(maxScoreInputs[0]!);
+    await user.type(maxScoreInputs[0]!, "100");
+
+    // The weight total indicator (aria-label="Total weight") should show 90
+    const totalOutput = await screen.findByLabelText(/total weight/i);
+    expect(totalOutput).toBeInTheDocument();
+    await waitFor(() => {
+      expect(totalOutput.textContent).toMatch(/90/);
+    });
+
+    // Save should be disabled
+    await waitFor(() => {
+      const saveBtn = screen.getByRole("button", { name: /^save$/i });
+      expect(saveBtn).toBeDisabled();
+    });
+  }, 10000);
 });
