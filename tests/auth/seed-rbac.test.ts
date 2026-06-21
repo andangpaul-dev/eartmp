@@ -49,3 +49,28 @@ describe("RBAC catalogue — results.override", () => {
     expect(rolePermissions("VIEWER")).not.toContain("results.override");
   });
 });
+
+describe("RBAC catalogue — students.manage (merge & bulk regen)", () => {
+  it("is present in the PERMISSIONS catalogue with a label", () => {
+    const entry = PERMISSIONS.find((p) => p.key === "students.manage");
+    expect(entry).toBeDefined();
+    expect(entry!.label.length).toBeGreaterThan(0);
+  });
+
+  it("is granted to SUPER_ADMIN (so Student Maintenance is reachable)", () => {
+    expect(rolePermissions("SUPER_ADMIN")).toContain("students.manage");
+  });
+});
+
+describe("RBAC catalogue integrity", () => {
+  it("every permission a built-in role grants exists in the catalogue", () => {
+    for (const role of ROLES) {
+      for (const perm of role.permissions) {
+        expect(
+          permKeys,
+          `role ${role.name} grants unknown "${perm}"`,
+        ).toContain(perm);
+      }
+    }
+  });
+});

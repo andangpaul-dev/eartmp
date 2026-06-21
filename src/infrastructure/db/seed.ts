@@ -32,6 +32,7 @@ export const PERMISSIONS: { key: string; label: string }[] = [
   { key: "students.read", label: "View students" },
   { key: "students.create", label: "Create students" },
   { key: "students.update", label: "Edit students" },
+  { key: "students.manage", label: "Merge & bulk-manage students" },
   { key: "results.read", label: "View results" },
   { key: "results.import", label: "Import results" },
   { key: "results.process", label: "Process results" },
