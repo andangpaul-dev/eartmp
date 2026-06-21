@@ -122,6 +122,19 @@ const SCHEMAS: Record<string, z.ZodType> = {
   mergeStudents: z.looseObject({ survivingId: str, duplicateId: str }),
   findDuplicateCandidates: z.looseObject({}),
   bulkRegenerateMatricules: z.looseObject({ facultyId: str, year: z.number() }),
+  // WS D — grading-config CRUD
+  createGradeScale: z.looseObject({
+    name: str,
+    bands: z.array(z.looseObject({})),
+  }),
+  updateGradeScale: z.looseObject({ id: str }),
+  deleteGradeScale: z.looseObject({ id: str }),
+  createAssessmentConfig: z.looseObject({
+    name: str,
+    components: z.array(z.looseObject({})),
+  }),
+  updateAssessmentConfig: z.looseObject({ id: str }),
+  deleteAssessmentConfig: z.looseObject({ id: str }),
 };
 
 /** Every method at least requires its input to be an object (reject primitives). */
