@@ -123,6 +123,7 @@ import { ListCourseRoster } from "../application/use-cases/results/CourseRoster"
 import { ProcessSemester } from "../application/use-cases/results/ProcessSemester";
 import { ImportResults } from "../application/use-cases/results/ImportResults";
 import { ImportStudents } from "../application/use-cases/records/ImportStudents";
+import { ImportCourses } from "../application/use-cases/records/ImportCourses";
 import { GetAcademicSummary } from "../application/use-cases/results/GetAcademicSummary";
 import { GraduationConfigService } from "../application/services/GraduationConfigService";
 import { BuildReportData } from "../application/use-cases/transcripts/BuildReportData";
@@ -404,6 +405,8 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
       },
     },
   );
+
+  const importCourses = new ImportCourses(uow);
 
   const transcripts = new PrismaTranscriptRepository(db);
   const templates = new PrismaTranscriptTemplateRepository(db);
@@ -726,6 +729,7 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     ],
     ["importResults", (i, s) => authorize(importResults, i as never, s)],
     ["importStudents", (i, s) => authorize(importStudents, i as never, s)],
+    ["importCourses", (i, s) => authorize(importCourses, i as never, s)],
     ["getAcademicSummary", (i, s) => authorize(academic, i as never, s)],
     [
       "approveTranscript",

@@ -122,6 +122,15 @@ const SCHEMAS: Record<string, z.ZodType> = {
   mergeStudents: z.looseObject({ survivingId: str, duplicateId: str }),
   findDuplicateCandidates: z.looseObject({}),
   bulkRegenerateMatricules: z.looseObject({ facultyId: str, year: z.number() }),
+  // course import
+  importCourses: z.looseObject({
+    rows: z.array(z.looseObject({})),
+    programmeId: optStr,
+    levelId: optStr,
+    semesterRank: z.number().optional(),
+    departmentId: optStr,
+    dryRun: z.boolean().optional(),
+  }),
   // WS D — grading-config CRUD
   createGradeScale: z.looseObject({
     name: str,

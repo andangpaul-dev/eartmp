@@ -60,6 +60,13 @@ export function makeCore(overrides: Partial<CoreApi> = {}): CoreApi {
       imported: 0,
       errors: [],
     }),
+    importCourses: async () => ({
+      totalRows: 0,
+      validRows: 0,
+      created: 0,
+      updated: 0,
+      errors: [],
+    }),
     createFaculty: async () => ({}) as never,
     updateFaculty: async () => ({}) as never,
     deleteFaculty: async () => {},
