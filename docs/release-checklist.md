@@ -50,6 +50,48 @@ domain/application core, not a packaged app.
 
 ---
 
+## Packaging the desktop installer (Tauri shell)
+
+> **⚠️ Build the PRODUCTION variant for any real install. The default build is a
+> UAT build that CANNOT open a production database.**
+
+The Tauri shell (`src-tauri/src/lib.rs`) has a `uat` cargo feature that is **on by
+default**. It controls how the sidecar host opens the encrypted DB:
+
+| Build             | Command                                           | Behaviour                                                                                                                                                                        |
+| ----------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Production**    | `npm run tauri -- build -- --no-default-features` | Sets `EARTMP_REQUIRE_UNLOCK=1`: the app starts **locked** and prompts the operator for their passphrase on the unlock screen. No demo data. **Use this for every real install.** |
+| **UAT / testing** | `npm run tauri build` (default features)          | Sets `EARTMP_SEED_DEMO=1` + `EARTMP_DB_PASSPHRASE="eartmp-dev-passphrase"`: seeds sample data and **auto-unlocks** with the dev passphrase. For throwaway test DBs only.         |
+
+**Why it matters:** a UAT build run against a database that was created by a
+production build (i.e. encrypted with the operator's own passphrase) fails to
+decrypt — `host.log` shows `SQLITE_NOTADB` → `Database could not be decrypted
+(wrong passphrase)` and the host **exits without listening**, so the app never
+starts. A production build run against the same DB simply shows the unlock screen.
+The `(locked — awaiting unlock)` line in `host.log` confirms a production build.
+
+**Build notes:**
+
+- The trailing `-- --no-default-features` is forwarded to `cargo` (Tauri runs
+  `cargo build` as the runner); `npm run tauri -- build --no-default-features`
+  (without the second `--`) is rejected by the Tauri CLI parser.
+- Artifacts: `src-tauri/target/release/bundle/msi/EARTMP_<ver>_x64_en-US.msi` and
+  `.../nsis/EARTMP_<ver>_x64-setup.exe`. A non-zero exit referencing
+  `TAURI_SIGNING_PRIVATE_KEY` happens **after** the bundles are written (it's only
+  the optional updater-signature step) — the installers are valid. Set that env
+  var only if you want signed auto-update artifacts.
+
+**Install / data layout (Windows, per-user — no UAC):**
+
+- Program: `%LOCALAPPDATA%\EARTMP\` (replaced on reinstall).
+- Data: `%APPDATA%\edu.eartmp.desktop\` — `eartmp.db` + **`eartmp.db.salt`**, `logs/host.log`, branding. **Never** in the program dir, so a clean
+  uninstall/reinstall preserves it. Back up `eartmp.db` **and** its sibling
+  `eartmp.db.salt` together — the encrypted DB is unrecoverable without the salt.
+- Migrations bundled under `%LOCALAPPDATA%\EARTMP\migrations\` apply on first
+  launch after unlock.
+
+---
+
 ## Known boundaries (by design, not defects)
 
 - **Shell phase pending:** no UI; the runtime data layer is dev-only Prisma
