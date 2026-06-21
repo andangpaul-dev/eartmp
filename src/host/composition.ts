@@ -177,10 +177,16 @@ import {
 import {
   ListGradeScales,
   SetDefaultGradeScale,
+  CreateGradeScale,
+  UpdateGradeScale,
+  DeleteGradeScale,
 } from "../application/use-cases/config/ManageGradeScales";
 import {
   ListAssessmentConfigs,
   SetDefaultAssessmentConfig,
+  CreateAssessmentConfig,
+  UpdateAssessmentConfig,
+  DeleteAssessmentConfig,
 } from "../application/use-cases/config/ManageAssessmentConfigs";
 import { ChangeKeyPassphrase } from "../application/use-cases/security/ChangeKeyPassphrase";
 import { ProvisionSigningKey } from "../application/use-cases/security/ProvisionSigningKey";
@@ -467,8 +473,23 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
   const setSetting = new SetSetting(settings, settingsRegistry, audit);
   const listGradeScales = new ListGradeScales(gradeScales);
   const setDefaultGradeScale = new SetDefaultGradeScale(gradeScales, audit);
+  const createGradeScale = new CreateGradeScale(gradeScales, audit);
+  const updateGradeScale = new UpdateGradeScale(gradeScales, audit);
+  const deleteGradeScale = new DeleteGradeScale(gradeScales, audit);
   const listAssessmentConfigs = new ListAssessmentConfigs(assessmentConfigs);
   const setDefaultAssessmentConfig = new SetDefaultAssessmentConfig(
+    assessmentConfigs,
+    audit,
+  );
+  const createAssessmentConfig = new CreateAssessmentConfig(
+    assessmentConfigs,
+    audit,
+  );
+  const updateAssessmentConfig = new UpdateAssessmentConfig(
+    assessmentConfigs,
+    audit,
+  );
+  const deleteAssessmentConfig = new DeleteAssessmentConfig(
     assessmentConfigs,
     audit,
   );
@@ -767,6 +788,9 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
       "setDefaultGradeScale",
       (i, s) => authorize(setDefaultGradeScale, i as never, s),
     ],
+    ["createGradeScale", (i, s) => authorize(createGradeScale, i as never, s)],
+    ["updateGradeScale", (i, s) => authorize(updateGradeScale, i as never, s)],
+    ["deleteGradeScale", (i, s) => authorize(deleteGradeScale, i as never, s)],
     [
       "listAssessmentConfigs",
       (i, s) => authorize(listAssessmentConfigs, i as never, s),
@@ -774,6 +798,18 @@ export function buildHost(db: PrismaClient = getPrisma()): Host {
     [
       "setDefaultAssessmentConfig",
       (i, s) => authorize(setDefaultAssessmentConfig, i as never, s),
+    ],
+    [
+      "createAssessmentConfig",
+      (i, s) => authorize(createAssessmentConfig, i as never, s),
+    ],
+    [
+      "updateAssessmentConfig",
+      (i, s) => authorize(updateAssessmentConfig, i as never, s),
+    ],
+    [
+      "deleteAssessmentConfig",
+      (i, s) => authorize(deleteAssessmentConfig, i as never, s),
     ],
     [
       "changeKeyPassphrase",
