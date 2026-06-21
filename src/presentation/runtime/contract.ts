@@ -31,6 +31,7 @@ import type {
   AssessmentComponent,
   ComponentScore,
 } from "../../domain/value-objects/AssessmentStructure";
+import type { GradeBand } from "../../domain/value-objects/GradeScale";
 import type { GpaSummary } from "../../domain/services/GpaEngine";
 import type { ImportReport } from "../../application/use-cases/results/ImportResults";
 import type { StudentImportReport } from "../../application/use-cases/records/ImportStudents";
@@ -89,6 +90,7 @@ export type {
   StoredGradeScale,
   StoredAssessmentConfig,
   GraduationRequirements,
+  GradeBand,
   UserSummary,
   Role,
   Permission,
@@ -488,10 +490,30 @@ export interface CoreApi {
   setSetting(input: { key: string; value: unknown }): Promise<void>;
   listGradeScales(input: Record<string, never>): Promise<StoredGradeScale[]>;
   setDefaultGradeScale(input: { id: string }): Promise<void>;
+  createGradeScale(input: {
+    name: string;
+    bands: GradeBand[];
+  }): Promise<StoredGradeScale>;
+  updateGradeScale(input: {
+    id: string;
+    name?: string;
+    bands?: GradeBand[];
+  }): Promise<StoredGradeScale>;
+  deleteGradeScale(input: { id: string }): Promise<void>;
   listAssessmentConfigs(
     input: Record<string, never>,
   ): Promise<StoredAssessmentConfig[]>;
   setDefaultAssessmentConfig(input: { id: string }): Promise<void>;
+  createAssessmentConfig(input: {
+    name: string;
+    components: AssessmentComponent[];
+  }): Promise<StoredAssessmentConfig>;
+  updateAssessmentConfig(input: {
+    id: string;
+    name?: string;
+    components?: AssessmentComponent[];
+  }): Promise<StoredAssessmentConfig>;
+  deleteAssessmentConfig(input: { id: string }): Promise<void>;
 
   // security: rotate the signing-key passphrase (re-seals the private key)
   changeKeyPassphrase(input: {
