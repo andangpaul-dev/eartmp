@@ -7,6 +7,10 @@ import { useState } from "react";
 import { useCore, useSession } from "../runtime/CoreProvider";
 import { useAction } from "../runtime/hooks";
 import { Button, Field } from "../components/ui";
+import {
+  isDatabaseLockedError,
+  DatabaseLockedHelp,
+} from "../components/DatabaseLockedHelp";
 
 export function LoginScreen() {
   const core = useCore();
@@ -59,11 +63,14 @@ export function LoginScreen() {
                 onChange={(e) => setPassword(e.target.value)}
               />
             </Field>
-            {submit.error && (
-              <div className="alert danger" style={{ marginBottom: 14 }}>
-                {submit.error.message}
-              </div>
-            )}
+            {submit.error &&
+              (isDatabaseLockedError(submit.error.message) ? (
+                <DatabaseLockedHelp onRetry={() => submit.run()} />
+              ) : (
+                <div className="alert danger" style={{ marginBottom: 14 }}>
+                  {submit.error.message}
+                </div>
+              ))}
             <Button
               type="submit"
               variant="primary"

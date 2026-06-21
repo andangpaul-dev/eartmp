@@ -9,6 +9,7 @@ import { useRef, useState } from "react";
 import { useCore, useSession } from "../runtime/CoreProvider";
 import { useAsync } from "../runtime/hooks";
 import { Card, Button, Badge, Icon, type Tone } from "../components/ui";
+import { DatabaseLockedHelp } from "../components/DatabaseLockedHelp";
 
 /** Minimal shape of the updater's Update object we use (avoids importing the
  *  plugin's types into a screen that also renders in the browser/tests). */
@@ -210,6 +211,10 @@ export function DiagnosticsScreen() {
             {copied ? "Copied" : "Copy diagnostics"}
           </Button>
         </div>
+      </Card>
+
+      <Card title="Troubleshooting">
+        <DatabaseLockedHelp />
       </Card>
 
       <UpdatesCard />

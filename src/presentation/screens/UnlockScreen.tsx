@@ -8,6 +8,10 @@ import { useState } from "react";
 import { useCore } from "../runtime/CoreProvider";
 import { useAction } from "../runtime/hooks";
 import { Button, Field, Icon } from "../components/ui";
+import {
+  isDatabaseLockedError,
+  DatabaseLockedHelp,
+} from "../components/DatabaseLockedHelp";
 
 export function UnlockScreen({ onUnlocked }: { onUnlocked: () => void }) {
   const core = useCore();
@@ -53,11 +57,14 @@ export function UnlockScreen({ onUnlocked }: { onUnlocked: () => void }) {
                 onChange={(e) => setPassphrase(e.target.value)}
               />
             </Field>
-            {submit.error && (
-              <div className="alert danger" style={{ marginBottom: 14 }}>
-                {submit.error.message}
-              </div>
-            )}
+            {submit.error &&
+              (isDatabaseLockedError(submit.error.message) ? (
+                <DatabaseLockedHelp onRetry={() => submit.run()} />
+              ) : (
+                <div className="alert danger" style={{ marginBottom: 14 }}>
+                  {submit.error.message}
+                </div>
+              ))}
             <Button
               type="submit"
               variant="primary"
