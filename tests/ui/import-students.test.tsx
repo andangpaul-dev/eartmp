@@ -62,4 +62,22 @@ describe("ImportStudentsScreen", () => {
     );
     expect(await screen.findByText(/2 valid/)).toBeInTheDocument();
   });
+
+  it("download template button present", async () => {
+    const createObjectURL = vi.fn(() => "blob:test");
+    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL: vi.fn() });
+
+    renderScreen(<ImportStudentsScreen />, {
+      permissions: ["students.create"],
+    });
+
+    const btn = await screen.findByRole("button", {
+      name: /download template/i,
+    });
+    expect(btn).toBeInTheDocument();
+    // clicking it should not throw
+    btn.click();
+
+    vi.unstubAllGlobals();
+  });
 });

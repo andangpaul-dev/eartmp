@@ -17,6 +17,10 @@ import {
   EmptyState,
 } from "../components/ui";
 import type { RawRow, StudentImportReport } from "../runtime/contract";
+import {
+  downloadCsvTemplate,
+  STUDENT_TEMPLATE_HEADERS,
+} from "./import/csvTemplate";
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -167,13 +171,27 @@ export function ImportStudentsScreen() {
             </select>
           </Field>
           <Field label="Spreadsheet (.xlsx / .csv)">
-            <input
-              className="input"
-              type="file"
-              accept=".xlsx,.csv"
-              aria-label="Spreadsheet file"
-              onChange={(e) => onFile(e.target.files?.[0])}
-            />
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input
+                className="input"
+                type="file"
+                accept=".xlsx,.csv"
+                aria-label="Spreadsheet file"
+                onChange={(e) => onFile(e.target.files?.[0])}
+              />
+              <Button
+                variant="ghost"
+                aria-label="Download template"
+                onClick={() =>
+                  downloadCsvTemplate(
+                    "students-template.csv",
+                    STUDENT_TEMPLATE_HEADERS,
+                  )
+                }
+              >
+                Download template
+              </Button>
+            </div>
           </Field>
         </div>
         <div className="muted" style={{ marginTop: 6, fontSize: 12.5 }}>
