@@ -96,5 +96,9 @@ export async function getEncryptedPrisma(
     url: `file:${file}`,
     encryptionKey: key,
   });
-  return new PrismaClient({ adapter });
+  const prisma = new PrismaClient({ adapter });
+  // Wait up to 5s for a transient lock (e.g. a restarting sidecar releasing the
+  // file) instead of failing immediately with SQLITE_BUSY ("database is locked").
+  await prisma.$executeRawUnsafe("PRAGMA busy_timeout = 5000");
+  return prisma;
 }

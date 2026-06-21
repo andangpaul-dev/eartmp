@@ -70,6 +70,29 @@ describe("encryptedDatabase (ADR-008)", () => {
     expect(header.startsWith("SQLite format 3")).toBe(false);
   });
 
+  it("sets PRAGMA busy_timeout so transient locks wait instead of failing", async () => {
+    const file = tmp("busy-timeout");
+    await removeBestEffort(file);
+    const prisma = await getEncryptedPrisma(
+      "operator",
+      "institution.encryptionSalt:busy",
+      file,
+    );
+    // provision a table so the connection is live
+    await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS t (id INTEGER)`);
+    const rows =
+      await prisma.$queryRawUnsafe<{ timeout: number }[]>(
+        `PRAGMA busy_timeout`,
+      );
+    // PRAGMA busy_timeout returns a single row { timeout: <ms> }
+    const val = Number(
+      (rows[0] as Record<string, unknown>)?.timeout ??
+        Object.values(rows[0] ?? {})[0],
+    );
+    expect(val).toBe(5000);
+    await prisma.$disconnect();
+  });
+
   it("rejects the wrong key", async () => {
     const file = tmp("wrongkey");
     await removeBestEffort(file);
