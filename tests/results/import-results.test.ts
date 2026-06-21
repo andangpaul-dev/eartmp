@@ -232,4 +232,125 @@ describe("ImportResults", () => {
       authorize(ctx.uc, { semesterId: SEM, rows: [] }, viewer),
     ).rejects.toBeInstanceOf(AuthorizationError);
   });
+
+  it("accepts matric/code/'Course code' aliases", async () => {
+    const report = await ctx.uc.execute(
+      {
+        semesterId: SEM,
+        rows: [{ matric: "M/1", code: "CS101", ca: 28, exam: 65 }],
+      },
+      admin,
+    );
+    expect(report.imported).toBe(1);
+    expect(report.errors).toHaveLength(0);
+    expect(ctx.results.rows[0]!.finalScore).toBe(93);
+  });
+
+  it("imports a RESIT row as a separate row from the NORMAL one", async () => {
+    await ctx.results.create({
+      studentId: "st1",
+      courseId: "co1",
+      semesterId: SEM,
+      componentScores: [],
+      finalScore: 40,
+      isLocked: false,
+      sitting: "NORMAL",
+      status: "GRADED",
+    });
+    const report = await ctx.uc.execute(
+      {
+        semesterId: SEM,
+        rows: [
+          {
+            matricNumber: "M/1",
+            courseCode: "CS101",
+            ca: 30,
+            exam: 70,
+            sitting: "RESIT",
+          },
+        ],
+      },
+      admin,
+    );
+    expect(report.imported).toBe(1);
+    expect(ctx.results.rows).toHaveLength(2);
+    const normal = ctx.results.rows.find((r) => r.sitting === "NORMAL")!;
+    expect(normal.finalScore).toBe(40);
+    const resit = ctx.results.rows.find((r) => r.sitting === "RESIT")!;
+    expect(resit.finalScore).toBe(100);
+  });
+
+  it("imports a DID row with no scores and stores no finalScore", async () => {
+    const report = await ctx.uc.execute(
+      {
+        semesterId: SEM,
+        rows: [{ matricNumber: "M/1", courseCode: "CS101", status: "DID" }],
+      },
+      admin,
+    );
+    expect(report.imported).toBe(1);
+    expect(report.errors).toHaveLength(0);
+    const row = ctx.results.rows[0]!;
+    expect(row.status).toBe("DID");
+    expect(row.finalScore).toBeUndefined();
+  });
+
+  it("flags an unknown sitting or status value", async () => {
+    const report = await ctx.uc.execute(
+      {
+        semesterId: SEM,
+        rows: [
+          {
+            matricNumber: "M/1",
+            courseCode: "CS101",
+            ca: 1,
+            exam: 1,
+            sitting: "EXTRA",
+          },
+          {
+            matricNumber: "M/2",
+            courseCode: "CS101",
+            ca: 1,
+            exam: 1,
+            status: "BOGUS",
+          },
+        ],
+      },
+      admin,
+    );
+    expect(report.imported).toBe(0);
+    expect(report.errors.find((e) => e.row === 1)!.messages.join()).toMatch(
+      /Unknown result sitting/,
+    );
+    expect(report.errors.find((e) => e.row === 2)!.messages.join()).toMatch(
+      /Unknown result status/,
+    );
+  });
+
+  it("a non-graded status update clears the finalScore on the existing row", async () => {
+    await ctx.results.create({
+      studentId: "st1",
+      courseId: "co1",
+      semesterId: SEM,
+      componentScores: [{ key: "ca", score: 20 }],
+      finalScore: 50,
+      isLocked: false,
+      sitting: "NORMAL",
+      status: "GRADED",
+    });
+    const report = await ctx.uc.execute(
+      {
+        semesterId: SEM,
+        rows: [
+          { matricNumber: "M/1", courseCode: "CS101", status: "INCOMPLETE" },
+        ],
+      },
+      admin,
+    );
+    expect(report.imported).toBe(1);
+    expect(ctx.results.rows).toHaveLength(1);
+    const row = ctx.results.rows[0]!;
+    expect(row.status).toBe("INCOMPLETE");
+    expect(row.finalScore == null).toBe(true);
+  });
 });

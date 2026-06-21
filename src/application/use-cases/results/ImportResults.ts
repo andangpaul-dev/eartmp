@@ -4,9 +4,19 @@
  * in-file duplicates, target not locked), builds a per-row report, and — only
  * when every row is valid and it is not a dry run — commits the whole batch in
  * one transaction (all-or-nothing, AD10.2/F-1). Reuses the Phase 9 scoring path
- * so import and manual entry agree (AD10.3). Permission-gated + audited.
+ * so import and manual entry agree (AD10.3). Optional `sitting` (NORMAL/RESIT)
+ * and `status` (GRADED/DID/DISQUALIFIED/INCOMPLETE) columns let a batch carry
+ * resits and non-graded outcomes; non-graded rows need no scores. Permission-
+ * gated + audited. Import is authoritative — it does NOT enforce resit
+ * eligibility.
  */
 import { SessionContext } from "../../../domain/value-objects/SessionContext";
+import {
+  assertSitting,
+  assertStatus,
+  type ResultSitting,
+  type ResultStatus,
+} from "../../../domain/value-objects/ResultSitting";
 import type { RawRow } from "../../ports/SpreadsheetReaderPort";
 import type { GradingConfigService } from "../../services/GradingConfigService";
 import type { UnitOfWork } from "../../ports/UnitOfWork";
@@ -34,7 +44,9 @@ interface ValidEntry {
   studentId: string;
   courseId: string;
   componentScores: { key: string; score: number }[];
-  finalScore: number;
+  finalScore?: number;
+  sitting: ResultSitting;
+  status: ResultStatus;
   existingId?: string;
 }
 
@@ -70,8 +82,14 @@ export class ImportResults implements AuthorizedUseCase<
       for (let i = 0; i < input.rows.length; i++) {
         const row = input.rows[i]!;
         const messages: string[] = [];
-        const matric = String(row.matricNumber ?? "").trim();
-        const code = String(row.courseCode ?? "").trim();
+        // Accept the camelCase keys AND the friendly header aliases, matching
+        // the student/course imports.
+        const matric = String(
+          row.matricNumber ?? row.matric ?? row.matricNo ?? "",
+        ).trim();
+        const code = String(
+          row.courseCode ?? row.code ?? row["Course code"] ?? "",
+        ).trim();
         if (!matric) messages.push("Missing matricNumber.");
         if (!code) messages.push("Missing courseCode.");
 
@@ -82,27 +100,57 @@ export class ImportResults implements AuthorizedUseCase<
         const course = code ? await repos.courses.findByCode(code) : null;
         if (code && !course) messages.push(`Unknown course "${code}".`);
 
+        // Optional sitting / status (default NORMAL / GRADED), validated against
+        // the value-object's allowed set. A blank cell keeps the default.
+        const sittingRaw =
+          String(row.sitting ?? row.Sitting ?? "")
+            .trim()
+            .toUpperCase() || "NORMAL";
+        const statusRaw =
+          String(row.status ?? row.Status ?? "")
+            .trim()
+            .toUpperCase() || "GRADED";
+        let sitting: ResultSitting = "NORMAL";
+        let status: ResultStatus = "GRADED";
+        try {
+          assertSitting(sittingRaw);
+          sitting = sittingRaw;
+        } catch (e) {
+          messages.push((e as Error).message);
+        }
+        try {
+          assertStatus(statusRaw);
+          status = statusRaw;
+        } catch (e) {
+          messages.push((e as Error).message);
+        }
+        const graded = status === "GRADED";
+
+        // Dedupe key is sitting-aware so a RESIT row never collides with the
+        // student's NORMAL row.
         if (matric && code) {
-          const key = `${matric}::${code}`;
+          const key = `${matric}::${code}::${sitting}`;
           if (seen.has(key))
             messages.push("Duplicate row for this student/course.");
           else seen.add(key);
         }
 
-        // Build + validate component scores.
-        const componentScores = components.map((c) => ({
-          key: c.key,
-          score: Number(row[c.key]),
-        }));
-        for (const c of components) {
-          const v = row[c.key];
-          if (v === undefined || v === "" || Number.isNaN(Number(v))) {
-            messages.push(`Missing/invalid score for "${c.key}".`);
+        // Build + validate component scores ONLY for graded rows; a
+        // DID/DISQUALIFIED/INCOMPLETE row carries no scores.
+        const componentScores = graded
+          ? components.map((c) => ({ key: c.key, score: Number(row[c.key]) }))
+          : [];
+        if (graded) {
+          for (const c of components) {
+            const v = row[c.key];
+            if (v === undefined || v === "" || Number.isNaN(Number(v))) {
+              messages.push(`Missing/invalid score for "${c.key}".`);
+            }
           }
         }
 
         let finalScore: number | undefined;
-        if (messages.length === 0) {
+        if (graded && messages.length === 0) {
           try {
             finalScore = structure.computeFinalScore(componentScores);
           } catch (e) {
@@ -117,7 +165,7 @@ export class ImportResults implements AuthorizedUseCase<
               student.id,
               input.semesterId,
             )
-          ).find((r) => r.courseId === course.id && r.sitting === "NORMAL");
+          ).find((r) => r.courseId === course.id && r.sitting === sitting);
           if (existing?.isLocked) {
             messages.push(
               "Existing result is locked; unlock before importing.",
@@ -134,7 +182,9 @@ export class ImportResults implements AuthorizedUseCase<
             studentId: student!.id,
             courseId: course!.id,
             componentScores,
-            finalScore: finalScore!,
+            ...(finalScore !== undefined ? { finalScore } : {}),
+            sitting,
+            status,
             ...(existingId ? { existingId } : {}),
           });
         }
@@ -150,10 +200,12 @@ export class ImportResults implements AuthorizedUseCase<
       if (input.dryRun || errors.length > 0) return base;
 
       for (const v of valid) {
+        const graded = v.status === "GRADED";
         if (v.existingId) {
           await repos.results.updateScores(v.existingId, {
             componentScores: v.componentScores,
-            finalScore: v.finalScore,
+            finalScore: graded ? v.finalScore! : null,
+            status: v.status,
           });
         } else {
           await repos.results.create({
@@ -161,10 +213,10 @@ export class ImportResults implements AuthorizedUseCase<
             courseId: v.courseId,
             semesterId: input.semesterId,
             componentScores: v.componentScores,
-            finalScore: v.finalScore,
+            ...(graded ? { finalScore: v.finalScore! } : {}),
             isLocked: false,
-            sitting: "NORMAL",
-            status: "GRADED",
+            sitting: v.sitting,
+            status: v.status,
           });
         }
       }
