@@ -12,7 +12,14 @@ const departments: Department[] = [
   { id: "d1", name: "Sci", code: "SCI", facultyId: "f1" },
 ];
 const programmes: Programme[] = [
-  { id: "p1", name: "CS", code: "CS", departmentId: "d1" },
+  {
+    id: "p1",
+    name: "CS",
+    code: "CS",
+    departmentId: "d1",
+    durationLevels: 3,
+    creditsRequired: 120,
+  },
 ];
 const levels: Level[] = [{ id: "l1", name: "100", rank: 1, programmeId: "p1" }];
 
@@ -104,7 +111,8 @@ describe("ImportCoursesScreen", () => {
     );
 
     // The commit call should NOT have dryRun: true
-    const commitCall = importCourses.mock.calls.find((c) => !c[0].dryRun);
+    const allCalls = importCourses.mock.calls as { dryRun?: boolean }[][];
+    const commitCall = allCalls.find((c) => !c[0]?.dryRun);
     expect(commitCall).toBeDefined();
   });
 
