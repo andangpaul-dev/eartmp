@@ -36,6 +36,20 @@ const GRAD_KEY = "graduation.requirements";
 const MATRIC_RULE_KEY = "student.matriculeRule";
 const MATRIC_SCHEME_KEY = "student.matriculeCheckScheme";
 const MATRIC_FORMAT_KEY = "student.matriculeFormat";
+const STANDING_BANDS_KEY = "grading.standingBands";
+
+const STANDING_BANDS_DEFAULT: StandingBandRow[] = [
+  { label: "First Class", minGpa: 3.5 },
+  { label: "Second Class Upper", minGpa: 3.0 },
+  { label: "Second Class Lower", minGpa: 2.0 },
+  { label: "Pass", minGpa: 1.0 },
+  { label: "Fail", minGpa: 0 },
+];
+
+interface StandingBandRow {
+  label: string;
+  minGpa: number | string;
+}
 
 type Tab = "institution" | "grading" | "graduation" | "security" | "matricule";
 const TABS: { key: Tab; label: string }[] = [
@@ -374,6 +388,8 @@ function GradingTab({ notify }: { notify: (m: string) => void }) {
           }}
         />
       )}
+
+      <StandingBandsEditor notify={notify} />
     </>
   );
 }
@@ -905,6 +921,181 @@ function AssessmentEditorModal({
         </Button>
       </div>
     </Modal>
+  );
+}
+
+function validateStandingBands(rows: StandingBandRow[]): string[] {
+  const errors: string[] = [];
+  if (rows.length === 0) errors.push("At least one band is required.");
+  rows.forEach((r, i) => {
+    if (!r.label.trim()) errors.push(`Row ${i + 1}: label cannot be empty.`);
+    if (!isFinite(Number(r.minGpa)))
+      errors.push(`Row ${i + 1}: Min GPA must be a number.`);
+  });
+  return errors;
+}
+
+function StandingBandsEditor({ notify }: { notify: (m: string) => void }) {
+  const core = useCore();
+  const { can } = useSession();
+  const manage = can("config.manage");
+
+  const [rows, setRows] = useState<StandingBandRow[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    core.getSetting({ key: STANDING_BANDS_KEY }).then((val) => {
+      if (!alive) return;
+      if (Array.isArray(val) && val.length > 0) {
+        setRows(val as StandingBandRow[]);
+      } else {
+        setRows(STANDING_BANDS_DEFAULT);
+      }
+      setLoaded(true);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const validationErrors = validateStandingBands(rows);
+  const canSave = manage && validationErrors.length === 0;
+
+  const updateRow = (i: number, patch: Partial<StandingBandRow>) => {
+    setRows((prev) =>
+      prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)),
+    );
+  };
+
+  const removeRow = (i: number) => {
+    setRows((prev) => prev.filter((_, idx) => idx !== i));
+  };
+
+  const addBand = () => {
+    setRows((prev) => [...prev, { label: "", minGpa: 0 }]);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setServerError(null);
+    try {
+      await core.setSetting({
+        key: STANDING_BANDS_KEY,
+        value: rows.map((r) => ({
+          label: r.label,
+          minGpa: Number(r.minGpa),
+        })),
+      });
+      notify("Classification bands saved");
+    } catch (e) {
+      setServerError(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!loaded)
+    return (
+      <Card title="Classification (standing) bands">
+        <div className="muted" style={{ padding: 16 }}>
+          Loading…
+        </div>
+      </Card>
+    );
+
+  return (
+    <Card title="Classification (standing) bands">
+      <div className="muted" style={{ marginBottom: 10, fontSize: 12.5 }}>
+        Changes apply to future GPA processing only — already-processed results
+        keep their original classification.
+      </div>
+
+      <table className="data">
+        <thead>
+          <tr>
+            <th>Label</th>
+            <th>Min GPA</th>
+            {manage && <th aria-label="Actions" />}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={i}>
+              <td>
+                <input
+                  className="input"
+                  aria-label="Classification label"
+                  value={row.label}
+                  disabled={!manage}
+                  onChange={(e) => updateRow(i, { label: e.target.value })}
+                />
+              </td>
+              <td>
+                <input
+                  className="input mono"
+                  type="number"
+                  aria-label="Min GPA"
+                  step={0.1}
+                  min={0}
+                  value={row.minGpa}
+                  disabled={!manage}
+                  onChange={(e) => updateRow(i, { minGpa: e.target.value })}
+                />
+              </td>
+              {manage && (
+                <td>
+                  <Button
+                    variant="ghost"
+                    aria-label={`Remove standing band ${i + 1}`}
+                    onClick={() => removeRow(i)}
+                  >
+                    Remove
+                  </Button>
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {manage && (
+        <div style={{ marginTop: 8 }}>
+          <Button variant="ghost" onClick={addBand}>
+            Add band
+          </Button>
+        </div>
+      )}
+
+      {validationErrors.length > 0 && (
+        <div className="alert danger" style={{ marginTop: 12 }}>
+          {validationErrors.map((e, i) => (
+            <div key={i}>{e}</div>
+          ))}
+        </div>
+      )}
+
+      {serverError && (
+        <div className="alert danger" style={{ marginTop: 12 }}>
+          {serverError}
+        </div>
+      )}
+
+      {manage && (
+        <div className="actions" style={{ marginTop: 14 }}>
+          <Button
+            variant="primary"
+            disabled={!canSave || saving}
+            loading={saving}
+            onClick={save}
+          >
+            Save classification bands
+          </Button>
+        </div>
+      )}
+    </Card>
   );
 }
 

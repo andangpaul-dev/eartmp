@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { ConfigurationScreen } from "../../src/presentation/screens/ConfigurationScreen";
 import type {
   StoredGradeScale,
@@ -117,8 +117,9 @@ describe("GradeScaleEditorModal", () => {
     await user.clear(gradeInputs[0]!);
     await user.type(gradeInputs[0]!, "F");
 
-    // Add a second band
-    await user.click(screen.getByRole("button", { name: /add band/i }));
+    // Add a second band (scope to the modal dialog to avoid ambiguity with StandingBandsEditor)
+    const dialog = screen.getByRole("dialog", { name: /new grade scale/i });
+    await user.click(within(dialog).getByRole("button", { name: /add band/i }));
 
     const minMarkInputs2 = await screen.findAllByLabelText(/min mark/i);
     const maxMarkInputs2 = await screen.findAllByLabelText(/max mark/i);
@@ -207,6 +208,135 @@ function makeConfig(
     ...overrides,
   };
 }
+
+describe("StandingBandsEditor", () => {
+  it("loads + saves standing bands via settings", async () => {
+    const setSetting = vi.fn(
+      async (_arg: { key: string; value: unknown }) => {},
+    );
+    const { user } = renderScreen(<ConfigurationScreen />, {
+      permissions: ["config.read", "config.manage"],
+      core: {
+        getSetting: async ({ key }: { key: string }) => {
+          if (key === "grading.standingBands")
+            return [{ label: "Pass", minGpa: 1 }];
+          return {};
+        },
+        setSetting,
+        listGradeScales: async () => [],
+        listAssessmentConfigs: async () => [],
+      },
+    });
+
+    await openGradingTab(user);
+
+    // Wait for the classification section heading (may load async)
+    await screen.findByText(
+      "Classification (standing) bands",
+      {},
+      { timeout: 8000 },
+    );
+
+    // Edit the label of the first row
+    const labelInputs =
+      await screen.findAllByLabelText(/classification label/i);
+    await user.clear(labelInputs[0]!);
+    await user.type(labelInputs[0]!, "Pass (edited)");
+
+    // Save classification bands
+    const saveBtn = screen.getByRole("button", {
+      name: /save classification bands/i,
+    });
+    await user.click(saveBtn);
+
+    await waitFor(() =>
+      expect(setSetting).toHaveBeenCalledWith(
+        expect.objectContaining({
+          key: "grading.standingBands",
+          value: expect.any(Array),
+        }),
+      ),
+    );
+
+    // Verify minGpa is a number in the saved value
+    const setCall = setSetting.mock.calls.find(
+      (args: unknown[]) =>
+        (args[0] as { key: string }).key === "grading.standingBands",
+    );
+    expect(setCall).toBeDefined();
+    const saved = (
+      setCall![0] as { key: string; value: { label: string; minGpa: number }[] }
+    ).value;
+    expect(typeof saved[0]!.minGpa).toBe("number");
+  }, 15000);
+
+  it("blocks Save with an empty label or non-numeric minGpa", async () => {
+    const { user } = renderScreen(<ConfigurationScreen />, {
+      permissions: ["config.read", "config.manage"],
+      core: {
+        getSetting: async ({ key }: { key: string }) => {
+          if (key === "grading.standingBands")
+            return [{ label: "Pass", minGpa: 1 }];
+          return {};
+        },
+        listGradeScales: async () => [],
+        listAssessmentConfigs: async () => [],
+      },
+    });
+
+    await openGradingTab(user);
+    await screen.findByText(
+      "Classification (standing) bands",
+      {},
+      { timeout: 8000 },
+    );
+
+    // Clear the label to make it invalid
+    const labelInputs =
+      await screen.findAllByLabelText(/classification label/i);
+    await user.clear(labelInputs[0]!);
+
+    await waitFor(() => {
+      const saveBtn = screen.getByRole("button", {
+        name: /save classification bands/i,
+      });
+      expect(saveBtn).toBeDisabled();
+    });
+
+    // Error should be visible
+    expect(
+      await screen.findByText(/label.*empty|empty.*label/i),
+    ).toBeInTheDocument();
+  }, 15000);
+
+  it("hides the standing-bands edit controls without config.manage", async () => {
+    const { user } = renderScreen(<ConfigurationScreen />, {
+      permissions: ["config.read"],
+      core: {
+        getSetting: async ({ key }: { key: string }) => {
+          if (key === "grading.standingBands")
+            return [{ label: "Pass", minGpa: 1 }];
+          return {};
+        },
+        listGradeScales: async () => [],
+        listAssessmentConfigs: async () => [],
+      },
+    });
+
+    await openGradingTab(user);
+    await screen.findByText(
+      "Classification (standing) bands",
+      {},
+      { timeout: 8000 },
+    );
+
+    // Add and Save should not be present
+    expect(screen.queryByRole("button", { name: /add band/i })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /save classification bands/i }),
+    ).toBeNull();
+  }, 15000);
+});
 
 describe("AssessmentEditorModal", () => {
   it("creates an assessment config; Save gated on weights=100", async () => {
